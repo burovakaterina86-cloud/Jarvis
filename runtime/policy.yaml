@@ -1,0 +1,149 @@
+# Политика безопасности JARVIS. Читает .claude/hooks/guard.py на каждый вызов инструмента.
+# Менять может только владелица руками (агенту запись в runtime/ запрещена).
+#
+# Схема:
+#   approval_timeout_sec: int            — сколько ждать ответа Approvals API (потом отказ)
+#   purchase_limit_env: str              — имя переменной окружения с лимитом покупки в рублях;
+#                                          MONEY с суммой выше лимита — отказ без запроса
+#   external: {<вид>: ask|auto}          — EXTERNAL-виды; нет вида в списке → ask
+#   money_kinds: [<вид>, ...]            — виды, которые всегда MONEY и всегда ask (auto игнорируется)
+#   read_tools: [<glob имени>, ...]      — встроенные инструменты без побочных эффектов → READ
+#   write_tools: {<имя>: <поле пути>}    — инструменты записи файла и поле с путём
+#   path_fields: [<поле>, ...]           — поля аргументов, где лежат пути для проверки секретов
+#   shell_tools: [<имя>, ...]            — инструменты, чьё поле command проверяется как команда
+#   deny_paths: [<glob>, ...]            — секреты: любое чтение/упоминание → DENY
+#   protected_write_paths: [<glob>, ...] — запись → DENY
+#   allow_write_paths: [<glob>, ...]     — запись вне корня проекта, разрешённая без запроса
+#                                          (внутри корня WRITE и так автоматически)
+#   rules: [{tool: <regex имени, полное совпадение; "*" — любой>, match: <regex по JSON аргументов, без учёта регистра>,
+#            level: READ|WRITE|EXTERNAL|MONEY|DENY, kind: <вид>, reason: <текст>}]
+#                                        — срабатывают все подходящие, побеждает самый строгий уровень
+# Глобы путей: относительные — от корня проекта; "~/" — домашняя папка; "**/" — в любом месте.
+# Неизвестный mcp__* и неизвестный встроенный инструмент → EXTERNAL (unknown_tool).
+
+approval_timeout_sec: 590
+purchase_limit_env: JARVIS_PURCHASE_LIMIT_RUB
+
+external:
+  send_message: ask
+  reply: ask
+  publish: ask
+  register: ask
+  message_owner: auto
+  network_write: ask
+  write_outside_root: ask
+  unknown_tool: ask
+
+money_kinds:
+  - purchase
+  - booking
+  - payment
+  - delete
+  - irreversible
+
+read_tools:
+  - Read
+  - Glob
+  - Grep
+  - LS
+  - NotebookRead
+  - WebFetch
+  - WebSearch
+  - TodoWrite
+  - Task
+  - Agent
+  - Skill
+  - ExitPlanMode
+  - BashOutput
+  - KillShell
+  - ListMcpResourcesTool
+  - ReadMcpResourceTool
+  - mcp__playwright__browser_navigate
+  - mcp__playwright__browser_navigate_back
+  - mcp__playwright__browser_snapshot
+  - mcp__playwright__browser_take_screenshot
+  - mcp__playwright__browser_click
+  - mcp__playwright__browser_hover
+  - mcp__playwright__browser_type
+  - mcp__playwright__browser_fill_form
+  - mcp__playwright__browser_select_option
+  - mcp__playwright__browser_press_key
+  - mcp__playwright__browser_wait_for
+  - mcp__playwright__browser_tabs
+  - mcp__playwright__browser_close
+  - mcp__playwright__browser_resize
+  - mcp__playwright__browser_console_messages
+  - mcp__playwright__browser_network_requests
+  - mcp__playwright__browser_handle_dialog
+  - mcp__playwright__browser_install
+
+write_tools:
+  Write: file_path
+  Edit: file_path
+  MultiEdit: file_path
+  NotebookEdit: notebook_path
+
+path_fields: [file_path, notebook_path, path, pattern, glob]
+
+shell_tools: [Bash, PowerShell]
+
+deny_paths:
+  - "**/.env*"
+  - "**/credentials*"
+  - "**/.credentials*"
+  - "~/.claude/.credentials.json"
+  - "~/.ssh/**"
+  - "state/browser-profile/**"
+  - "state/secrets/**"
+
+protected_write_paths:
+  - ".claude/settings*.json"
+  - ".claude/hooks/**"
+  - ".claude/skills/**"
+  - ".claude/agents/**"
+  - "runtime/**"
+  - "integrations/**"
+  - ".git/hooks/**"
+  - ".mcp.json"
+  - "**/.env*"
+
+allow_write_paths: []
+
+rules:
+  # --- опасные команды: отказ ---
+  - {tool: "Bash", match: '(^|[\s;&|("])format(\.com)?\s+[a-z]:', level: DENY, kind: dangerous, reason: "форматирование диска"}
+  - {tool: "PowerShell", match: '(^|[\s;&|("])(format(\.com)?\s+[a-z]:|format-volume\b)', level: DENY, kind: dangerous, reason: "форматирование диска"}
+  - {tool: "*", match: 'git\s+push\b[^;&|\n]*(\s--force\b|\s-f\b|\s--force-with-lease\b|\s\+\S)', level: DENY, kind: dangerous, reason: "git push --force"}
+  - {tool: "*", match: '(^|[\s;&|("])reg(\.exe)?\s+(add|delete|import|load|copy|restore|save|unload)\b', level: DENY, kind: dangerous, reason: "изменение реестра"}
+  - {tool: "*", match: '(^|[\s;&|("])schtasks(\.exe)?\b', level: DENY, kind: dangerous, reason: "планировщик задач Windows"}
+  - {tool: "*", match: 'set-executionpolicy', level: DENY, kind: dangerous, reason: "смена политики исполнения"}
+  - {tool: "*", match: '(new-itemproperty|set-itemproperty|remove-itemproperty)[^;&|\n]*hk(lm|cu|cr|u|cc):', level: DENY, kind: dangerous, reason: "изменение реестра"}
+  - {tool: "*", match: '(curl|wget|invoke-webrequest|iwr|invoke-restmethod|irm|start-bitstransfer|bitsadmin|certutil)\b[^;&|\n]*\.(exe|msi|bat|cmd|ps1|scr|vbs)\b', level: DENY, kind: dangerous, reason: "скачивание исполняемого файла"}
+  - {tool: "*", match: '(iwr|irm|invoke-webrequest|invoke-restmethod|curl|wget)\b[^;&\n]*\|\s*(iex|invoke-expression|sh|bash|cmd|powershell|pwsh)\b', level: DENY, kind: dangerous, reason: "скачивание и запуск скрипта"}
+  - {tool: "*", match: 'dangerously.skip.permissions|bypass.?permissions', level: DENY, kind: dangerous, reason: "обход прав"}
+  - {tool: "*", match: '(^|[\s;&|("])(bcdedit|diskpart|vssadmin|cipher\s+/w|takeown|icacls)\b', level: DENY, kind: dangerous, reason: "системная команда"}
+  - {tool: "*", match: 'set-mppreference|netsh\s+advfirewall', level: DENY, kind: dangerous, reason: "настройки защиты системы"}
+
+  # --- удаление: всегда подтверждение ---
+  - {tool: "Bash|PowerShell", match: '(^|[\s;&|("''(])(rm|rmdir|unlink|shred|del|erase|rd|ri|remove-item|clear-content)(\.exe)?(\s|$)', level: MONEY, kind: delete, reason: "удаление файлов"}
+  - {tool: "Bash|PowerShell", match: '\bfind\b[^;&|\n]*\s-delete\b|\bgit\s+clean\b', level: MONEY, kind: delete, reason: "удаление файлов"}
+  - {tool: "*", match: '::\s*delete\s*\(|\bos\.(remove|unlink|rmdir|removedirs)\b|shutil\.rmtree|\.unlink\s*\(|\.rmdir\s*\(|unlinksync|rmsync|\bfs\.(rm|unlink)\b', level: MONEY, kind: delete, reason: "удаление файлов"}
+
+  # --- отправка в сеть и публикация ---
+  - {tool: "*", match: '\bgit\s+push\b', level: EXTERNAL, kind: publish, reason: "публикация в git"}
+  - {tool: "*", match: '\bcurl\b[^;&|\n]*(\s-X\s*(POST|PUT|PATCH|DELETE)|\s(-d|--data\S*|-F|--form)\s)', level: EXTERNAL, kind: network_write, reason: "запрос с отправкой данных"}
+  - {tool: "*", match: '(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^;&|\n]*-method\s+(post|put|patch|delete)', level: EXTERNAL, kind: network_write, reason: "запрос с отправкой данных"}
+  - {tool: "*", match: '\bgh\s+(pr|issue|release|repo)\s+(create|comment|edit|merge|delete)', level: EXTERNAL, kind: publish, reason: "публикация на GitHub"}
+
+  # --- браузер: поля паролей и карт — отказ ---
+  - {tool: "mcp__playwright__browser_type", match: '(парол|password|passwd|pass\b|card|карт|cvv|cvc|cvn|csc|security code|код безопасности|expir|срок действия|ccnum|cc-number|cc-csc|cc-exp|pan\b|pin\b|пин)', level: DENY, kind: secret_field, reason: "ввод в поле пароля или карты"}
+  - {tool: "mcp__playwright__browser_fill_form", match: '(парол|password|passwd|card|карт|cvv|cvc|cvn|csc|security code|код безопасности|expir|срок действия|ccnum|cc-number|cc-csc|cc-exp|pin\b|пин)', level: DENY, kind: secret_field, reason: "ввод в поле пароля или карты"}
+  - {tool: "mcp__playwright__browser_file_upload", match: '.', level: EXTERNAL, kind: send_message, reason: "загрузка файла на сайт"}
+
+  # --- браузер: деньги и внешние действия ---
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(оплат|оплачу|pay\b|pay now|checkout|place order|оформить заказ|подтвердить заказ|купить|buy now|purchase)', level: MONEY, kind: purchase, reason: "оплата / покупка"}
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(заброниров|бронир|book now|reserve|booking)', level: MONEY, kind: booking, reason: "бронирование"}
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(удалить|delete|remove account|отменить заказ|cancel order)', level: MONEY, kind: irreversible, reason: "необратимое действие"}
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(отправить|send\b|submit|опубликовать|publish|post\b|поделиться|share|ответить|reply)', level: EXTERNAL, kind: send_message, reason: "отправка / публикация"}
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(зарегистр|register|sign up|check-in|регистрация на рейс|онлайн-регистрац)', level: EXTERNAL, kind: register, reason: "регистрация"}
+  - {tool: "mcp__playwright__browser_evaluate|mcp__playwright__browser_run_code", match: '.', level: EXTERNAL, kind: unknown_tool, reason: "выполнение кода на странице"}

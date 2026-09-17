@@ -124,7 +124,7 @@ Claude Code (cwd = корень JARVIS)
 
 | # | Метка | История | Приёмка |
 |---|-------|---------|---------|
-| 44 | R13 | Агент никогда не запускается с полным обходом прав | мост вызывает `--permission-mode dontAsk` + разрешения из `.claude/settings.json`; флага `--dangerously-skip-permissions` нет нигде; тест проверяет строку запуска |
+| 44 | R13 | Агент никогда не запускается с полным обходом прав | мост вызывает `--permission-mode dontAsk` + разрешения из `runtime/jarvis-settings.json`; флага `--dangerously-skip-permissions` нет нигде; тест проверяет строку запуска |
 | 45 | R14 | Действия разделены на 4 уровня | READ — сразу; WRITE внутри корня JARVIS — сразу; EXTERNAL (отправить, опубликовать, ответить человеку, зарегистрировать) — кнопка «Подтвердить»; IRREVERSIBLE/MONEY (оплата, бронь, покупка, удаление) — всегда кнопка «Подтвердить» с явным текстом суммы/объекта, без возможности отключить |
 | 45a | R14.3 | EXTERNAL-действия настраиваются политикой | `policy.yaml` для каждого вида EXTERNAL: `ask` (по умолчанию) или `auto` (например, сообщение самой владелице); MONEY/IRREVERSIBLE — только `ask`, настройка игнорируется |
 | 46 | R14.1 | Подтверждение нельзя обойти промптом | Guard-хук (PreToolUse, matcher `*`, включая `mcp__*`) классифицирует вызов, для EXTERNAL/MONEY делает HTTP-запрос к Approvals API моста и ждёт ответа; нет ответа за 10 мин → отказ; ошибка хука → отказ (fail-closed, exit 2) |
@@ -162,7 +162,7 @@ Claude Code (cwd = корень JARVIS)
 ## Решения по реализации
 
 1. **Python 3.12, python-telegram-bot (async).** Почему: зрелая, polling без публичного адреса — компьютер дома не нужно открывать в интернет.
-2. **Вызов Claude: `claude -p --output-format stream-json --verbose --resume <sid> --permission-mode dontAsk --append-system-prompt-file runtime/jarvis-turn.md --max-turns 60`, промпт через stdin.** Почему: документированный путь для скриптов; stdin обходит лимит 32 KB командной строки Windows; `dontAsk` + явные разрешения вместо обхода прав. Не `--bare` — он не видит подписку, хуки и навыки. Из окружения процесса удаляются `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDECODE*`.
+2. **Вызов Claude: `claude -p --output-format stream-json --verbose --resume <sid> --permission-mode dontAsk --append-system-prompt-file runtime/jarvis-turn.md --settings runtime/jarvis-settings.json --max-turns 60`, промпт через stdin.** Почему: документированный путь для скриптов; stdin обходит лимит 32 KB командной строки Windows; `dontAsk` + явные разрешения вместо обхода прав. Не `--bare` — он не видит подписку, хуки и навыки. Из окружения процесса удаляются `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDECODE*`.
 3. **Подтверждения — свой Guard-хук + Approvals API моста**, а не `--permission-prompt-tool` (схема не документирована) и не официальный Telegram-плагин channels (research preview, требует Bun, держит сессию открытой). Guard вызывается через абсолютный путь к `python.exe` из venv. Approvals API слушает только `127.0.0.1`, с одноразовым токеном из `state/secrets/`.
 4. **Классификация действий** — таблица правил в `runtime/policy.yaml` (читает Guard; менять может только владелица): инструмент + шаблон аргументов → уровень. Неизвестный MCP-инструмент → EXTERNAL по умолчанию.
 5. **Браузер — `@playwright/mcp` с `--user-data-dir state/browser-profile`, Edge/Chrome.** Почему: работает на Windows, держит логины, не требует своего LLM-ключа (в отличие от библиотеки browser-use). Один профиль = один браузер одновременно: браузерные задачи в очереди последовательно.
@@ -258,7 +258,7 @@ essa-jarvis/
 
 | Этап | Что | Готово, когда (проверяемо) |
 |---|---|---|
-| V0.1a | Каркас, `.env.example`, `start.bat`, `settings.json`, Guard + `policy.yaml` | тесты Guard зелёные: чтение `.env` → отказ, запись в `.claude/settings.json` → отказ, `rm` → запрос подтверждения, чтение essa-ai/ → пропуск; ни одного `--dangerously-skip-permissions` в коде |
+| V0.1a | Каркас, `.env.example`, `start.bat`, `settings.json`, Guard + `policy.yaml` | тесты Guard зелёные: чтение `.env` → отказ, запись в `runtime/jarvis-settings.json` → отказ, `rm` → запрос подтверждения, чтение essa-ai/ → пропуск; ни одного `--dangerously-skip-permissions` в коде |
 | V0.1b | `claude_bridge` + `sessions` + `events` | на фейковом `claude`: ответ разобран, `session_id` сохранён, второй ход идёт с `--resume`, битая сессия → новая; реальный `claude -p` на машине отвечает на «привет» по подписке |
 | V0.1c | Telegram: allow-list, очередь, статус, `/new` `/stop`, разбиение, файлы | с телефона: «привет» → ответ; сообщение с чужого аккаунта → тишина; два сообщения подряд → второе в очереди; `/stop` останавливает |
 | V0.1d | Approvals API + кнопки | тестовый вызов EXTERNAL → кнопки в Telegram → «Отклонить» → действие не выполнено, запись в `approvals.jsonl`; нет ответа 10 мин → отказ |

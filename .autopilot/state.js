@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-17T22:36:55+07:00",
-  "updatedAt": "2026-09-17T23:24:56+07:00",
+  "updatedAt": "2026-09-17T23:39:44+07:00",
   "finishedAt": null,
   "stages": [
     {
@@ -53,7 +53,8 @@ window.STATE =
     },
     {
       "id": "review",
-      "status": "pending"
+      "status": "active",
+      "startedAt": "2026-09-17T23:33:03+07:00"
     },
     {
       "id": "final",
@@ -96,10 +97,15 @@ window.STATE =
         "start.bat",
         ".venv/"
       ],
-      "status": "pending",
+      "status": "repair",
       "retries": 0,
-      "repairs": 0,
-      "handoffs": 0
+      "repairs": 2,
+      "handoffs": 0,
+      "startedAt": "2026-09-17T23:25:17+07:00",
+      "repairFindings": [
+        "shell-запись вне корня → ask; чтение .env через glob → deny; deadline Approvals < таймаут хука; кавычки не выключают deny; нераспознанное удаление → ask; лимит не задан → ask",
+        "запись через $HOME/$env:/%VAR% → ask; [IO.File]::Delete → ask"
+      ]
     },
     {
       "id": "02",
@@ -335,10 +341,16 @@ window.STATE =
     "extra": "все — углубление R##.n или материалы пользователя; ничего не вырезано",
     "action": "все 30 закрыты правками spec.md (2026-09-17)"
   },
-  "concerns": [],
+  "concerns": [
+    "guard: браузерные click/type/press_key классифицируются по подписи element, которую пишет агент — MONEY в браузере ловится эвристикой (T01 craft)",
+    "guard: shell-эвристика в принципе обходима (cd + относительный путь, переменные) — защита многослойная, но не абсолютная (T01)",
+    "guard.py: дублированные проверки shell_tools/read_tools, раскрытие ~ в двух местах, список полей карт в двух файлах, импорты в середине test_guard.py (T01 craft)",
+    "test_guard: поиск запрещённого флага исключает docs/ и .md (документация упоминает флаг как запрещённый) (T01 craft)",
+    "decide(event, policy, root, env) и поле kind — сигнатура шире, чем в таске (T01 spec, не блокирует)"
+  ],
   "reviewers": {
-    "manifestSpec": null,
-    "craft": null
+    "manifestSpec": "a5b820cc515998171",
+    "craft": "a8e2ba34d51fbe905"
   },
   "blind": null
 }

@@ -1,0 +1,6 @@
+python-telegram-bot[job-queue]>=21
+faster-whisper
+pyyaml
+aiohttp
+pytest
+pytest-asyncio

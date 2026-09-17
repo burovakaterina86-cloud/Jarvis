@@ -5,3 +5,9 @@ node_modules/
 __pycache__/
 .DS_Store
 .autopilot/serve.*
+
+# ESSA-JARVIS
+state/
+inbox/
+.venv/
+.pytest_cache/
