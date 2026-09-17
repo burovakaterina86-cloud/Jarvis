@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "CLAUDE.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-17T22:36:55+07:00",
-  "updatedAt": "2026-09-17T23:12:29+07:00",
+  "updatedAt": "2026-09-17T23:20:36+07:00",
   "finishedAt": null,
   "stages": [
     {
@@ -58,17 +58,17 @@ window.STATE =
     "total": 60,
     "done": 0,
     "inTicket": 0,
-    "inSpec": 48,
+    "inSpec": 46,
     "placeholder": 0,
-    "deferred": 12,
-    "dropped": 0
+    "deferred": 11,
+    "dropped": 3
   },
   "tickets": [],
   "singlePass": null,
   "tests": null,
   "debt": {
     "placeholders": [
-      "профили workspaces ESSA.AI и Умиды",
+      "профиль ESSA.AI (essa-ai/*.md)",
       "SOUL.md / GOALS.md",
       "вход на сайты в браузере JARVIS",
       "лимит суммы покупок в policy.yaml"
