@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-17T22:36:55+07:00",
-  "updatedAt": "2026-09-17T23:39:44+07:00",
+  "updatedAt": "2026-09-17T23:40:46+07:00",
   "finishedAt": null,
   "stages": [
     {
@@ -49,7 +49,8 @@ window.STATE =
     {
       "id": "build",
       "status": "active",
-      "startedAt": "2026-09-17T23:24:56+07:00"
+      "startedAt": "2026-09-17T23:24:56+07:00",
+      "note": "1 из 8 тасков готов"
     },
     {
       "id": "review",
@@ -97,7 +98,7 @@ window.STATE =
         "start.bat",
         ".venv/"
       ],
-      "status": "repair",
+      "status": "done",
       "retries": 0,
       "repairs": 2,
       "handoffs": 0,
@@ -105,7 +106,13 @@ window.STATE =
       "repairFindings": [
         "shell-запись вне корня → ask; чтение .env через glob → deny; deadline Approvals < таймаут хука; кавычки не выключают deny; нераспознанное удаление → ask; лимит не задан → ask",
         "запись через $HOME/$env:/%VAR% → ask; [IO.File]::Delete → ask"
-      ]
+      ],
+      "finishedAt": "2026-09-17T23:40:46+07:00",
+      "tests": {
+        "passed": 105,
+        "failed": 0
+      },
+      "commit": "2077875"
     },
     {
       "id": "02",
@@ -132,10 +139,11 @@ window.STATE =
         "tests/test_bridge.py",
         "tests/fake_claude/"
       ],
-      "status": "pending",
+      "status": "in-progress",
       "retries": 0,
       "repairs": 0,
-      "handoffs": 0
+      "handoffs": 0,
+      "startedAt": "2026-09-17T23:40:46+07:00"
     },
     {
       "id": "03",
@@ -152,10 +160,11 @@ window.STATE =
         "runtime/approvals.py",
         "tests/test_approvals.py"
       ],
-      "status": "pending",
+      "status": "in-progress",
       "retries": 0,
       "repairs": 0,
-      "handoffs": 0
+      "handoffs": 0,
+      "startedAt": "2026-09-17T23:40:46+07:00"
     },
     {
       "id": "05",
@@ -190,10 +199,11 @@ window.STATE =
         "scripts/check_context_size.py",
         "tests/test_memory_hooks.py"
       ],
-      "status": "pending",
+      "status": "in-progress",
       "retries": 0,
       "repairs": 0,
-      "handoffs": 0
+      "handoffs": 0,
+      "startedAt": "2026-09-17T23:40:46+07:00"
     },
     {
       "id": "06",
@@ -319,7 +329,10 @@ window.STATE =
     }
   ],
   "singlePass": null,
-  "tests": null,
+  "tests": {
+    "passed": 105,
+    "failed": 0
+  },
   "debt": {
     "placeholders": [
       "профиль ESSA.AI (essa-ai/*.md)",

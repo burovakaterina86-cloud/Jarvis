@@ -9,14 +9,14 @@
 | ID | Из брифа (дословно) | Статус | Основание | Где |
 |----|---------------------|--------|-----------|-----|
 | R01 | «собственного JARVIS для ESSA.AI — сначала под соцсети, потом расширять до универсального автономного агента» | in-ticket | пользователь: «Да, так» — архитектура всей системы → «ок» → первая рабочая версия; остальное отдельными сборками | T01..T08 |
-| R02 | «собрать свой лёгкий runtime вокруг Claude Code» / «Claude Code является единственным основным агентным runtime. Мы НЕ создаём второй LLM-orchestrator и не используем OpenClaw» | in-ticket | — | T01, T02 |
+| R02 | «собрать свой лёгкий runtime вокруг Claude Code» / «Claude Code является единственным основным агентным runtime. Мы НЕ создаём второй LLM-orchestrator и не используем OpenClaw» | in-ticket | — | T01, T02 (T01 2077875 — частично) |
 | R03 | «JARVIS GATEWAY / Python, максимально тонкий» / «Python как основной bridge/runtime» | in-ticket | — | T02 |
 | R04 | «Claude Code через существующую подписку» | in-ticket | — | T02 |
 | R05 | «вызывает Claude Code через CLI, сохраняет `session_id`, продолжает разговор через `--resume`» | in-ticket | — | T02 |
 | R06 | «Telegram — основной интерфейс» | in-ticket | — | T02, T04 |
-| R07 | «Windows 10» | in-ticket | факт: эта машина — Windows 11 Home (build 26200); проектируем под Windows 10+ | T01, T04, T08 |
+| R07 | «Windows 10» | in-ticket | факт: эта машина — Windows 11 Home (build 26200); проектируем под Windows 10+ | T01, T04, T08 (T01 2077875 — частично) |
 | R08 | «PERSONALITY SOUL.md / MEMORY MEMORY.md / GOALS GOALS.md» + «TASK ROUTER» | in-ticket | — | T05 |
-| R09 | «Я бы сразу заложила такую структуру: essa-jarvis/ …» (дерево каталогов) | in-ticket | — | T01 |
+| R09 | «Я бы сразу заложила такую структуру: essa-jarvis/ …» (дерево каталогов) | in-ticket | — | T01 (T01 2077875 — частично) |
 | R10 | «всегда загружаем очень мало. `CLAUDE.md + SOUL.md + компактный MEMORY.md + GOALS.md`» с размерами «3–5 KB / 1–2 KB / 3–5 KB / 1–2 KB» | in-ticket | — | T05 |
 | R11 | «Skills — только когда подходят. Knowledge — только когда нужен. История — compress.» | in-ticket | — | T02, T05 |
 | R12 | «Подробные технические инструкции: docs/REFERENCE.md а не CLAUDE.md» | in-ticket | — | T05, T08 |
@@ -25,9 +25,9 @@
 
 | ID | Из брифа (дословно) | Статус | Основание | Где |
 |----|---------------------|--------|-----------|-----|
-| R13 | «никаких `--dangerously-skip-permissions` глобально» | in-ticket | — | T01, T02 |
+| R13 | «никаких `--dangerously-skip-permissions` глобально» | in-ticket | — | T01, T02 (T01 2077875 — частично) |
 | R14 | «четыре уровня: READ → автоматически; WRITE workspace → автоматически; EXTERNAL ACTION → approval policy; IRREVERSIBLE / MONEY → обязательное подтверждение» | in-ticket | — | T01, T03, T04 |
-| R15 | «hooks из `claude-telegram-agent` я бы перенесла практически сразу» — «блокируют опасные shell-команды и доступ к `.env`, ключам и credentials» (`protect-secrets.py`, `protect-destructive-actions.py`) | in-ticket | — | T01 |
+| R15 | «hooks из `claude-telegram-agent` я бы перенесла практически сразу» — «блокируют опасные shell-команды и доступ к `.env`, ключам и credentials» (`protect-secrets.py`, `protect-destructive-actions.py`) | in-ticket | — | T01 (T01 2077875 — частично) |
 | R16 | «клиентские данные строго изолированы» / «открывает ТОЛЬКО workspaces/umida/» | dropped | пользователь: «давай про Умиду уберем все, это мой агент и не нужно мне тащить в него клиентов» | — |
 | R17i | *(подразумевается)* бот в Telegram отвечает только владельцу — иначе любой, кто найдёт бота, управляет Claude Code на компьютере | in-ticket | — | T04 |
 
