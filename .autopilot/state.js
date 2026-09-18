@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-17T22:36:55+07:00",
-  "updatedAt": "2026-09-18T11:35:17+07:00",
+  "updatedAt": "2026-09-18T12:26:13+07:00",
   "finishedAt": null,
   "stages": [
     {
@@ -50,7 +50,7 @@ window.STATE =
       "id": "build",
       "status": "active",
       "startedAt": "2026-09-17T23:24:56+07:00",
-      "note": "6 из 8 готовы; 02 и 07 на доработке"
+      "note": "7 из 8 тасков готовы"
     },
     {
       "id": "review",
@@ -64,8 +64,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 60,
-    "done": 36,
-    "inTicket": 10,
+    "done": 42,
+    "inTicket": 4,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 11,
@@ -341,14 +341,20 @@ window.STATE =
         "integrations/telegram/",
         "tests/test_activation.py"
       ],
-      "status": "repair",
+      "status": "done",
       "retries": 0,
       "repairs": 1,
       "handoffs": 0,
       "startedAt": "2026-09-18T07:00:04+07:00",
       "repairFindings": [
         "базовые помощники оказались включены без кнопки; тесты зависят от рабочего дерева; статус теста по слову; неатомарная активация"
-      ]
+      ],
+      "finishedAt": "2026-09-18T11:38:52+07:00",
+      "tests": {
+        "passed": 290,
+        "failed": 0
+      },
+      "commit": "9653129"
     },
     {
       "id": "08",
@@ -374,16 +380,20 @@ window.STATE =
         "scripts/",
         "start.bat"
       ],
-      "status": "pending",
+      "status": "repair",
       "retries": 0,
-      "repairs": 0,
-      "handoffs": 0
+      "repairs": 1,
+      "handoffs": 0,
+      "startedAt": "2026-09-18T11:38:52+07:00",
+      "repairFindings": [
+        "в документах не сказано, что живой прогон не выполнялся; пример .env склеивал пояснение со значением; два сканера запрета; check_hooks пишет в рабочий журнал"
+      ]
     }
   ],
   "singlePass": null,
   "tests": {
-    "passed": 282,
-    "failed": 7
+    "passed": 290,
+    "failed": 0
   },
   "debt": {
     "placeholders": [
@@ -430,11 +440,32 @@ window.STATE =
     "статус не показывает отказы Guard: события blocked идут в events.jsonl, поток хода их не несёт (T04 spec/craft — долг)",
     "start.bat молча копирует .env из .env.example (в спецификации нет; поведение безопасное) (T04 spec)",
     "браузерные ходы не сериализуются глобально (uses_browser всегда False); при одном владельце ходы и так идут по очереди, риск — только при параллельных чатах (T04 долг)",
-    "вход в claude на машине владелицы истёк (OAuth session expired) — до `claude` + /login бот получает auth_required (проверка в T08)"
+    "вход в claude на машине владелицы истёк (OAuth session expired) — до `claude` + /login бот получает auth_required (проверка в T08)",
+    "сквозным путём не покрыты истёкший таймаут подтверждения и MONEY выше лимита (T08 craft — долг)",
+    "числа таймаутов (590/580/620) названы в трёх местах: policy.yaml, approvals.py, REFERENCE.md (T08 craft)"
   ],
   "reviewers": {
     "manifestSpec": "a5b820cc515998171",
     "craft": "a8e2ba34d51fbe905"
   },
-  "blind": null
+  "blind": {
+    "verdict": "собрано; живой путь не подтверждён",
+    "drift": [
+      "R27 (Definition of Done MVP): манифест считал путь «сообщение с телефона → комплект контента» закрытым таском 04+06, слепая проверка показала: ни одного успешного хода не было — claude на машине отвечает auth_required, в essa-ai/content/ пусто",
+      "R30 (память): структура есть, но ни одного факта не записано — не проверено вживую",
+      "G11 (голос): модель faster-whisper не скачана, распознавание вживую не работало",
+      "R25/G03/G05/G08 (браузер): профиль state/browser-profile пуст, ни одной браузерной задачи не выполнено",
+      "R32 (состояния задач): в событиях нет PLANNING и REVIEW — эти состояния относятся к планировщику V0.7 и отложены",
+      "R08/R10: SOUL.md и GOALS.md — метки [ЗАПОЛНИ], характер и цели фактически не заданы (ожидаемо: это факты владелицы)"
+    ],
+    "commands": [
+      ".venv/Scripts/python.exe -m pytest -q → 297 passed",
+      "tests/smoke_real_turn.py → auth_required (цепочка до claude отработала)",
+      "scripts/check_hooks.py → все команды хуков исполняются как задумано",
+      "scripts/check_context_size.py → 4.25 KB / 12 KB ok",
+      "guard вживую: Read .env → exit 2; запись в runtime/policy.yaml → exit 2; запись в essa-ai/content → exit 0",
+      "живой круг подтверждений: MONEY → кнопка → allow → exit 0",
+      "npx @playwright/mcp@latest --version → 0.0.81"
+    ]
+  }
 }

@@ -281,13 +281,9 @@ def test_no_project_settings_with_jarvis_hooks():
 
 
 def test_no_skip_permissions_flag_in_code():
-    needle = "dangerously" + "-skip-permissions"
-    skip = {".venv", ".git", ".autopilot", "node_modules", "docs"}
-    exts = {".py", ".bat", ".cmd", ".ps1", ".sh", ".json", ".yaml", ".yml", ".toml", ".js", ".ts", ".ini", ".txt"}
-    hits = [str(f) for f in REPO.rglob("*")
-            if f.is_file() and f.suffix in exts and not skip & set(f.relative_to(REPO).parts)
-            and needle in f.read_text(encoding="utf-8", errors="ignore")]
-    assert hits == []
+    # Список файлов и исключений — один на все тесты, в tests/codescan.py.
+    from tests import codescan
+    assert codescan.bypass_hits() == []
 
 
 # ---------- дозапрос ревью ----------
