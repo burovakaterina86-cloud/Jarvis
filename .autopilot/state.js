@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-17T22:36:55+07:00",
-  "updatedAt": "2026-09-17T23:40:46+07:00",
+  "updatedAt": "2026-09-18T06:55:04+07:00",
   "finishedAt": null,
   "stages": [
     {
@@ -50,7 +50,7 @@ window.STATE =
       "id": "build",
       "status": "active",
       "startedAt": "2026-09-17T23:24:56+07:00",
-      "note": "1 из 8 тасков готов"
+      "note": "5 из 8 тасков готовы"
     },
     {
       "id": "review",
@@ -64,8 +64,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 60,
-    "done": 8,
-    "inTicket": 38,
+    "done": 29,
+    "inTicket": 17,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 11,
@@ -139,11 +139,20 @@ window.STATE =
         "tests/test_bridge.py",
         "tests/fake_claude/"
       ],
-      "status": "in-progress",
+      "status": "done",
       "retries": 0,
-      "repairs": 0,
+      "repairs": 1,
       "handoffs": 0,
-      "startedAt": "2026-09-17T23:40:46+07:00"
+      "startedAt": "2026-09-17T23:40:46+07:00",
+      "repairFindings": [
+        "повтор хода после выполненных инструментов; переполнение по тексту ответа; бюджет списывается на неуспешных ходах; непокрытые ветки разбора; убийство дерева"
+      ],
+      "finishedAt": "2026-09-18T06:50:43+07:00",
+      "tests": {
+        "passed": 215,
+        "failed": 0
+      },
+      "commit": "52bde91"
     },
     {
       "id": "03",
@@ -160,11 +169,20 @@ window.STATE =
         "runtime/approvals.py",
         "tests/test_approvals.py"
       ],
-      "status": "in-progress",
+      "status": "done",
       "retries": 0,
-      "repairs": 0,
+      "repairs": 1,
       "handoffs": 0,
-      "startedAt": "2026-09-17T23:40:46+07:00"
+      "startedAt": "2026-09-17T23:40:46+07:00",
+      "repairFindings": [
+        "client_gone недостижим; таймаут сервера < срока Guard; тесты 400/stop; права токена; обрезка журнала"
+      ],
+      "finishedAt": "2026-09-18T06:42:22+07:00",
+      "tests": {
+        "passed": 183,
+        "failed": 0
+      },
+      "commit": "d163431"
     },
     {
       "id": "05",
@@ -199,11 +217,20 @@ window.STATE =
         "scripts/check_context_size.py",
         "tests/test_memory_hooks.py"
       ],
-      "status": "in-progress",
+      "status": "done",
       "retries": 0,
-      "repairs": 0,
+      "repairs": 1,
       "handoffs": 0,
-      "startedAt": "2026-09-17T23:40:46+07:00"
+      "startedAt": "2026-09-17T23:40:46+07:00",
+      "repairFindings": [
+        "🧠 запомнил при неуспешной записи; разбор transcript учитывает вставки хуков и субагентов; нет теста на check_context_size"
+      ],
+      "finishedAt": "2026-09-18T06:44:22+07:00",
+      "tests": {
+        "passed": 193,
+        "failed": 0
+      },
+      "commit": "e52abcc"
     },
     {
       "id": "06",
@@ -239,10 +266,20 @@ window.STATE =
         "integrations/browser/",
         "tests/test_skills_format.py"
       ],
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0,
-      "handoffs": 0
+      "repairs": 1,
+      "handoffs": 0,
+      "startedAt": "2026-09-17T23:44:15+07:00",
+      "repairFindings": [
+        "профиль браузера у login.py и MCP считается по-разному; формулировка запрета публикации; find_browser; тесты"
+      ],
+      "finishedAt": "2026-09-18T06:46:35+07:00",
+      "tests": {
+        "passed": 220,
+        "failed": 0
+      },
+      "commit": "9517118"
     },
     {
       "id": "04",
@@ -266,10 +303,14 @@ window.STATE =
         "integrations/__init__.py",
         "tests/test_telegram.py"
       ],
-      "status": "pending",
+      "status": "repair",
       "retries": 0,
-      "repairs": 0,
-      "handoffs": 0
+      "repairs": 1,
+      "handoffs": 0,
+      "startedAt": "2026-09-18T06:40:01+07:00",
+      "repairFindings": [
+        "режим настройки отвечал посторонним; new_session не показывался; два статус-сообщения; доставка ответа без защиты; uses_browser по словам; дыры в тестах"
+      ]
     },
     {
       "id": "07",
@@ -330,7 +371,7 @@ window.STATE =
   ],
   "singlePass": null,
   "tests": {
-    "passed": 105,
+    "passed": 220,
     "failed": 0
   },
   "debt": {
@@ -340,7 +381,9 @@ window.STATE =
       "вход на сайты в браузере JARVIS",
       "лимит суммы покупок в policy.yaml"
     ],
-    "assumptions": [],
+    "assumptions": [
+      "дневной бюджет запусков по умолчанию 100 (переменная JARVIS_DAILY_RUN_BUDGET пустая) — число выбрано за владелицу"
+    ],
     "emptyEnv": [
       "TELEGRAM_BOT_TOKEN",
       "TELEGRAM_OWNER_ID"
@@ -359,7 +402,22 @@ window.STATE =
     "guard: shell-эвристика в принципе обходима (cd + относительный путь, переменные) — защита многослойная, но не абсолютная (T01)",
     "guard.py: дублированные проверки shell_tools/read_tools, раскрытие ~ в двух местах, список полей карт в двух файлах, импорты в середине test_guard.py (T01 craft)",
     "test_guard: поиск запрещённого флага исключает docs/ и .md (документация упоминает флаг как запрещённый) (T01 craft)",
-    "decide(event, policy, root, env) и поле kind — сигнатура шире, чем в таске (T01 spec, не блокирует)"
+    "decide(event, policy, root, env) и поле kind — сигнатура шире, чем в таске (T01 spec, не блокирует)",
+    "approvals.py: addresses читает приватное _site._server; emit_event-заглушка дублирует guard._log_blocked (T03 craft)",
+    "approvals: падение подписчика on_request только логируется — Guard ждёт до таймаута (T03 spec)",
+    "хуки памяти: дублированная обёртка main в 4 файлах, неиспользуемые параметры (T05 craft)",
+    "check_context_size: бюджет 12 KB считает только 4 корневых файла, правила (6.4 KB) отдельной строкой (T05 craft)",
+    "capture_learning: порог «3 вызова инструментов» — эвристика, в спецификации не описан (T05 manifest/spec)",
+    "delegation.md дублирует список базовых ролей из истории 55 — при расхождении с .claude/agents правило будет врать (T05 spec)",
+    "claude_bridge: разбор события дублируется (_log_event/_absorb), «успех» считается в трёх местах (T02 craft)",
+    "events.jsonl: ротация не синхронизирована между процессами (мост, guard, approvals) — возможна потеря дописей (T02 craft)",
+    "навыки: политика безопасности частично продублирована из .claude/rules (T06 craft)",
+    "trend-radar: ограничение «~15 минут браузерной работы» агент не может измерить (T06 craft)",
+    "голос: путь faster-whisper не исполнялся ни разу (нет образца ogg) — проверить вживую на первом голосовом (T04)",
+    "кнопки «Принято/Переделать/Опубликовано» появляются, только если агент упомянул папку комплекта в ответе (T04)",
+    "отказы Guard не попадают в статус-сообщение: events.jsonl никто не читает (T04)",
+    "статус не показывает отказы Guard: события blocked идут в events.jsonl, поток хода их не несёт (T04 spec/craft — долг)",
+    "start.bat молча копирует .env из .env.example (в спецификации нет; поведение безопасное) (T04 spec)"
   ],
   "reviewers": {
     "manifestSpec": "a5b820cc515998171",

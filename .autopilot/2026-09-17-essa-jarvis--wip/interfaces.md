@@ -53,3 +53,56 @@
 - `runtime/jarvis-settings.json`: `defaultMode: dontAsk`, allow/deny, хуки PreToolUse `*` → guard.py; PostToolUse → `memory_notice.py`; Stop → `capture_learning.py`; PreCompact → `pre_compact.py`; SessionStart → `session_start.py` (все в `.claude/hooks/`, пишет таск 05). Команды хуков в bash-форме: `"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe" <hook> || exit 2` — работа под Claude Code на Windows не проверена, проверяет таск 08.
 - Правила для Bash/PowerShell сверяются с командной строкой (исходной и без кавычек/склеек). Shell-запись вне корня, через `..` или в путь с переменной (`$HOME`, `$env:`, `%VAR%`) → EXTERNAL `write_outside_root`. Любое удаление (`rm`, `del`, `Remove-Item`, `os.remove`, `::Delete(` …) → MONEY/ask. Токены `.e*`/`.env`/`credentials` в shell → DENY. `approval_timeout_sec: 590` (общий deadline), таймаут хука 620 с. Лимит не задан → MONEY ask.
 - Тесты: `.venv\Scripts\python.exe -m pytest -q`; `pytest.ini` в корне. 105 тестов.
+
+### Из таска 03 — Approvals API
+
+- `runtime.approvals.ApprovalsServer(timeout: float = 600.0)`; `async start(root) -> int` (порт; только 127.0.0.1; пишет `state/approvals.port`, новый `state/secrets/approvals.token`); `async stop()` (удаляет файлы, висящие → deny `shutdown`); повторный start → RuntimeError.
+- `on_request(callback(request_id: str, level, tool, summary, details: dict))` — sync или async.
+- `resolve(request_id, "allow"|"deny", reason="") -> bool` — False, если запроса уже нет (Guard ушёл: reason `client_gone`, или таймаут) → Telegram-слой должен сообщить «запрос уже неактуален» и убрать кнопки.
+- Свойства: `port`, `pending: list[str]`, `addresses`.
+- HTTP: 401 без/с чужим токеном; 400 при плохом теле или level не EXTERNAL|MONEY; 200 `{decision, reason}`.
+- Журнал `state/approvals.jsonl`: `{ts,type:"request",request_id,level,tool,summary,details}` / `{ts,type:"decision",request_id,decision,reason,tool}`.
+- События пока пишет заглушка `emit_event(root, type, **fields)` внутри approvals.py — заменить на `runtime.events.emit` после таска 02.
+
+### Из таска 05 — личность и память
+
+- Хуки памяти: `main(stdin=None, stdout=None, root=ROOT) -> int` (всегда 0), `handle(event, root) -> dict|None`; JSON на stdin → JSON на stdout.
+- `memory_notice` (PostToolUse): запись в `MEMORY.md`, `memory/**`, `essa-ai/knowledge/**` → additionalContext «🧠 запомнил: … (<путь>)».
+- `capture_learning` (Stop): молчит при `stop_hook_active`, при нечитаемом transcript и при < 3 вызовов инструментов; иначе напоминание про урок/алгоритм. **Мост (таск 02) должен брать итог хода из финального `result`, иначе владелице уйдёт служебный текст.**
+- `pre_compact` (PreCompact): строка в `memory/episodes/YYYY-MM.jsonl` `{date,session,trigger,request,result,files}`.
+- `session_start`: `MEMORY.md` > 5 KB → additionalContext «сожми MEMORY.md».
+- `scripts/check_context_size.py`: `check(root) -> bool`, бюджеты CLAUDE 5 / SOUL 2 / GOALS 2 / MEMORY 5 KB, сумма 12 KB. Сейчас 4.25 KB + правила 6.40 KB.
+- Файлы личности: `CLAUDE.md` (карта проекта для JARVIS), `SOUL.md`, `GOALS.md`, `MEMORY.md`; правила в `.claude/rules/`; бизнес-контекст в `essa-ai/` (PROFILE, VOICE, AUDIENCE, PRODUCTS, STRATEGY, ANALYTICS, `content/PUBLISHED.md`, `knowledge/`); долгая память в `memory/{decisions,projects,people,episodes}/`.
+
+### Из таска 02 — мост к Claude Code
+
+- `claude_bridge.TurnResult(text, session_id, new_session, cost_usd, status: "ok"|"stopped"|"rate_limited"|"auth_required"|"error", error=None)`.
+- `async claude_bridge.run_turn(prompt, session_id=None, on_event=None, *, run_id=None, task="", env=None, claude_cmd=None, cwd=None) -> TurnResult` — не бросает исключений. `stop(run_id) -> bool`, `build_env(base=None)`, `build_args(sid)`.
+- `sessions.get(chat_id) -> str|None`, `sessions.set(chat_id, sid)`, `sessions.reset(chat_id)`.
+- `task_router.Job(prompt, uses_browser=False, task="", on_event=None, on_done=None, result=None)`; `TaskRouter(*, budget=None, budget_path=None, env=None, claude_cmd=None, sessions=None).submit(chat_id, job) -> int` (0 = стартует сразу), `.pending(chat_id)`, `.stop(chat_id)`; модульные `submit/stop/run_id_for`.
+- `events.emit(type, **fields) -> dict`; `EVENTS_PATH` / `SESSIONS_PATH` — модульные атрибуты (подменяются в тестах). **Таску 03: заменить заглушку `emit_event` на `events.emit`.**
+- Итог хода Telegram-слою брать из финального `result`, а не из последнего текста (иначе уйдёт служебное напоминание хука capture_learning).
+- Риск: в дымовом прогоне внутри этой среды разработки `claude` вернул `auth_required` (host-логин вместо подписки). Проверка на боевой машине через `start.bat` — таск 08.
+
+### Из таска 03 — доработка
+
+- `ApprovalsServer(timeout=580.0)`, `DEFAULT_TIMEOUT=580.0` (< 590 с у Guard). `AppRunner(handler_cancellation=True)`: уход Guard снимает запрос сразу → `resolve` False, журнал `deny/client_gone`, allow после ухода не пишется.
+- Токен: создаётся `O_EXCL` c 0o600, права до записи; на Windows `icacls`; неудача → WARNING + событие `error`.
+- Журнал: строки в `summary`/`details` обрезаются до 500 символов (`JOURNAL_STR_LIMIT`); в `on_request` и Guard уходит полное.
+
+### Из таска 06 — навыки и браузер
+
+- 8 навыков в `.claude/skills/`: `trend-radar`, `competitor-research`, `content-strategy`, `content-plan` (оркестратор), `copywriting`, `reels-script`, `repurpose-content`, `browser-use`.
+- Папка комплекта: `essa-ai/content/YYYY-MM-DD-<тема>/{post.md,carousel.md,reels.md,stories.md,sources.md,status}`; `status`: draft|accepted|rework|published; публикация → строка в `essa-ai/content/PUBLISHED.md`.
+- MCP-сервер `playwright` (`.mcp.json`): `npx @playwright/mcp@latest --user-data-dir state/browser-profile --browser msedge`. Инструменты: browser_navigate(_back), browser_snapshot, browser_take_screenshot, browser_click, browser_type, browser_fill_form, browser_select_option, browser_press_key, browser_wait_for, browser_tabs, browser_close.
+- Вход на сайты: `.venv\Scripts\python.exe -m integrations.browser.login <url>`; `build_command(url, browser_path=None, root=None)`, `find_browser()`, `PROFILE_DIR = state/browser-profile`. Профиль занят одним процессом: во время браузерной задачи вход невозможен.
+
+### Из таска 04 — Telegram
+
+- Команды: `/start` `/help` `/whoami` `/new` `/stop` `/status` `/browser_login <url>`; текст, голос, фото, документы.
+- `gateway.Gateway(owner_id, root, router, sessions, approvals, transcriber, min_status_interval)`: `.on_message/.on_voice/.on_file/.on_callback`, `.on_approval_request(request_id, level, tool, summary, details)`, `.attach(bot)`, `.announce()`, `.register(app)`; callback-данные `ap:<tok>:<d>` и `ct:<tok>:<d>`.
+- `gateway.load_env(path) -> dict[key, True]` (значений не отдаёт), `Config(token, owner_id).from_env()`, `run(config)`, `main(argv, env_path) -> int`.
+- `status.split_message(text, limit=4096)`, `too_long`, `human_elapsed`, `StatusReporter(bot, chat_id, task, min_interval=3.0, clock)` с `.note/.note_blocked/.start/.update/.finish`.
+- `files.sanitize_name`, `inbox_path`, `save_bytes`, `find_content_bundle(text, root)`, `mark_content(root, name, accepted|redo|published, when, note)`.
+- `voice.transcribe(path, transcriber=None) -> str|None`, `model_name()`, `get_model()`.
+- Запуск: `start.bat` (ASCII-only: после `chcp 65001` кириллица в .bat ломает разбор); автозапуск — `powershell -ExecutionPolicy Bypass -File scripts\install_autostart.ps1` (снять: `-Remove`), ставит владелица сама.
