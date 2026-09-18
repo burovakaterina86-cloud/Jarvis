@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-17T22:36:55+07:00",
-  "updatedAt": "2026-09-18T06:55:04+07:00",
+  "updatedAt": "2026-09-18T11:35:17+07:00",
   "finishedAt": null,
   "stages": [
     {
@@ -50,7 +50,7 @@ window.STATE =
       "id": "build",
       "status": "active",
       "startedAt": "2026-09-17T23:24:56+07:00",
-      "note": "5 из 8 тасков готовы"
+      "note": "6 из 8 готовы; 02 и 07 на доработке"
     },
     {
       "id": "review",
@@ -64,8 +64,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 60,
-    "done": 29,
-    "inTicket": 17,
+    "done": 36,
+    "inTicket": 10,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 11,
@@ -141,18 +141,19 @@ window.STATE =
       ],
       "status": "done",
       "retries": 0,
-      "repairs": 1,
+      "repairs": 2,
       "handoffs": 0,
       "startedAt": "2026-09-17T23:40:46+07:00",
       "repairFindings": [
-        "повтор хода после выполненных инструментов; переполнение по тексту ответа; бюджет списывается на неуспешных ходах; непокрытые ветки разбора; убийство дерева"
+        "повтор хода после выполненных инструментов; переполнение по тексту ответа; бюджет списывается на неуспешных ходах; непокрытые ветки разбора; убийство дерева",
+        "D02: окружение сессии Claude Code ломало вход по подписке"
       ],
-      "finishedAt": "2026-09-18T06:50:43+07:00",
+      "finishedAt": "2026-09-18T11:35:17+07:00",
       "tests": {
         "passed": 215,
         "failed": 0
       },
-      "commit": "52bde91"
+      "commit": "3d27130"
     },
     {
       "id": "03",
@@ -303,14 +304,20 @@ window.STATE =
         "integrations/__init__.py",
         "tests/test_telegram.py"
       ],
-      "status": "repair",
+      "status": "done",
       "retries": 0,
       "repairs": 1,
       "handoffs": 0,
       "startedAt": "2026-09-18T06:40:01+07:00",
       "repairFindings": [
         "режим настройки отвечал посторонним; new_session не показывался; два статус-сообщения; доставка ответа без защиты; uses_browser по словам; дыры в тестах"
-      ]
+      ],
+      "finishedAt": "2026-09-18T07:00:04+07:00",
+      "tests": {
+        "passed": 251,
+        "failed": 0
+      },
+      "commit": "525dea4"
     },
     {
       "id": "07",
@@ -334,10 +341,14 @@ window.STATE =
         "integrations/telegram/",
         "tests/test_activation.py"
       ],
-      "status": "pending",
+      "status": "repair",
       "retries": 0,
-      "repairs": 0,
-      "handoffs": 0
+      "repairs": 1,
+      "handoffs": 0,
+      "startedAt": "2026-09-18T07:00:04+07:00",
+      "repairFindings": [
+        "базовые помощники оказались включены без кнопки; тесты зависят от рабочего дерева; статус теста по слову; неатомарная активация"
+      ]
     },
     {
       "id": "08",
@@ -371,8 +382,8 @@ window.STATE =
   ],
   "singlePass": null,
   "tests": {
-    "passed": 220,
-    "failed": 0
+    "passed": 282,
+    "failed": 7
   },
   "debt": {
     "placeholders": [
@@ -417,7 +428,9 @@ window.STATE =
     "кнопки «Принято/Переделать/Опубликовано» появляются, только если агент упомянул папку комплекта в ответе (T04)",
     "отказы Guard не попадают в статус-сообщение: events.jsonl никто не читает (T04)",
     "статус не показывает отказы Guard: события blocked идут в events.jsonl, поток хода их не несёт (T04 spec/craft — долг)",
-    "start.bat молча копирует .env из .env.example (в спецификации нет; поведение безопасное) (T04 spec)"
+    "start.bat молча копирует .env из .env.example (в спецификации нет; поведение безопасное) (T04 spec)",
+    "браузерные ходы не сериализуются глобально (uses_browser всегда False); при одном владельце ходы и так идут по очереди, риск — только при параллельных чатах (T04 долг)",
+    "вход в claude на машине владелицы истёк (OAuth session expired) — до `claude` + /login бот получает auth_required (проверка в T08)"
   ],
   "reviewers": {
     "manifestSpec": "a5b820cc515998171",

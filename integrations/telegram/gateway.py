@@ -9,7 +9,9 @@ Telegram-переменные.
 """
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import json
 import logging
 import os
 import shutil
@@ -25,6 +27,7 @@ from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, Mes
 
 from integrations.telegram import files, voice
 from integrations.telegram.status import StatusReporter, split_message, too_long
+from runtime import activation
 from runtime import sessions as sessions_mod
 from runtime import task_router
 from runtime.approvals import ApprovalsServer
@@ -50,6 +53,8 @@ HELP = ("Пиши задачу текстом или голосом, присы�
 
 APPROVE_PREFIX = "ap"
 CONTENT_PREFIX = "ct"
+DRAFT_PREFIX = "df"
+DRAFT_POLL_INTERVAL = 10.0   # черновик замечаем в течение десяти секунд после появления
 TOKEN_TTL = 24 * 3600.0   # столько живёт кнопка, если её так и не нажали
 MAX_TOKENS = 200
 
@@ -164,6 +169,9 @@ class Gateway:
 
     def content_callback_data(self, name: str, decision: str) -> str:
         return f"{self._token_for(CONTENT_PREFIX, name)}:{decision}"
+
+    def draft_callback_data(self, kind: str, name: str, decision: str) -> str:
+        return f"{self._token_for(DRAFT_PREFIX, f'{kind}:{name}')}:{decision}"
 
     @staticmethod
     async def _send(context, chat_id, text, **kw):
@@ -372,6 +380,152 @@ class Gateway:
         except Exception as exc:  # noqa: BLE001
             log.warning("не удалось отправить запрос подтверждения: %s", type(exc).__name__)
 
+    # ---- черновики навыков и помощников
+
+    def _draft_keyboard(self, kind: str, name: str) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("Активировать", callback_data=self.draft_callback_data(kind, name, "on")),
+            InlineKeyboardButton("Посмотреть", callback_data=self.draft_callback_data(kind, name, "show")),
+            InlineKeyboardButton("Удалить черновик", callback_data=self.draft_callback_data(kind, name, "rm")),
+        ]])
+
+    def _draft_confirm_keyboard(self, kind: str, name: str) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("Да, удалить", callback_data=self.draft_callback_data(kind, name, "rm2")),
+            InlineKeyboardButton("Отмена", callback_data=self.draft_callback_data(kind, name, "no")),
+        ]])
+
+    @staticmethod
+    def _draft_text(draft) -> str:
+        head = "Новый навык" if draft.kind == "skill" else "Новый помощник"
+        mark = {"passed": "Тест: пройден", "failed": "Тест: не пройден"}.get(
+            draft.test_status, "Тест: не прогонялся")
+        lines = [f"{head} {draft.name}: {draft.description or '(без описания)'}", mark]
+        if draft.problems:
+            lines.append("Проверка не пройдена: " + "; ".join(draft.problems))
+        return "\n".join(lines)
+
+    def _seen_path(self) -> Path:
+        return self.root / "state" / "drafts-seen.json"
+
+    def _load_seen(self) -> set:
+        try:
+            data = json.loads(self._seen_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return set()
+        return set(data) if isinstance(data, list) else set()
+
+    def _save_seen(self, seen: set) -> None:
+        # Одна операция на файл: опрос и нажатие кнопки могут совпасть по времени,
+        # а половина записанного набора хуже устаревшей.
+        path = self._seen_path()
+        tmp = path.with_suffix(".json.tmp")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text(json.dumps(sorted(seen), ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError as exc:
+            log.warning("не смог запомнить показанные черновики: %s", type(exc).__name__)
+
+    def _forget_draft(self, key: str) -> None:
+        """Черновик исчез (включён или удалён) — снова появится под тем же именем, снова покажем."""
+        seen = self._load_seen()
+        if key in seen:
+            seen.discard(key)
+            self._save_seen(seen)
+
+    async def check_drafts(self) -> list:
+        """Один опрос drafts/: о каждом новом черновике сообщаем владелице ровно раз."""
+        if self.bot is None or self.owner_id is None:
+            return []
+        seen = self._load_seen()
+        fresh = []
+        for draft in activation.list_drafts(self.root):
+            key = f"{draft.kind}:{draft.name}"
+            if key in seen:
+                continue
+            try:
+                await self.bot.send_message(
+                    self.owner_id, self._draft_text(draft),
+                    reply_markup=self._draft_keyboard(draft.kind, draft.name))
+            except Exception as exc:  # noqa: BLE001 — не отметим показанным, покажем в следующий раз
+                log.warning("не удалось показать черновик %s: %s", key, type(exc).__name__)
+                continue
+            seen.add(key)
+            fresh.append(draft)
+        if fresh:
+            self._save_seen(seen)
+        return fresh
+
+    async def watch_drafts(self, interval: float = DRAFT_POLL_INTERVAL, sleep=None) -> None:
+        """Фоновый опрос. Сон подменяем в тестах — ждать по-настоящему там незачем."""
+        sleep = sleep or asyncio.sleep
+        while True:
+            await sleep(interval)
+            try:
+                await self.check_drafts()
+            except Exception as exc:  # noqa: BLE001 — наблюдение не должно ронять бота
+                log.warning("опрос черновиков не удался: %s", type(exc).__name__)
+
+    async def _draft_action(self, query, token: str, value: str, decision: str) -> None:
+        kind, _, name = value.partition(":")
+        if decision == "on":
+            try:
+                activation.activate(kind, name, self.root)
+            except activation.ActivationError as exc:
+                await query.edit_message_text(text=f"Не включил {name}: {exc}", reply_markup=None)
+                return
+            self._tokens.pop(token, None)
+            self._forget_draft(value)
+            word = "Навык" if kind == "skill" else "Помощник"
+            await query.edit_message_text(
+                text=f"{word} {name} включён — доступен со следующего хода.", reply_markup=None)
+        elif decision == "show":
+            await self._show_draft(query, kind, name)
+        elif decision == "rm":
+            await query.edit_message_text(
+                text=f"Удалить черновик {name}? Вернуть его будет нельзя.",
+                reply_markup=self._draft_confirm_keyboard(kind, name))
+        elif decision == "rm2":
+            try:
+                gone = activation.discard(kind, name, self.root)
+            except activation.ActivationError as exc:
+                await query.edit_message_text(text=f"Не удалил: {exc}", reply_markup=None)
+                return
+            self._tokens.pop(token, None)
+            self._forget_draft(value)
+            await query.edit_message_text(
+                text=(f"Удалил черновик {name}." if gone else f"Черновика {name} уже нет."),
+                reply_markup=None)
+        elif decision == "no":
+            await query.edit_message_text(text=f"Оставил черновик {name}.",
+                                          reply_markup=self._draft_keyboard(kind, name))
+
+    async def _show_draft(self, query, kind: str, name: str) -> None:
+        path = activation.draft_path(kind, name, self.root)
+        if kind == "skill":
+            # TEST.md — половина решения: по нему видно, что навык вообще проверяли.
+            docs = [(path / "SKILL.md", f"{name}-SKILL.md"),
+                    (path / "TEST.md", f"{name}-TEST.md")]
+        else:
+            docs = [(path, f"{name}.md")]
+        sent = 0
+        for doc, filename in docs:
+            try:
+                data = doc.read_bytes()
+            except OSError:
+                continue
+            try:
+                await self.bot.send_document(self.owner_id, document=data, filename=filename,
+                                             caption=f"Черновик {name} — решай, включать ли.")
+            except Exception as exc:  # noqa: BLE001
+                log.warning("не удалось отправить черновик: %s", type(exc).__name__)
+                return
+            sent += 1
+        if not sent:
+            await query.edit_message_text(text=f"Не нашёл черновик {name} на диске.",
+                                          reply_markup=None)
+
     async def on_callback(self, update, context) -> None:
         query = update.callback_query
         uid = getattr(getattr(query, "from_user", None), "id", None)
@@ -395,6 +549,8 @@ class Gateway:
             await self._resolve_approval(query, value, decision)
         elif prefix == CONTENT_PREFIX:
             await self._mark_content(query, value, decision)
+        elif prefix == DRAFT_PREFIX:
+            await self._draft_action(query, token, value, decision)
         self._prune_tokens()
 
     async def _resolve_approval(self, query, request_id: str, decision: str) -> None:
@@ -467,14 +623,22 @@ def run(config: Config | None = None) -> int:
     approvals = ApprovalsServer()
     gw = Gateway(owner_id=config.owner_id, approvals=approvals)
 
+    watcher: asyncio.Task | None = None
+
     async def post_init(app: Application) -> None:
+        nonlocal watcher
         gw.attach(app.bot)
         approvals.on_request(gw.on_approval_request)
         port = await approvals.start(ROOT)
         log.info("Approvals API слушает 127.0.0.1:%s", port)
+        # Папки заводим до первого черновика: новая .claude/agents/ требует перезапуска Claude Code.
+        activation.ensure_dirs(ROOT)
+        watcher = asyncio.create_task(gw.watch_drafts())
         await gw.announce()
 
     async def post_shutdown(app: Application) -> None:
+        if watcher is not None:
+            watcher.cancel()
         await approvals.stop()
 
     app = (Application.builder().token(config.token)

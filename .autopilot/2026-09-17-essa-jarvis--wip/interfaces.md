@@ -106,3 +106,10 @@
 - `files.sanitize_name`, `inbox_path`, `save_bytes`, `find_content_bundle(text, root)`, `mark_content(root, name, accepted|redo|published, when, note)`.
 - `voice.transcribe(path, transcriber=None) -> str|None`, `model_name()`, `get_model()`.
 - Запуск: `start.bat` (ASCII-only: после `chcp 65001` кириллица в .bat ломает разбор); автозапуск — `powershell -ExecutionPolicy Bypass -File scripts\install_autostart.ps1` (снять: `-Remove`), ставит владелица сама.
+
+### Из таска 07 — самосоздаваемые навыки и помощники
+
+- `runtime.activation`: `Draft(kind,name,path,description,when_to_use,test_status,problems)`, `list_drafts(root)`, `validate(kind,name,root) -> list[str]` (пусто = можно включать), `activate(kind,name,root) -> Path` (`ActivationError`), `discard(kind,name,root) -> bool`, `ensure_dirs(root)`, `draft_path/live_path`; `kind ∈ {"skill","agent"}`.
+- Gateway: `draft_callback_data(kind,name,decision)` → `df:<tok>:<on|show|rm|rm2|no>`; `async check_drafts()`, `async watch_drafts(interval=10.0)`; `DRAFT_POLL_INTERVAL=10.0`. Показанные черновики — `state/drafts-seen.json`.
+- `TEST.md` черновика навыка содержит строку «Результат: пройден | не пройден» — по ней бот печатает «Тест: …».
+- Черновики базовых помощников: `drafts/agents/{researcher,competitor-analyst,strategist,copywriter,reels-producer,reviewer}.md`; живые — в `.claude/agents/` (папка существует заранее).

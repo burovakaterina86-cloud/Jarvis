@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Code — ESSA.AI · Graphite Violet Editorial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&family=Open+Sans:wght@400;600;700&family=Marck+Script&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+  :root {
+    /* ── ЦВЕТА (DESIGN.md · core palette) ── */
+    --accent:       #7158E7;   /* violet-primary */
+    --accent-deep:  #592DE2;   /* violet-strong */
+    --accent-soft:  rgba(113,88,231,0.16);
+    --accent-line:  rgba(113,88,231,0.38);
+    --violet-soft:  #9F87EC;
+    --lavender:     #C8BFE7;
+    --bg-top:       #292834;   /* bg-dark-secondary */
+    --bg-deep:      #0D1015;   /* bg-dark-primary */
+    --ink:          #F7F5FA;   /* text-on-dark */
+    --ink-muted:    #B8B4C2;   /* text-muted-dark */
+    --ink-faint:    rgba(247,245,250,0.32);
+    --line:         rgba(247,245,250,0.14);
+    /* ── ХОЛСТЫ ── */
+    --sw: 320px;  --sh: 400px;   /* карусель 4:5  → экспорт 960×1200 */
+    --rw: 270px;  --rh: 480px;   /* рилс 9:16     → экспорт 810×1440 */
+    --pad: 20px;
+    --radius: 20px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: #16151C; }
+  body {
+    font-family: 'Open Sans', sans-serif;
+    background: #16151C;
+    padding: 26px 24px 60px;
+    display: flex; flex-direction: column; gap: 22px;
+  }
+
+  /* ══ ЗАМЕТКИ О НАЗНАЧЕНИИ ══ */
+  .row-note { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 11px; line-height: 1.55; color: var(--ink-muted); max-width: 720px; margin-top: -12px; }
+  .row-note strong { color: var(--violet-soft); font-weight: 600; }
+  .scope-banner { background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: var(--radius); padding: 16px 20px; max-width: 940px; }
+  .scope-banner h2 { font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--violet-soft); margin-bottom: 8px; }
+  .scope-banner p { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 11.5px; line-height: 1.6; color: var(--ink-muted); margin-bottom: 5px; }
+  .scope-banner p:last-child { margin-bottom: 0; }
+  .scope-banner b { color: var(--ink); font-weight: 600; }
+
+  /* ══ СЛУЖЕБНЫЙ ИНТЕРФЕЙС (не часть дизайн-кода) ══ */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .topbar h1 { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 13px; color: var(--ink); letter-spacing: 0.01em; text-transform: uppercase; }
+  .topbar h1 span { color: var(--violet-soft); }
+  .row-title { font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(247,245,250,0.45); }
+  .dl-all-btn {
+    background: var(--accent); color: #fff; border: 1px solid var(--accent-deep); border-radius: 12px;
+    padding: 9px 16px; font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 11px;
+    letter-spacing: 0.03em; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  }
+  .dl-all-btn:hover { background: var(--accent-deep); }
+  .slides-row { display: flex; flex-direction: row; align-items: flex-start; gap: 14px; overflow-x: auto; padding-bottom: 10px; }
+  .slides-row::-webkit-scrollbar { height: 4px; }
+  .slides-row::-webkit-scrollbar-track { background: rgba(247,245,250,0.08); }
+  .slides-row::-webkit-scrollbar-thumb { background: var(--accent); }
+  .slide-wrap { display: flex; flex-direction: column; align-items: center; gap: 7px; flex-shrink: 0; }
+  .slide-label { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .slide-label span { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 9px; letter-spacing: 0.08em; color: rgba(247,245,250,0.5); text-transform: uppercase; }
+  .dl-btn { background: transparent; border: 1px solid var(--accent-line); color: var(--violet-soft); border-radius: 8px; padding: 3px 9px; font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 9px; cursor: pointer; }
+  .dl-btn:hover { background: var(--accent-soft); }
+
+  /* ══ БАЗА СЛАЙДА ══ */
+  .slide {
+    width: var(--sw); height: var(--sh); flex-shrink: 0; position: relative; overflow: hidden;
+    background: linear-gradient(165deg, var(--bg-top) 0%, var(--bg-deep) 100%);
+    border-radius: 0; padding: var(--pad); display: flex; flex-direction: column;
+  }
+  .reel { width: var(--rw); height: var(--rh); }
+  .slide-noise { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0.05;
+    background-image: radial-gradient(circle, var(--ink) 0.6px, transparent 0.6px);
+    background-size: 13px 13px;
+  }
+  .slide-blob { position: absolute; border-radius: 50%; filter: blur(40px); pointer-events: none; z-index: 0; }
+  .dot-grid { position: absolute; width: 48px; height: 48px; z-index: 1; pointer-events: none; opacity: 0.45;
+    background-image: radial-gradient(circle, var(--lavender) 1px, transparent 1px);
+    background-size: 9px 9px;
+  }
+  .corner-frame { position: absolute; width: 14px; height: 14px; z-index: 1; pointer-events: none; border-color: var(--accent-line); border-style: solid; border-width: 0; }
+  .cf-tl { top: 10px; left: 10px; border-top-width: 1.4px; border-left-width: 1.4px; }
+  .cf-br { bottom: 10px; right: 10px; border-bottom-width: 1.4px; border-right-width: 1.4px; }
+
+  /* ── ШАПКА / ФУТЕР — тонкие линии сверху и снизу ── */
+  .slide-header { position: relative; z-index: 2; display: flex; align-items: center; gap: 6px; padding-bottom: 9px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .nickname { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 8px; letter-spacing: 0.05em; color: var(--ink-muted); }
+  .slide-num { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.08em; color: var(--ink-faint); margin-left: auto; }
+  .slide-footer { position: relative; z-index: 2; margin-top: auto; padding-top: 9px; border-top: 1px solid var(--line); min-height: 10px; }
+  .slide-content { position: relative; z-index: 2; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+  .slide-body { position: relative; z-index: 2; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  .slide-body .text-block { width: 100%; text-align: left; }
+
+  /* ── РУКОПИСНАЯ ЗАМЕТКА НА ПОЛЯХ ── */
+  .margin-note { position: absolute; z-index: 3; display: flex; align-items: flex-start; gap: 5px; max-width: 118px; pointer-events: none; }
+  .margin-note svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; }
+  .margin-note span { font-family: 'Marck Script', cursive; font-size: 15px; line-height: 1.1; color: var(--violet-soft); }
+
+  /* ── ТИПОГРАФИКА ── */
+  .tag { font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--violet-soft); background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 6px; padding: 3px 8px; display: inline-block; margin-bottom: 9px; }
+  .hero { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 24px; line-height: 1.08; letter-spacing: -0.01em; color: var(--ink); }
+  .hero em { font-style: normal; color: var(--violet-soft); }
+  .title { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 18px; line-height: 1.12; letter-spacing: -0.01em; color: var(--ink); }
+  .title em { font-style: normal; color: var(--violet-soft); }
+  .subtitle { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 9px; line-height: 1.5; color: var(--ink-muted); }
+  .sub-heading { font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
+  .body-text { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 8.5px; line-height: 1.55; color: var(--ink-muted); }
+  .accent-line { width: 24px; height: 2px; background: var(--accent); margin-bottom: 10px; border-radius: 2px; }
+  .rule { width: 100%; height: 1px; background: var(--line); margin: 9px 0; }
+
+  /* ── МОДУЛЬ: LIST ── */
+  .list-item { display: flex; gap: 9px; align-items: flex-start; padding: 9px 11px; background: rgba(247,245,250,0.04); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 6px; }
+  .list-num { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 12px; color: var(--violet-soft); line-height: 1.2; flex-shrink: 0; min-width: 16px; }
+  .list-text strong { display: block; font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 9.5px; color: var(--ink); margin-bottom: 2px; }
+  .list-text span { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 7.5px; line-height: 1.45; color: var(--ink-muted); }
+
+  /* ── МОДУЛЬ: BARS ── */
+  .bar-row { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+  .bar-label { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 7px; color: var(--ink); min-width: 34px; }
+  .bar-track { flex: 1; height: 15px; background: rgba(247,245,250,0.07); border-radius: 8px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); display: flex; align-items: center; justify-content: flex-end; padding-right: 5px; border-radius: 8px; }
+  .bar-value { font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 6.5px; color: #fff; white-space: nowrap; }
+  .bar-prev { height: 100%; background: rgba(247,245,250,0.14); display: flex; align-items: center; justify-content: flex-end; padding-right: 5px; border-radius: 8px; }
+  .bar-prev .bar-value { color: rgba(247,245,250,0.85); }
+
+  /* ── МОДУЛЬ: BIG STAT ── */
+  .big-stat { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 40px; line-height: 1; letter-spacing: -0.02em; color: var(--ink); }
+  .big-stat em { font-style: normal; color: var(--violet-soft); }
+  .stat-unit { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 9px; color: var(--ink-muted); margin-left: 4px; }
+  .stat-desc { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 8px; color: var(--ink-muted); margin-top: 4px; }
+
+  /* ── МОДУЛЬ: STAT GRID ── */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .stat-card { background: rgba(247,245,250,0.04); border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
+  .stat-card-val { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -0.01em; color: var(--violet-soft); }
+  .stat-card-val em { font-style: normal; color: var(--ink); }
+  .stat-card-label { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 6.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); margin-top: 4px; }
+
+  /* ── МОДУЛЬ: DONUT ── */
+  .donut-wrap { display: flex; align-items: center; gap: 12px; }
+  .donut-info strong { display: block; font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 15px; color: var(--ink); }
+  .donut-info strong em { font-style: normal; color: var(--violet-soft); }
+  .donut-info span { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 7.5px; color: var(--ink-muted); }
+
+  /* ── МОДУЛЬ: TIMELINE ── */
+  .timeline { position: relative; }
+  .timeline::before { content: ''; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 1px; background: var(--accent-line); }
+  .tl-item { display: flex; gap: 11px; align-items: flex-start; padding: 7px 0; }
+  .tl-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 2px; }
+  .tl-dot.hollow { background: var(--bg-top); border: 2px solid var(--accent); }
+  .tl-text strong { display: block; font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 9px; color: var(--ink); margin-bottom: 1px; }
+  .tl-text span { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 7.5px; color: var(--ink-muted); }
+
+  /* ── МОДУЛЬ: QUOTE ── */
+  .quote-block { background: var(--accent-soft); border-left: 2px solid var(--accent); border-radius: 0 14px 14px 0; padding: 10px 12px; margin-bottom: 12px; }
+  .quote-text { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 11px; line-height: 1.4; color: var(--ink); }
+  .quote-sub { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 7px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); margin-top: 6px; }
+
+  /* ── МОДУЛЬ: FACTS ── */
+  .fact-row { display: flex; gap: 9px; align-items: flex-start; margin-bottom: 8px; }
+  .fact-icon { width: 22px; height: 22px; border-radius: 8px; background: var(--accent-soft); border: 1px solid var(--accent-line); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .fact-icon svg { width: 11px; height: 11px; stroke: var(--violet-soft); fill: none; stroke-width: 1.8; }
+  .fact-text strong { display: block; font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 9px; color: var(--ink); margin-bottom: 1px; }
+  .fact-text span { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 7.5px; line-height: 1.45; color: var(--ink-muted); }
+
+  /* ── МОДУЛЬ: CTA ── */
+  .cta-word { display: inline-block; background: var(--accent); padding: 7px 15px; margin-bottom: 12px; border-radius: 12px; }
+  .cta-word span { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 24px; letter-spacing: -0.01em; color: #fff; line-height: 1; display: block; }
+  .cta-item { display: flex; align-items: flex-start; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .cta-item:last-child { border-bottom: none; }
+  .cta-sq { width: 5px; height: 5px; border-radius: 50%; background: var(--violet-soft); margin-top: 4px; flex-shrink: 0; }
+  .cta-text { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 8.5px; line-height: 1.4; color: var(--ink); }
+
+  /* ── РИЛС ── */
+  .reel-hook { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.04; letter-spacing: -0.01em; color: var(--ink); }
+  .reel-hook em { font-style: normal; color: var(--violet-soft); }
+  .reel-sub { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); margin-top: 10px; }
+
+  /* ══ БЛОК ТОКЕНОВ ══ */
+  .token-section { background: var(--bg-deep); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px 28px; width: 100%; max-width: 940px; }
+  .token-title { font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--violet-soft); margin-bottom: 22px; }
+  .token-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 28px; }
+  .token-group h3 { font-family: 'Open Sans', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 14px; }
+  .token-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .color-swatch { width: 26px; height: 26px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--line); }
+  .token-name { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 11px; color: var(--ink); }
+  .token-val { font-family: 'Open Sans', sans-serif; font-size: 10px; color: var(--ink-muted); }
+  .font-specimen { margin-bottom: 12px; }
+  .fs-name { font-family: 'Open Sans', sans-serif; font-size: 9px; letter-spacing: 0.04em; color: var(--ink-muted); }
+  .fs-sample { font-size: 18px; color: var(--ink); line-height: 1.2; margin-top: 3px; }
+  .fs-display { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; letter-spacing: -0.01em; }
+  .fs-body { font-family: 'Open Sans', sans-serif; font-weight: 400; }
+  .fs-hand { font-family: 'Marck Script', cursive; }
+  .type-row { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--line); padding: 7px 0; }
+  .type-label { font-family: 'Open Sans', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 0.03em; color: var(--ink); }
+  .type-spec { font-family: 'Open Sans', sans-serif; font-size: 10px; color: var(--ink-faint); }
+  .rules-list { list-style: none; }
+  .rules-list li { font-family: 'Open Sans', sans-serif; font-weight: 400; font-size: 11px; line-height: 1.5; color: var(--ink-muted); padding-left: 14px; position: relative; margin-bottom: 7px; }
+  .rules-list li::before { content: '●'; position: absolute; left: 0; top: 0; color: var(--accent); font-size: 7px; }
+</style>
+</head>
+<body>
+
+<!-- DESIGN-CODE
+{
+  "owner": "@studio_essa_ai",
+  "version": "v1",
+  "scope": {
+    "type": "visual-design-code",
+    "carousel": "ЭТАЛОН. Слайды воспроизводятся один в один: та же вёрстка, размеры, декор и модули.",
+    "reels": "НЕ эталон, а образец стиля. Кадры выше — только обложки. Сцены видео, титры, субтитры и перебивки создаются НА ОСНОВЕ этой палитры, шрифтов и декора, а не копируются с этих кадров.",
+    "video_rules": [
+      "палитра, шрифты и правила акцентов переносятся в видео без изменений",
+      "композиция каждой сцены строится под кадр и не обязана повторять раскладку обложки",
+      "движение, длительность и монтаж этот файл не описывает"
+    ]
+  },
+  "style": "Graphite Violet Editorial (STYLE_02_DARK) — тёмный editorial: графит + фиолетовый акцент, узкая крупная типографика, рукописные заметки на полях",
+  "canvas": { "carousel": "320x400", "reels": "270x480", "export_scale": 3, "ratio": "4:5 / 9:16" },
+  "colors": {
+    "accent": "#7158E7",
+    "accent_deep": "#592DE2",
+    "accent_soft": "rgba(113,88,231,0.16)",
+    "violet_soft": "#9F87EC",
+    "lavender": "#C8BFE7",
+    "bg_top": "#292834",
+    "bg_deep": "#0D1015",
+    "ink": "#F7F5FA",
+    "ink_muted": "#B8B4C2",
+    "line": "rgba(247,245,250,0.14)"
+  },
+  "fonts": {
+    "display": "Roboto Condensed 700 — заголовки, hero, крупные цифры",
+    "body": "Open Sans 400/600/700 — текст, лейблы, подписи",
+    "hand": "Marck Script — рукописные тезис-заметки на полях (третий шрифт, отдельное решение Катерины)"
+  },
+  "type_scale": {
+    "reel_hook": "30px/700",
+    "hero": "24px/700",
+    "big_stat": "40px/700",
+    "title": "18px/700",
+    "quote": "11px/600",
+    "sub_heading": "9px/700 uppercase",
+    "body": "8.5px/400",
+    "caption": "7px/700 uppercase",
+    "hand_note": "15px Marck Script"
+  },
+  "geometry": { "radius": "14–20px — DESIGN.md диапазон 16–28px", "padding": "20px", "border": "1px solid line" },
+  "decor": ["noise 5%", "blur-blobs violet", "dot-grid lavender", "corner-frames", "тонкие линии сверху и снизу слайда"],
+  "modules": ["list", "bars", "big-stat", "stat-grid", "donut", "timeline", "quote", "facts", "cta", "margin-note"],
+  "rules": [
+    "три шрифта: Roboto Condensed (display) + Open Sans (body) + Marck Script (рукописные заметки — исключение по прямому решению)",
+    "один фиолетовый акцент, lavender и violet-soft — вторичные, не равноправный второй акцент",
+    "радиус скруглений 14–20px, не 0",
+    "один смысловой акцент на слайд",
+    "соседние слайды не повторяют один dominant layout подряд (carousel rhythm)",
+    "не больше 1–2 заметных glow/blob-зон на слайд",
+    "иллюстрации — геометрия и псевдо-интерфейсные блоки, без 3D, без фото (фото в код не встраивается)",
+    "рукописная заметка — по одной на слайд, с иконкой по смыслу, не обязательна на каждом слайде"
+  ]
+}
+-->
+
+<div class="topbar">
+  <h1>Design Code · <span>ESSA.AI</span> · Graphite Violet Editorial · v1 · 4:5 → 960×1200</h1>
+  <button class="dl-all-btn" onclick="downloadAll()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+    Скачать все (ZIP)
+  </button>
+</div>
+
+<div class="scope-banner">
+  <h2>Что это за файл</h2>
+  <p>Это <b>визуальный дизайн-код</b>: палитра, шрифты, шкала размеров, декор и набор контент-модулей. Он задаёт то, как выглядит бренд, а не то, что в нём говорится.</p>
+  <p><b>Для карусели это эталон.</b> Слайды ниже воспроизводятся один в один — та же вёрстка, те же отступы, те же модули, меняется только контент.</p>
+  <p><b>Для видео это не эталон, а пример стиля.</b> Кадры в разделе рилсов — только обложки. Сцены, титры, субтитры и перебивки создаются <b>на основе</b> этой палитры, шрифтов и правил акцентов, а не копируются покадрово. Композиция каждой сцены строится под задачу кадра. Движение, ритм и монтаж этот файл не описывает.</p>
+</div>
+
+<div class="row-title">Карусель · 7 слайдов · 320×400</div>
+<div class="slides-row">
+
+  <!-- SLIDE 1 — ОБЛОЖКА -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span>01 — Обложка</span><button class="dl-btn" onclick="dlSlide('slide-1','01-cover',320,400)">↓ PNG</button></div>
+    <div class="slide" id="slide-1">
+      <div class="slide-noise"></div>
+      <div class="slide-blob" style="width:190px;height:190px;top:-70px;right:-50px;background:radial-gradient(circle,rgba(113,88,231,0.35) 0%,transparent 70%);"></div>
+      <div class="slide-blob" style="width:120px;height:120px;bottom:-40px;left:-30px;background:radial-gradient(circle,rgba(157,135,236,0.16) 0%,transparent 70%);"></div>
+      <div class="dot-grid" style="top:26px;left:18px;"></div>
+      <div class="corner-frame cf-br"></div>
+      <div class="slide-header">
+        <span class="nickname">@studio_essa_ai</span>
+        <span class="slide-num">01</span>
+      </div>
+      <div class="slide-body">
+        <!-- ИЛЛЮСТРАЦИЯ: псевдо-интерфейс, абстрактная геометрия. Только rect/circle/line. -->
+        <svg viewBox="0 0 140 100" width="128" height="91" xmlns="http://www.w3.org/2000/svg">
+          <rect x="10" y="8" width="120" height="16" rx="6" fill="none" stroke="#9F87EC" stroke-width="1.3" opacity="0.55"/>
+          <rect x="16" y="13" width="38" height="6" rx="3" fill="#7158E7" opacity="0.7"/>
+          <circle cx="118" cy="16" r="3" fill="#C8BFE7" opacity="0.6"/>
+          <rect x="10" y="32" width="76" height="36" rx="10" fill="#7158E7" opacity="0.14"/>
+          <rect x="17" y="41" width="30" height="4" rx="2" fill="#C8BFE7" opacity="0.85"/>
+          <rect x="17" y="49" width="54" height="4" rx="2" fill="#C8BFE7" opacity="0.4"/>
+          <rect x="17" y="57" width="20" height="4" rx="2" fill="#C8BFE7" opacity="0.4"/>
+          <rect x="92" y="32" width="38" height="36" rx="10" fill="none" stroke="#9F87EC" stroke-width="1.2" opacity="0.5"/>
+          <circle cx="111" cy="50" r="10" fill="#592DE2" opacity="0.6"/>
+          <line x1="10" y1="78" x2="130" y2="78" stroke="#9F87EC" stroke-width="1.1" opacity="0.4"/>
+          <rect x="10" y="84" width="26" height="9" rx="4.5" fill="#7158E7" opacity="0.55"/>
+          <rect x="40" y="84" width="16" height="9" rx="4.5" fill="none" stroke="#C8BFE7" stroke-width="1" opacity="0.5"/>
+        </svg>
+        <div class="text-block">
+          <span class="tag">Design Code · ESSA.AI</span>
+          <div class="hero">Меньше <em>лишней работы</em>.<br>Не больше ИИ.</div>
+          <div class="subtitle">Как эксперту перестать тратить вечера на монтаж</div>
+        </div>
+      </div>
+      <div class="margin-note" style="bottom:66px;right:14px;transform:rotate(4deg);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#9F87EC" stroke-width="1.8"><path d="M12 21s-7-4.5-9.5-9C0.5 8 2 4 6 4c2 0 3.5 1.2 4 2.5C10.5 5.2 12 4 14 4c4 0 5.5 4 3.5 8-2.5 4.5-9.5 9-9.5 9z"/></svg>
+        <span>это про тебя?</span>
+      </div>
+      <div class="slide-footer"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 2 — СПИСОК -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span>02 — Список</span><button class="dl-btn" onclick="dlSlide('slide-2','02-list',320,400)">↓ PNG</button></div>
+    <div class="slide" id="slide-2">
+      <div class="slide-noise"></div>
+      <div class="dot-grid" style="top:20px;right:16px;"></div>
+      <div class="slide-header">
+        <span class="nickname">@studio_essa_ai</span>
+        <span class="slide-num">02</span>
+      </div>
+      <div class="slide-content">
+        <span class="tag">Проблема</span>
+        <div class="title">Куда уходит вечер, <em>если ты эксперт</em></div>
+        <div class="rule"></div>
+        <div class="list-item"><span class="list-num">01</span><div class="list-text"><strong>Съёмка</strong><span>Час на дубли, чтобы получилось 40 секунд</span></div></div>
+        <div class="list-item"><span class="list-num">02</span><div class="list-text"><strong>Монтаж</strong><span>Ещё два часа на нарезку и субтитры</span></div></div>
+        <div class="list-item"><span class="list-num">03</span><div class="list-text"><strong>Публикация</strong><span>И только потом — экспертиза, ради которой всё это</span></div></div>
+      </div>
+      <div class="slide-footer"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 3 — ИНФОГРАФИКА -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span>03 — Инфографика</span><button class="dl-btn" onclick="dlSlide('slide-3','03-bars',320,400)">↓ PNG</button></div>
+    <div class="slide" id="slide-3">
+      <div class="slide-noise"></div>
+      <div class="slide-blob" style="width:140px;height:140px;top:-40px;right:-40px;background:radial-gradient(circle,rgba(113,88,231,0.22) 0%,transparent 70%);"></div>
+      <div class="slide-header">
+        <span class="nickname">@studio_essa_ai</span>
+        <span class="slide-num">03</span>
+      </div>
+      <div class="slide-content">
+        <span class="tag">Инфографика</span>
+        <div class="big-stat">6<em>×</em><span class="stat-unit">быстрее</span></div>
+        <div class="stat-desc">Время на монтаж одного ролика</div>
+        <div class="rule"></div>
+        <div class="bar-row"><span class="bar-label">Было</span><div class="bar-track"><div class="bar-prev" style="width:100%;"><span class="bar-value">3 часа</span></div></div></div>
+        <div class="bar-row"><span class="bar-label">Стало</span><div class="bar-track"><div class="bar-fill" style="width:18%;"><span class="bar-value">30 мин</span></div></div></div>
+      </div>
+      <div class="margin-note" style="bottom:70px;left:14px;transform:rotate(-4deg);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#9F87EC" stroke-width="1.8"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+        <span>без монтажёра</span>
+      </div>
+      <div class="slide-footer"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 4 — РЕЗУЛЬТАТЫ -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span>04 — Результаты</span><button class="dl-btn" onclick="dlSlide('slide-4','04-stats',320,400)">↓ PNG</button></div>
+    <div class="slide" id="slide-4">
+      <div class="slide-noise"></div>
+      <div class="dot-grid" style="bottom:18px;left:16px;"></div>
+      <div class="slide-header">
+        <span class="nickname">@studio_essa_ai</span>
+        <span class="slide-num">04</span>
+      </div>
+      <div class="slide-content">
+        <span class="tag">Что делает агент</span>
+        <div class="title">Один агент <em>вместо команды</em></div>
+        <div class="rule"></div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-card-val">01</div><div class="stat-card-label">Сценарий</div></div>
+          <div class="stat-card"><div class="stat-card-val">02</div><div class="stat-card-label">Монтаж</div></div>
+          <div class="stat-card"><div class="stat-card-val">03</div><div class="stat-card-label">Субтитры</div></div>
+          <div class="stat-card"><div class="stat-card-val">04</div><div class="stat-card-label">Публикация</div></div>
+        </div>
+      </div>
+      <div class="slide-footer"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 5 — ТАЙМЛАЙН -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span>05 — Таймлайн</span><button class="dl-btn" onclick="dlSlide('slide-5','05-timeline',320,400)">↓ PNG</button></div>
+    <div class="slide" id="slide-5">
+      <div class="slide-noise"></div>
+      <div class="slide-header">
+        <span class="nickname">@studio_essa_ai</span>
+        <span class="slide-num">05</span>
+      </div>
+      <div class="slide-content">
+        <span class="tag">Как это работает</span>
+        <div class="title">Три шага, <em>не десять</em></div>
+        <div class="rule"></div>
+        <div class="timeline">
+          <div class="tl-item"><div class="tl-dot"></div><div class="tl-text"><strong>Записываешь мысль</strong><span>Голосом, без сценария</span></div></div>
+          <div class="tl-item"><div class="tl-dot"></div><div class="tl-text"><strong>Агент собирает ролик</strong><span>Монтаж, субтитры, обложка</span></div></div>
+          <div class="tl-item"><div class="tl-dot hollow"></div><div class="tl-text"><strong>Ты проверяешь и публикуешь</strong><span>Финальное слово всегда за тобой</span></div></div>
+        </div>
+      </div>
+      <div class="slide-footer"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 6 — ЦИТАТА + ФАКТЫ -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span>06 — Цитата</span><button class="dl-btn" onclick="dlSlide('slide-6','06-quote',320,400)">↓ PNG</button></div>
+    <div class="slide" id="slide-6">
+      <div class="slide-noise"></div>
+      <div class="dot-grid" style="top:18px;right:16px;"></div>
+      <div class="slide-header">
+        <span class="nickname">@studio_essa_ai</span>
+        <span class="slide-num">06</span>
+      </div>
+      <div class="slide-content">
+        <span class="tag">Мысль</span>
+        <div class="quote-block">
+          <div class="quote-text">Не больше нейросетей в жизни эксперта. Меньше рутины, которая крадёт время на саму экспертизу.</div>
+          <div class="quote-sub">ESSA.AI</div>
+        </div>
+        <div class="fact-row"><div class="fact-icon"><svg viewBox="0 0 24 24"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg></div><div class="fact-text"><strong>Экономия времени</strong><span>Часы вечера возвращаются тебе, а не монтажу</span></div></div>
+        <div class="fact-row"><div class="fact-icon"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg></div><div class="fact-text"><strong>Тот же голос</strong><span>Агент учится твоей манере говорить, а не заменяет её</span></div></div>
+      </div>
+      <div class="margin-note" style="bottom:52px;right:16px;transform:rotate(3deg);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#9F87EC" stroke-width="1.8"><path d="M12 21s-7-4.5-9.5-9C0.5 8 2 4 6 4c2 0 3.5 1.2 4 2.5C10.5 5.2 12 4 14 4c4 0 5.5 4 3.5 8-2.5 4.5-9.5 9-9.5 9z"/></svg>
+        <span>и правда легче</span>
+      </div>
+      <div class="slide-footer"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 7 — CTA -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span>07 — CTA</span><button class="dl-btn" onclick="dlSlide('slide-7','07-cta',320,400)">↓ PNG</button></div>
+    <div class="slide" id="slide-7">
+      <div class="slide-noise"></div>
+      <div class="slide-blob" style="width:160px;height:160px;bottom:-50px;right:-40px;background:radial-gradient(circle,rgba(113,88,231,0.26) 0%,transparent 70%);"></div>
+      <div class="slide-header">
+        <span class="nickname">@studio_essa_ai</span>
+        <span class="slide-num">07</span>
+      </div>
+      <div class="slide-content">
+        <div class="cta-word"><span>Погнали</span></div>
+        <div class="cta-item"><span class="cta-sq"></span><span class="cta-text">Разберём твой формат контента за один созвон</span></div>
+        <div class="cta-item"><span class="cta-sq"></span><span class="cta-text">Соберём агента под твою нишу</span></div>
+        <div class="cta-item"><span class="cta-sq"></span><span class="cta-text">Ты сохраняешь голос, агент — время</span></div>
+      </div>
+      <div class="slide-footer"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="row-title">Рилсы · 2 обложки · 270×480</div>
+<div class="row-note">Кадры ниже — <strong>образец стиля для видео</strong>, не эталон для покадрового повтора. Палитра, шрифты и акценты переносятся в видео без изменений, композиция каждой сцены строится под задачу кадра, монтаж и ритм этот файл не описывает.</div>
+<div class="slides-row">
+
+  <!-- REEL 1 — ТЕКСТОВЫЙ ХУК -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span>Обложка 01 — Хук</span><button class="dl-btn" onclick="dlSlide('reel-1','reel-01-hook',270,480)">↓ PNG</button></div>
+    <div class="slide reel" id="reel-1">
+      <div class="slide-noise"></div>
+      <div class="slide-blob" style="width:150px;height:150px;top:-50px;left:-30px;background:radial-gradient(circle,rgba(113,88,231,0.3) 0%,transparent 70%);"></div>
+      <div class="slide-header">
+        <span class="nickname">@studio_essa_ai</span>
+      </div>
+      <div class="slide-body">
+        <div class="text-block">
+          <div class="reel-hook">12 часов<br><em>→ 2 часа</em><br>в неделю</div>
+          <div class="reel-sub">на контент, не на монтаж</div>
+        </div>
+      </div>
+      <div class="slide-footer"></div>
+    </div>
+  </div>
+
+  <!-- REEL 2 — ИЛЛЮСТРАЦИЯ + ПОДПИСЬ -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span>Обложка 02 — Иллюстрация</span><button class="dl-btn" onclick="dlSlide('reel-2','reel-02-illustration',270,480)">↓ PNG</button></div>
+    <div class="slide reel" id="reel-2">
+      <div class="slide-noise"></div>
+      <div class="dot-grid" style="bottom:24px;right:16px;"></div>
+      <div class="slide-header">
+        <span class="nickname">@studio_essa_ai</span>
+      </div>
+      <div class="slide-body">
+        <svg viewBox="0 0 140 100" width="120" height="86" xmlns="http://www.w3.org/2000/svg">
+          <rect x="10" y="8" width="120" height="16" rx="6" fill="none" stroke="#9F87EC" stroke-width="1.3" opacity="0.55"/>
+          <rect x="16" y="13" width="38" height="6" rx="3" fill="#7158E7" opacity="0.7"/>
+          <rect x="10" y="32" width="120" height="40" rx="10" fill="#7158E7" opacity="0.14"/>
+          <rect x="17" y="42" width="46" height="4" rx="2" fill="#C8BFE7" opacity="0.85"/>
+          <rect x="17" y="50" width="80" height="4" rx="2" fill="#C8BFE7" opacity="0.4"/>
+          <rect x="17" y="58" width="60" height="4" rx="2" fill="#C8BFE7" opacity="0.4"/>
+          <circle cx="112" cy="52" r="11" fill="#592DE2" opacity="0.6"/>
+        </svg>
+        <div class="text-block">
+          <div class="reel-hook" style="font-size:22px;">Без операторов<br>и <em>монтажёров</em></div>
+        </div>
+      </div>
+      <div class="slide-footer"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="token-section">
+  <div class="token-title">Дизайн-токены · Graphite Violet Editorial · экспорт ×3</div>
+  <div class="token-grid">
+    <div class="token-group">
+      <h3>Цвета</h3>
+      <div class="token-row"><div class="color-swatch" style="background:#7158E7;"></div><div><div class="token-name">--accent</div><div class="token-val">#7158E7</div></div></div>
+      <div class="token-row"><div class="color-swatch" style="background:#592DE2;"></div><div><div class="token-name">--accent-deep</div><div class="token-val">#592DE2</div></div></div>
+      <div class="token-row"><div class="color-swatch" style="background:#9F87EC;"></div><div><div class="token-name">--violet-soft</div><div class="token-val">#9F87EC</div></div></div>
+      <div class="token-row"><div class="color-swatch" style="background:#C8BFE7;"></div><div><div class="token-name">--lavender</div><div class="token-val">#C8BFE7</div></div></div>
+      <div class="token-row"><div class="color-swatch" style="background:#292834;"></div><div><div class="token-name">--bg-top</div><div class="token-val">#292834</div></div></div>
+      <div class="token-row"><div class="color-swatch" style="background:#0D1015;"></div><div><div class="token-name">--bg-deep</div><div class="token-val">#0D1015</div></div></div>
+      <div class="token-row"><div class="color-swatch" style="background:#F7F5FA;"></div><div><div class="token-name">--ink</div><div class="token-val">#F7F5FA</div></div></div>
+    </div>
+    <div class="token-group">
+      <h3>Шрифты</h3>
+      <div class="font-specimen"><div class="fs-name">Roboto Condensed 700 — Display</div><div class="fs-sample fs-display">Заголовок слайда</div></div>
+      <div class="font-specimen"><div class="fs-name">Open Sans 400 — Body</div><div class="fs-sample fs-body">Описание в две строки</div></div>
+      <div class="font-specimen"><div class="fs-name">Marck Script — Hand note</div><div class="fs-sample fs-hand">это про тебя?</div></div>
+      <h3 style="margin-top:18px;">Правила</h3>
+      <ul class="rules-list">
+        <li>Радиус скругления 14–20px</li>
+        <li>Один фиолетовый акцент, второго нет</li>
+        <li>Один смысловой акцент на слайд</li>
+        <li>Рукописная заметка — не на каждом слайде</li>
+      </ul>
+    </div>
+    <div class="token-group">
+      <h3>Размеры</h3>
+      <div class="type-row"><span class="type-label">Холст карусели</span><span class="type-spec">320×400</span></div>
+      <div class="type-row"><span class="type-label">Холст рилса</span><span class="type-spec">270×480</span></div>
+      <div class="type-row"><span class="type-label">Экспорт</span><span class="type-spec">×3 → 960×1200 / 810×1440</span></div>
+      <div class="type-row"><span class="type-label">Отступ</span><span class="type-spec">20px</span></div>
+      <div class="type-row"><span class="type-label">Reel hook</span><span class="type-spec">30px / 700</span></div>
+      <div class="type-row"><span class="type-label">Hero</span><span class="type-spec">24px / 700</span></div>
+      <div class="type-row"><span class="type-label">Big stat</span><span class="type-spec">40px / 700</span></div>
+      <div class="type-row"><span class="type-label">Title</span><span class="type-spec">18px / 700</span></div>
+      <div class="type-row"><span class="type-label">Body</span><span class="type-spec">8.5px / 400</span></div>
+      <div class="type-row"><span class="type-label">Hand note</span><span class="type-spec">15px Marck Script</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const EXPORT_SCALE = 3;
+
+async function captureSlide(id, w, h) {
+  const el = document.getElementById(id);
+  return await html2canvas(el, {
+    scale: EXPORT_SCALE, useCORS: true, backgroundColor: null,
+    width: w, height: h, scrollX: 0, scrollY: 0,
+    windowWidth: w, windowHeight: h
+  });
+}
+
+async function dlSlide(id, filename, w, h) {
+  const btn = event.target;
+  const orig = btn.textContent;
+  btn.textContent = '...';
+  try {
+    const canvas = await captureSlide(id, w, h);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = filename + '.png';
+    a.click();
+    btn.textContent = 'OK';
+    setTimeout(() => btn.textContent = orig, 2000);
+  } catch(e) { btn.textContent = orig; console.error(e); }
+}
+
+async function downloadAll() {
+  const items = [
+    ['slide-1','01-cover',320,400], ['slide-2','02-list',320,400],
+    ['slide-3','03-bars',320,400],  ['slide-4','04-stats',320,400],
+    ['slide-5','05-timeline',320,400], ['slide-6','06-quote',320,400],
+    ['slide-7','07-cta',320,400],
+    ['reel-1','reel-01-hook',270,480], ['reel-2','reel-02-illustration',270,480]
+  ];
+  const btn = document.querySelector('.dl-all-btn');
+  const origHTML = btn.innerHTML;
+  try {
+    const zip = new JSZip();
+    for (const [id, name, w, h] of items) {
+      btn.textContent = name + '...';
+      const canvas = await captureSlide(id, w, h);
+      zip.file(name + '.png', canvas.toDataURL('image/png').split(',')[1], { base64: true });
+      await new Promise(r => setTimeout(r, 150));
+    }
+    btn.textContent = 'Упаковываю ZIP...';
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'design-code-studio_essa_ai.zip';
+    a.click();
+  } catch(e) { console.error(e); }
+  btn.innerHTML = origHTML;
+}
+</script>
+</body>
+</html>

@@ -99,3 +99,4 @@
 | ID | Находка | Статус | Основание | Где |
 |----|---------|--------|-----------|-----|
 | D01 | проектный `.claude/settings.json` применяется и к сессиям разработки в этой папке: deny/Guard JARVIS заблокировали бы сборку | in-ticket | служит R13, R15; настройки агента вынесены в `runtime/jarvis-settings.json`, передаются флагом `--settings` | spec Решения §2, T01, T02 |
+| D02 | сессия Claude Code передаёт дочерним процессам служебное окружение (`ANTHROPIC_BASE_URL`, `CLAUDE_CODE_*`), из-за чего `claude -p` отвечает `auth_required` вместо работы по подписке | in-ticket | обнаружено живым прогоном бота 2026-09-18; служит R04, R05 | T02 (build_env вычищает все CLAUDE*/ANTHROPIC*, кроме CLAUDE_CODE_GIT_BASH_PATH) |

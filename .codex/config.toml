@@ -1,0 +1,9 @@
+[mcp_servers.playwright]
+command = "npx"
+args = [
+    "@playwright/mcp@latest",
+    "--user-data-dir",
+    'C:\Users\burov\Projects\Jarvis\state\browser-profile',
+    "--browser",
+    "msedge",
+]
