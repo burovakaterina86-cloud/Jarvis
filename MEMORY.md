@@ -5,3 +5,5 @@
 
 ## Факты
 
+- 2026-09-18 — в essa-ai/ уже лежит наполненный knowledge pack (EXPERTISE, 02_AUDIENCE, 04_PRODUCTS_AND_AI_WORKSHOP, VOICE и др.), а короткие PROFILE/STRATEGY/PRODUCTS/ANALYTICS.md — пустые заглушки (подробнее: memory/projects/essa-ai.md)
+

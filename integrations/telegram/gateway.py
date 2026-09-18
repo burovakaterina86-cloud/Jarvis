@@ -26,7 +26,8 @@ from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, Mes
                           filters)
 
 from integrations.telegram import files, voice
-from integrations.telegram.status import StatusReporter, split_message, too_long
+from integrations.telegram.status import (STATUS_DELAY, StatusReporter, split_message,
+                                          too_long)
 from runtime import activation
 from runtime import sessions as sessions_mod
 from runtime import task_router
@@ -114,7 +115,7 @@ class Gateway:
 
     def __init__(self, *, owner_id: int | None, root: str | Path = ROOT, router=None,
                  sessions=None, approvals=None, transcriber=None,
-                 min_status_interval: float = 3.0):
+                 min_status_interval: float = 3.0, status_delay: float = STATUS_DELAY):
         self.owner_id = owner_id
         self.root = Path(root)
         self.router = router if router is not None else task_router.default_router()
@@ -122,6 +123,7 @@ class Gateway:
         self.approvals = approvals
         self.transcriber = transcriber
         self.min_status_interval = min_status_interval
+        self.status_delay = status_delay
         self.bot = None
         # короткий токен кнопки -> (значение, момент создания); чистится после нажатия и по TTL
         self._tokens: dict[str, tuple[str, float]] = {}
@@ -300,7 +302,8 @@ class Gateway:
         chat_id = update.effective_chat.id
         task = task or _task_name(prompt)
         reporter = StatusReporter(context.bot, chat_id, task=task,
-                                  min_interval=self.min_status_interval)
+                                  min_interval=self.min_status_interval,
+                                  start_after=self.status_delay)
 
         async def on_event(ev):
             reporter.note(ev)
@@ -315,6 +318,8 @@ class Gateway:
             await self._send(context, chat_id,
                              f"Принял, возьму после текущей задачи (в очереди: {position}).")
         result = await job.result
+        # Статус-карточка уходит из чата вместе с концом хода; итоговая строка нужна только
+        # репортёру с выключенным удалением (`delete_on_finish=False`).
         await reporter.finish(_final_line(result, reporter))
         await self._deliver(context, chat_id, result)
 

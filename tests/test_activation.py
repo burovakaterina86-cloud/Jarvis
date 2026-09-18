@@ -258,23 +258,32 @@ BASE_AGENTS = ["researcher", "competitor-analyst", "strategist", "copywriter",
                "reels-producer", "reviewer"]
 
 
-def shipped_agents(tmp_path):
-    """Состав поставки — из git; пока папка не в индексе, из рабочего дерева.
+def _git(*args) -> str:
+    """Вывод git или пропуск теста: без git состав поставки проверить нечем."""
+    try:
+        proc = subprocess.run(["git", *args], cwd=str(REPO), capture_output=True)
+    except OSError as exc:
+        pytest.skip(f"git недоступен ({type(exc).__name__}): состав поставки не проверить")
+    if proc.returncode != 0:
+        pytest.skip("git не отдал содержимое drafts/agents: "
+                    + proc.stderr.decode("utf-8", "replace").strip())
+    return proc.stdout.decode("utf-8", "replace")
 
-    Проверяем на временной копии: ни один тест не должен зависеть от того,
-    активировала ли владелица черновик у себя.
+
+def shipped_agents(tmp_path):
+    """Состав поставки — из коммита, а не с диска.
+
+    Владелица включает базовых помощников кнопкой, и тогда drafts/agents/ на диске пуст,
+    а `.claude/agents/` полон. Это правильное поведение продукта, и тест не должен
+    от него зависеть: файлы берём из HEAD и раскладываем во временную папку.
     """
-    proc = subprocess.run(["git", "ls-files", "drafts/agents"], cwd=str(REPO),
-                          capture_output=True, text=True)
-    names = [line.strip() for line in proc.stdout.splitlines() if line.strip().endswith(".md")]
-    paths = [REPO / n for n in names]
-    if not paths:
-        paths = sorted((REPO / "drafts" / "agents").glob("*.md"))
+    listing = _git("ls-tree", "-r", "--name-only", "HEAD", "drafts/agents")
+    names = sorted(n.strip() for n in listing.splitlines() if n.strip().endswith(".md"))
     copy = tmp_path / "drafts" / "agents"
     copy.mkdir(parents=True, exist_ok=True)
-    for path in paths:
-        (copy / path.name).write_bytes(path.read_bytes())
-    return sorted(p.stem for p in copy.glob("*.md"))
+    for rel in names:
+        (copy / Path(rel).name).write_text(_git("show", f"HEAD:{rel}"), encoding="utf-8")
+    return sorted(Path(n).stem for n in names)
 
 
 def test_base_agent_drafts_are_shipped_and_valid(tmp_path):

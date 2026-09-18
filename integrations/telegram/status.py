@@ -2,6 +2,11 @@
 
 Статус редактируется не чаще раза в `min_interval` секунд (по умолчанию 3 с) —
 Telegram ограничивает частоту правок, а владелице важен не каждый кадр, а ход работы.
+
+Статус-сообщение появляется только на ходах длиннее `start_after` секунд, а в конце хода
+удаляется: на коротком ходе карточка «⚙️ JARVIS … Этап: принял задачу … ⏱ 0 с» успевала
+только замусорить переписку, и владелица попросила её убрать. До порога события копятся
+в репортёре, и первая же карточка показывает актуальный этап, а не «принял задачу».
 """
 from __future__ import annotations
 
@@ -10,6 +15,7 @@ import time
 TELEGRAM_LIMIT = 4096
 MAX_MESSAGES = 3          # больше — отправляем документом
 FENCE = "```"
+STATUS_DELAY = 6.0        # короче — ход кончится раньше, чем владелица успеет заглянуть в статус
 
 
 # ------------------------------------------------------------------ разбиение
@@ -86,13 +92,17 @@ class StatusReporter:
     """Одно сообщение на ход: этап, инструмент, время. Редактируется с троттлингом."""
 
     def __init__(self, bot, chat_id, *, task: str = "", min_interval: float = 3.0,
+                 start_after: float = STATUS_DELAY, delete_on_finish: bool = True,
                  clock=time.monotonic):
         self.bot = bot
         self.chat_id = chat_id
         self.task = task
         self.min_interval = float(min_interval)
+        self.start_after = float(start_after)
+        self.delete_on_finish = bool(delete_on_finish)
         self.clock = clock
         self.message_id = None
+        self._begun = False
         self._created = False   # ставится ДО первого await: два события подряд не создадут два статуса
         self.stage = "принял задачу"
         self.tool: str | None = None
@@ -144,19 +154,30 @@ class StatusReporter:
 
     # ---- отправка
 
+    def _begin(self) -> None:
+        """Отсчёт хода — от первого события, а не от создания репортёра: ход мог ждать в очереди."""
+        if self._begun:
+            return
+        self._begun = True
+        self.started = self.clock()
+        self._last_edit = self.started
+
     async def start(self) -> None:
-        """Создаёт статус-сообщение ровно один раз — его зовёт первое событие хода."""
+        """Создаёт статус-сообщение ровно один раз. Обычно его зовёт `update` по порогу."""
         if self._created:
             return
         self._created = True
-        self.started = self.clock()
-        msg = await self._safe(self.bot.send_message(self.chat_id, self.text()))
+        self._begin()
+        msg = await self._safe(self.bot.send_message, self.chat_id, self.text())
         self.message_id = getattr(msg, "message_id", None)
         self._last_edit = self.clock()
         self._last_text = self.text()
 
     async def update(self, *, force: bool = False) -> bool:
         if not self._created:
+            self._begin()
+            if not force and self.clock() - self.started < self.start_after:
+                return False    # ход ещё короткий: события копим, в чат не лезем
             await self.start()
             return True
         if self.message_id is None:
@@ -167,24 +188,33 @@ class StatusReporter:
         now = self.clock()
         if not force and now - self._last_edit < self.min_interval:
             return False
-        await self._safe(self.bot.edit_message_text(
-            text=text, chat_id=self.chat_id, message_id=self.message_id))
+        await self._safe(self.bot.edit_message_text,
+                         text=text, chat_id=self.chat_id, message_id=self.message_id)
         self._last_edit = now
         self._last_text = text
         return True
 
-    async def finish(self, text: str) -> None:
+    async def finish(self, text: str = "") -> None:
+        """Ход кончился: статус убираем, чтобы в чате остался только ответ.
+
+        Ничего не создаём: если карточки не было (короткий ход), её и не должно появиться.
+        Не удалилась — оставляем как есть: вторым сообщением про это не спамим.
+        """
         if self.message_id is None:
-            await self._safe(self.bot.send_message(self.chat_id, text))
+            return
+        if self.delete_on_finish:
+            message_id, self.message_id = self.message_id, None
+            await self._safe(self.bot.delete_message,
+                             chat_id=self.chat_id, message_id=message_id)
             return
         self._last_text = text
-        await self._safe(self.bot.edit_message_text(
-            text=text, chat_id=self.chat_id, message_id=self.message_id))
+        await self._safe(self.bot.edit_message_text,
+                         text=text, chat_id=self.chat_id, message_id=self.message_id)
 
     @staticmethod
-    async def _safe(coro):
-        """Ошибки Telegram (та же правка, флуд-лимит) не должны ронять ход."""
+    async def _safe(call, *args, **kw):
+        """Ошибки Telegram (та же правка, флуд-лимит, чужое сообщение) не должны ронять ход."""
         try:
-            return await coro
+            return await call(*args, **kw)
         except Exception:  # noqa: BLE001
             return None

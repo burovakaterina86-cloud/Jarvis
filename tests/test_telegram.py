@@ -81,13 +81,16 @@ class TelegramDown(RuntimeError):
 
 
 class FakeBot:
-    def __init__(self, fail_document=False, fail_get_file=False, fail_message=False):
+    def __init__(self, fail_document=False, fail_get_file=False, fail_message=False,
+                 fail_delete=False):
         self.sent: list[dict] = []
         self.edits: list[dict] = []
         self.documents: list[dict] = []
+        self.deleted: list[dict] = []
         self.fail_document = fail_document
         self.fail_get_file = fail_get_file
         self.fail_message = fail_message
+        self.fail_delete = fail_delete
         self._next_id = 100
 
     async def send_message(self, chat_id, text, **kw):
@@ -108,6 +111,12 @@ class FakeBot:
         self.documents.append({"chat_id": chat_id, "document": document,
                                "filename": filename, "caption": caption})
         return FakeMessage(self._next_id, caption or "")
+
+    async def delete_message(self, chat_id=None, message_id=None, **kw):
+        if self.fail_delete:
+            raise TelegramDown("delete_message")
+        self.deleted.append({"chat_id": chat_id, "message_id": message_id})
+        return True
 
     async def get_file(self, file_id):
         if self.fail_get_file:
@@ -151,11 +160,62 @@ async def test_status_edits_not_more_than_once_per_three_seconds():
 
 async def test_status_finish_forces_edit():
     bot, clock = FakeBot(), Clock()
-    rep = status.StatusReporter(bot, 7, min_interval=3.0, clock=clock)
+    rep = status.StatusReporter(bot, 7, min_interval=3.0, delete_on_finish=False, clock=clock)
     await rep.start()
     clock.now += 0.1
     await rep.finish("готово")
     assert bot.edits[-1]["text"].startswith("готово")
+
+
+def _tool_event(name):
+    return {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name}]}}
+
+
+async def test_short_turn_never_creates_a_status_message():
+    bot, clock = FakeBot(), Clock()
+    rep = status.StatusReporter(bot, 7, task="почему ты так странно отвечаешь",
+                                min_interval=0.0, start_after=6.0, clock=clock)
+    for i in range(4):   # ход уложился в секунду: событий много, карточки быть не должно
+        clock.now += 0.25
+        rep.note(_tool_event(f"Tool{i}"))
+        await rep.update()
+    await rep.finish("✅ Готово за 1 с.")
+    assert bot.sent == [] and bot.edits == [] and bot.deleted == []
+
+
+async def test_long_turn_shows_status_and_deletes_it_at_the_end():
+    bot, clock = FakeBot(), Clock()
+    rep = status.StatusReporter(bot, 7, task="собери контент",
+                                min_interval=3.0, start_after=6.0, clock=clock)
+    clock.now += 1.0
+    rep.note(_tool_event("Read"))
+    await rep.update()
+    assert bot.sent == []                      # порог ещё не перейдён
+
+    clock.now += 6.0
+    rep.note(_tool_event("Read"))
+    await rep.update()
+    assert len(bot.sent) == 1 and bot.sent[0]["text"].startswith("⚙️")
+    assert "Read" in bot.sent[0]["text"]
+    message_id = rep.message_id
+
+    clock.now += 4.0
+    rep.note(_tool_event("Bash"))
+    await rep.update()
+    assert any("Bash" in e["text"] for e in bot.edits)
+
+    await rep.finish("✅ Готово за 11 с.")
+    assert [d["message_id"] for d in bot.deleted] == [message_id]
+    assert not any(e["text"].startswith("✅") for e in bot.edits)
+
+
+async def test_status_delete_failure_is_silent():
+    bot, clock = FakeBot(fail_delete=True), Clock()
+    rep = status.StatusReporter(bot, 7, min_interval=0.0, start_after=0.0, clock=clock)
+    await rep.update()
+    assert len(bot.sent) == 1
+    await rep.finish("✅ Готово.")            # Telegram отказал — ход всё равно не падает
+    assert bot.deleted == [] and bot.edits == []
 
 
 # ---------------------------------------------------------------- voice
@@ -469,13 +529,30 @@ async def test_published_button_writes_published_md(tmp_path):
 
 
 async def test_one_status_message_per_turn(tmp_path):
-    g = make_gateway(tmp_path)
+    g = make_gateway(tmp_path, status_delay=0.0)
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="посчитай")), ctx)
     statuses = [m for m in ctx.bot.sent if m["text"].startswith("⚙️")]
     assert len(statuses) == 1                      # ровно одно статус-сообщение на ход
     assert any("Bash" in e["text"] for e in ctx.bot.edits)
-    assert ctx.bot.edits[-1]["text"].startswith("✅")
+    assert len(ctx.bot.deleted) == 1               # и в конце оно исчезает
+    assert not any(e["text"].startswith("✅") for e in ctx.bot.edits)
+
+
+async def test_short_turn_leaves_only_the_answer(tmp_path):
+    g = make_gateway(tmp_path)      # порог по умолчанию, ход в тесте мгновенный
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="привет")), ctx)
+    assert [m for m in ctx.bot.sent if m["text"].startswith("⚙️")] == []
+    assert ctx.bot.edits == []
+    assert [m["text"] for m in ctx.bot.sent] == ["ответ агента"]
+
+
+async def test_status_delete_failure_does_not_break_the_answer(tmp_path):
+    g = make_gateway(tmp_path, status_delay=0.0)
+    ctx = FakeContext(bot=FakeBot(fail_delete=True))
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="посчитай")), ctx)
+    assert any("ответ агента" in m["text"] for m in ctx.bot.sent)
 
 
 async def test_queued_turn_says_position_and_waits_with_status(tmp_path):
