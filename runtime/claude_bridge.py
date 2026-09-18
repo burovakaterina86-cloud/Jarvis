@@ -24,10 +24,11 @@ SETTINGS_FILE = ROOT / "runtime" / "jarvis-settings.json"
 MAX_TURNS = 60
 STREAM_LIMIT = 32 * 1024 * 1024
 
-# Переменные, которые не должны попасть в окружение claude.
-_ENV_DROP_EXACT = {"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_ENTRYPOINT",
-                   "TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID"}
-_ENV_DROP_PREFIX = ("CLAUDECODE", "TELEGRAM_")
+# Переменные, которые не должны попасть в окружение claude: всё служебное окружение
+# родительской сессии Claude Code (иначе дочерний claude уходит на хост-авторизацию
+# вместо подписки владелицы — D02) и Telegram-секреты.
+_ENV_DROP_PREFIX = ("CLAUDE", "ANTHROPIC", "TELEGRAM")
+_ENV_KEEP = {"CLAUDE_CODE_GIT_BASH_PATH"}  # нужен claude на Windows
 
 
 @dataclass
@@ -45,10 +46,11 @@ _stopped: set[str] = set()
 
 
 def build_env(base: dict | None = None) -> dict:
-    """Окружение дочернего claude: всё из base, кроме API-ключей, CLAUDECODE* и Telegram-секретов."""
+    """Окружение дочернего claude: всё из base, кроме CLAUDE*/ANTHROPIC*/TELEGRAM*
+    (исключение — _ENV_KEEP). JARVIS_* и остальное окружение процесса передаётся как есть."""
     src = dict(os.environ if base is None else base)
     return {k: v for k, v in src.items()
-            if k.upper() not in _ENV_DROP_EXACT and not k.upper().startswith(_ENV_DROP_PREFIX)}
+            if k.upper() in _ENV_KEEP or not k.upper().startswith(_ENV_DROP_PREFIX)}
 
 
 def build_args(session_id: str | None) -> list[str]:

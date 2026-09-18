@@ -17,15 +17,10 @@ from runtime import claude_bridge  # noqa: E402
 PROMPT = "Ответь одним словом: привет. Не используй инструменты."
 
 
-def _clean_env() -> dict:
-    """Окружение как у боевого запуска из start.bat: без переменных хост-сессии Claude Code."""
-    keep = {"CLAUDE_CODE_GIT_BASH_PATH"}
-    return {k: v for k, v in os.environ.items()
-            if k in keep or not (k.upper().startswith(("CLAUDE", "ANTHROPIC")))}
-
-
 async def _turn():
-    return await claude_bridge.run_turn(PROMPT, None, None, task="smoke", env=_clean_env())
+    # ровно то окружение, что мост даёт claude в бою
+    return await claude_bridge.run_turn(PROMPT, None, None, task="smoke",
+                                        env=claude_bridge.build_env(os.environ))
 
 
 @pytest.mark.smoke

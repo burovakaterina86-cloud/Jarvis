@@ -297,3 +297,16 @@ async def test_failed_turn_does_not_spend_daily_budget(fake, monkeypatch):
     r1, r2 = await asyncio.wait_for(asyncio.gather(j1.result, j2.result), 20)
     assert r1.status == r2.status == "rate_limited"  # бюджет не списан неуспешным ходом
     assert len(fake.calls()) == 2
+
+
+async def test_host_claude_session_vars_are_stripped(fake):
+    env = {**fake.base_env, "ANTHROPIC_BASE_URL": "http://host", "ANTHROPIC_API_KEY": "x",
+           "CLAUDE_CODE_MESSAGING_TOKEN": "x", "CLAUDE_CODE_MESSAGING_SOCKET": "x",
+           "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH": "1", "CLAUDE_CODE_OAUTH_SCOPES": "x",
+           "CLAUDE_CODE_SESSION_ID": "x", "CLAUDECODE": "1", "CLAUDE_AGENT_SDK_VERSION": "1",
+           "CLAUDE_CODE_GIT_BASH_PATH": "C:\bash.exe", "TELEGRAM_BOT_TOKEN": "x",
+           "FAKE_CLAUDE_SCENARIO": "ok"}
+    await fake.run(env=env)
+    keys = fake.calls()[-1]["env_keys"]
+    left = [k for k in keys if k.upper().startswith(("CLAUDE", "ANTHROPIC", "TELEGRAM"))]
+    assert left == ["CLAUDE_CODE_GIT_BASH_PATH"]
