@@ -1,7 +1,7 @@
 window.STATE =
 {
   "slug": "essa-jarvis",
-  "dir": "2026-09-17-essa-jarvis--wip",
+  "dir": "2026-09-17-essa-jarvis",
   "title": "ESSA-JARVIS — автономный агент поверх Claude Code",
   "mode": "semi",
   "depth": "normal",
@@ -11,8 +11,8 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-17T22:36:55+07:00",
-  "updatedAt": "2026-09-18T12:26:13+07:00",
-  "finishedAt": null,
+  "updatedAt": "2026-09-18T12:27:12+07:00",
+  "finishedAt": "2026-09-18T12:27:12+07:00",
   "stages": [
     {
       "id": "preflight",
@@ -48,26 +48,32 @@ window.STATE =
     },
     {
       "id": "build",
-      "status": "active",
+      "status": "done",
       "startedAt": "2026-09-17T23:24:56+07:00",
-      "note": "7 из 8 тасков готовы"
+      "note": "8 из 8 тасков готовы",
+      "finishedAt": "2026-09-18T12:27:12+07:00"
     },
     {
       "id": "review",
-      "status": "active",
-      "startedAt": "2026-09-17T23:33:03+07:00"
+      "status": "done",
+      "startedAt": "2026-09-17T23:33:03+07:00",
+      "finishedAt": "2026-09-18T12:27:12+07:00",
+      "note": "все таски проверены двумя ревьюерами"
     },
     {
       "id": "final",
-      "status": "pending"
+      "status": "done",
+      "startedAt": "2026-09-18T12:27:12+07:00",
+      "finishedAt": "2026-09-18T12:27:12+07:00",
+      "note": "слепая приёмка: живой путь не подтверждён до входа в Claude"
     }
   ],
   "requirements": {
-    "total": 60,
-    "done": 42,
-    "inTicket": 4,
+    "total": 62,
+    "done": 46,
+    "inTicket": 0,
     "inSpec": 0,
-    "placeholder": 0,
+    "placeholder": 2,
     "deferred": 11,
     "dropped": 3
   },
@@ -380,19 +386,25 @@ window.STATE =
         "scripts/",
         "start.bat"
       ],
-      "status": "repair",
+      "status": "done",
       "retries": 0,
       "repairs": 1,
       "handoffs": 0,
       "startedAt": "2026-09-18T11:38:52+07:00",
       "repairFindings": [
         "в документах не сказано, что живой прогон не выполнялся; пример .env склеивал пояснение со значением; два сканера запрета; check_hooks пишет в рабочий журнал"
-      ]
+      ],
+      "finishedAt": "2026-09-18T12:27:12+07:00",
+      "tests": {
+        "passed": 298,
+        "failed": 0
+      },
+      "commit": "7f67618"
     }
   ],
   "singlePass": null,
   "tests": {
-    "passed": 290,
+    "passed": 298,
     "failed": 0
   },
   "debt": {
