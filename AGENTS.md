@@ -27,7 +27,7 @@ runtime/                 policy.yaml, jarvis-settings.json, jarvis-turn.md — �
 .claude/hooks/           guard.py + memory_notice/capture_learning/pre_compact/session_start
 .claude/skills/          11 навыков JARVIS; .claude/rules/ — 5 правил, грузятся каждым ходом
 .claude/agents/          6 живых субагентов (researcher, competitor-analyst, strategist, copywriter, reels-producer, reviewer); drafts/agents/ и drafts/skills/ сейчас пусты
-essa-ai/                 бизнес-контекст ESSA; вход — 00_PROJECT_MAP.md; content/, knowledge/
+essa-ai/                 бизнес-контекст ESSA; вход — INDEX.md (маршруты); content/, knowledge/
 memory/                  decisions/ projects/ people/ episodes/ — долгая память агента
 state/                   runtime-данные: sessions.json, events.jsonl, approvals.port, secrets/, browser-profile/ (gitignore)
 docs/                    ARCHITECTURE.md, MVP.md, SETUP.md, REFERENCE.md
@@ -86,6 +86,10 @@ Approvals отдаёт запрос в `Gateway.on_approval_request` → кно�
 - Профиль браузера занят одним процессом: `integrations.browser.login` не запустить, пока идёт браузерная задача.
 - `activation.activate` **перемещает** файл (`shutil.move`) из `drafts/` в `.claude/skills|agents`, а не копирует. Поэтому состав базовых ролей нельзя проверять по `git ls-tree HEAD drafts/agents` — там остался только `.gitkeep`; роль ищи там, где она лежит сейчас (сейчас все шесть — в `.claude/agents/`, `drafts/agents/` и `drafts/skills/` пусты). Новая папка `.claude/agents/` требует перезапуска Claude Code — поэтому `activation.ensure_dirs` вызывается на старте.
 - `essa-ai/{PROFILE,STRATEGY,PRODUCTS,ANALYTICS}.md` — не данные, а указатели: каждый перечисляет файлы с реальными материалами (`EXPERTISE.md`, `05_FUNNEL.md`, `04_PRODUCTS_AND_AI_WORKSHOP.md`, `10_METRICS_AND_TESTS.md`, `11_DECISION_LOG.md` …). Вход в папку — `essa-ai/00_PROJECT_MAP.md`, но он маршрутизирует не ко всему: `ROLE_PACKS.md`, `CAPABILITY_MAPPING.md`, `DESIGN.md`, `MANIFEST.md`, `ROUTER.md` и другие в карте не упомянуты — «нет в карте» не значит «нет в папке», проверяй `Glob`.
+- `essa-ai/INDEX.md` (4 КБ) — вход в папку: маршрут «задача → два-три файла» и список того,
+  что нельзя читать целиком. `ESSA_PROJECT_KNOWLEDGE_PACK.md` — 377 КБ, это склейка всех
+  остальных файлов: чтение целиком съедает контекст хода, только `Grep`. Приоритет при
+  расхождениях по-прежнему за `00_PROJECT_MAP.md` (22 КБ), но открывать её ради маршрута не нужно.
 - `.agents/skills/` и `.codex/agents/` — зеркала навыков и субагентов для других CLI; правишь `.claude/` — синхронизируй их.
 - `state/` и `inbox/` в .gitignore: удалять `state/*.json` на живом боте нельзя, там сессии и бюджет.
 - `runtime/`, `integrations/`, `.claude/hooks|skills|agents`, `.env`, `.mcp.json` закрыты на запись для самого JARVIS через deny в `runtime/jarvis-settings.json` — это его правила, разработчика они не ограничивают.
