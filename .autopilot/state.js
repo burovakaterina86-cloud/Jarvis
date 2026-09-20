@@ -1,7 +1,7 @@
 window.STATE =
 {
   "slug": "essa-jarvis",
-  "dir": "2026-09-17-essa-jarvis--wip",
+  "dir": "2026-09-17-essa-jarvis",
   "title": "ESSA-JARVIS — автономный агент поверх Claude Code",
   "mode": "semi",
   "depth": "normal",
@@ -11,8 +11,8 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-17T22:36:55+07:00",
-  "updatedAt": "2026-09-20T10:45:00+07:00",
-  "finishedAt": null,
+  "updatedAt": "2026-09-20T11:40:00+07:00",
+  "finishedAt": "2026-09-20T11:40:00+07:00",
   "stages": [
     {
       "id": "preflight",
@@ -48,23 +48,29 @@ window.STATE =
     },
     {
       "id": "build",
-      "status": "active",
+      "status": "done",
       "startedAt": "2026-09-20T10:05:00+07:00",
-      "note": "9 из 10 тасков готовы"
+      "note": "10 из 10 тасков готовы",
+      "finishedAt": "2026-09-20T11:05:00+07:00"
     },
     {
       "id": "review",
-      "status": "pending"
+      "status": "done",
+      "startedAt": "2026-09-20T10:25:00+07:00",
+      "finishedAt": "2026-09-20T11:05:00+07:00",
+      "note": "таск 10 — PASS по манифесту и спецификации; 8 находок craft закрыты дозапросом"
     },
     {
       "id": "final",
-      "status": "pending"
+      "status": "done",
+      "startedAt": "2026-09-20T11:05:00+07:00",
+      "finishedAt": "2026-09-20T11:40:00+07:00"
     }
   ],
   "requirements": {
     "total": 69,
-    "done": 47,
-    "inTicket": 3,
+    "done": 51,
+    "inTicket": 0,
     "inSpec": 0,
     "placeholder": 2,
     "deferred": 11,
@@ -409,7 +415,7 @@ window.STATE =
       ],
       "status": "done",
       "retries": 0,
-      "repairs": 1,
+      "repairs": 2,
       "handoffs": 0,
       "startedAt": "2026-09-18T12:30:00+07:00",
       "finishedAt": "2026-09-18T12:58:36+07:00",
@@ -419,7 +425,8 @@ window.STATE =
       },
       "commit": "e1e829b",
       "repairFindings": [
-        "D03: включение помощников кнопкой убрало черновики из HEAD — два теста состава поставки стали красными; роль теперь проверяется там, где лежит сейчас"
+        "D03: включение помощников кнопкой убрало черновики из HEAD — два теста состава поставки стали красными; роль теперь проверяется там, где лежит сейчас",
+        "потеряна строгость: лишний файл в drafts/agents и инертная проверка validate — возвращены (коммит 88bed85)"
       ]
     },
     {
@@ -445,19 +452,25 @@ window.STATE =
         "essa-ai/PRODUCTS.md",
         "essa-ai/ANALYTICS.md"
       ],
-      "status": "repair",
+      "status": "done",
       "retries": 0,
       "repairs": 1,
       "handoffs": 0,
       "startedAt": "2026-09-20T10:05:00+07:00",
       "repairFindings": [
         "нет тестов на таблицы и на нарезку с тегами; is_markup_error ловит чужие исключения без модуля telegram; ссылка без кавычек мимо теста; лишний импорт; порог HTML не назван; CLAUDE.md — карта не единственный вход"
-      ]
+      ],
+      "finishedAt": "2026-09-20T11:05:00+07:00",
+      "tests": {
+        "passed": 314,
+        "failed": 0
+      },
+      "commit": "2f1843e"
     }
   ],
   "singlePass": null,
   "tests": {
-    "passed": 311,
+    "passed": 314,
     "failed": 0
   },
   "debt": {
@@ -523,23 +536,20 @@ window.STATE =
     "craft": "a50f6ce250882d5b8"
   },
   "blind": {
-    "verdict": "собрано; живой путь не подтверждён",
+    "verdict": "проект поднимается, главный сценарий проходит целиком; блокирующих находок нет",
     "drift": [
-      "R27 (Definition of Done MVP): манифест считал путь «сообщение с телефона → комплект контента» закрытым таском 04+06, слепая проверка показала: ни одного успешного хода не было — claude на машине отвечает auth_required, в essa-ai/content/ пусто",
-      "R30 (память): структура есть, но ни одного факта не записано — не проверено вживую",
-      "G11 (голос): модель faster-whisper не скачана, распознавание вживую не работало",
-      "R25/G03/G05/G08 (браузер): профиль state/browser-profile пуст, ни одной браузерной задачи не выполнено",
-      "R32 (состояния задач): в событиях нет PLANNING и REVIEW — эти состояния относятся к планировщику V0.7 и отложены",
-      "R08/R10: SOUL.md и GOALS.md — метки [ЗАПОЛНИ], характер и цели фактически не заданы (ожидаемо: это факты владелицы)"
+      "R25/G03/G05/G08 (браузер): MCP подключён и навык есть, но в приёмочном прогоне браузер не вызывался — вживую по-прежнему не проверен",
+      "R34 (субагенты): шесть ролей включены, но в живом ходе агент их не вызвал и сам это отметил",
+      "R31 (TrendRadar): есть навык, отдельного слоя integrations/trend-radar нет — ожидаемо, отложено",
+      "R44 (структура): вместо workspaces/essa-ai — корневой essa-ai, навыки в .claude/skills, state/tasks.db нет (планировщик отложен)",
+      "smoke_real_turn: на ходе «покажи .env» агент отказался сам, текстом, не дойдя до инструмента — заявленная проверка «Guard отказал» в этом прогоне не выполнилась; сам хук работоспособен (check_hooks: отказ exit 2)"
     ],
     "commands": [
-      ".venv/Scripts/python.exe -m pytest -q → 297 passed",
-      "tests/smoke_real_turn.py → auth_required (цепочка до claude отработала)",
+      ".venv\\Scripts\\python.exe -m pytest -q → 314 passed",
       "scripts/check_hooks.py → все команды хуков исполняются как задумано",
-      "scripts/check_context_size.py → 4.25 KB / 12 KB ok",
-      "guard вживую: Read .env → exit 2; запись в runtime/policy.yaml → exit 2; запись в essa-ai/content → exit 0",
-      "живой круг подтверждений: MONEY → кнопка → allow → exit 0",
-      "npx @playwright/mcp@latest --version → 0.0.81"
+      "scripts/check_context_size.py → 4.72 KB / 12 KB ok",
+      "python -m integrations.telegram (= start.bat) → бот поднялся, приветствие ушло владелице, Approvals API слушает",
+      "живой ход «Сделай контент для ESSA на завтра» → STATUS ok, собран комплект essa-ai/content/2026-09-21-не-изучай-нейросети/"
     ]
   }
 }
