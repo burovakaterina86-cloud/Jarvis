@@ -25,9 +25,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, MessageHandler,
                           filters)
 
-from integrations.telegram import files, voice
-from integrations.telegram.status import (STATUS_DELAY, StatusReporter, split_message,
-                                          too_long)
+from integrations.telegram import files, render, voice
+from integrations.telegram.status import STATUS_DELAY, StatusReporter, too_long
 from runtime import activation
 from runtime import sessions as sessions_mod
 from runtime import task_router
@@ -37,7 +36,13 @@ from runtime.task_router import Job
 ROOT = Path(__file__).resolve().parents[2]
 log = logging.getLogger("jarvis.telegram")
 
-GREETING = "JARVIS на связи."
+DEFAULT_OWNER_NAME = "Катерина"   # перекрывается переменной окружения JARVIS_OWNER_NAME
+
+
+def greeting() -> str:
+    """Приветствие при запуске: по имени, а не служебное «JARVIS на связи»."""
+    name = (os.environ.get("JARVIS_OWNER_NAME", "") or "").strip() or DEFAULT_OWNER_NAME
+    return f"Привет, {name}! На связи Джарвис."
 SETUP_HINT = ("Бот в режиме настройки: в .env пуст TELEGRAM_OWNER_ID.\n"
               "Отправь /whoami, впиши показанный номер в .env и перезапусти start.bat.")
 VOICE_FAILED = "Я не разобрал голосовое — повтори или напиши текстом."
@@ -342,7 +347,11 @@ class Gateway:
         text = (getattr(result, "text", "") or "").strip()
         if not text:
             return
-        parts = split_message(text)
+        # Ответ агента — markdown; владелице он уходит оформленным (render), а в файл
+        # кладётся исходный markdown: файл она открывает и правит, теги там лишние.
+        parts = render.prepare(text)
+        # Порог «лентой или файлом» считается по готовым к отправке кускам HTML, а не по
+        # markdown-кускам: владелице важно число сообщений в чате, а оно берётся отсюда.
         if too_long(parts):
             stamp = dt.datetime.now().strftime("%Y-%m-%d-%H%M%S")
             await context.bot.send_document(
@@ -351,7 +360,7 @@ class Gateway:
         else:
             for part in parts:
                 if part.strip():
-                    await self._send(context, chat_id, part)
+                    await render.send(context.bot, chat_id, part)
         bundle = files.find_content_bundle(text, self.root)
         if bundle:
             await self._send(context, chat_id, "Черновик — ждёт твоего решения.",
@@ -597,7 +606,7 @@ class Gateway:
             log.warning("%s", SETUP_HINT)
             return
         try:
-            await self.bot.send_message(self.owner_id, GREETING)
+            await self.bot.send_message(self.owner_id, greeting())
         except Exception as exc:  # noqa: BLE001
             log.warning("не удалось поздороваться: %s", type(exc).__name__)
 

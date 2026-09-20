@@ -113,3 +113,16 @@
 - Gateway: `draft_callback_data(kind,name,decision)` → `df:<tok>:<on|show|rm|rm2|no>`; `async check_drafts()`, `async watch_drafts(interval=10.0)`; `DRAFT_POLL_INTERVAL=10.0`. Показанные черновики — `state/drafts-seen.json`.
 - `TEST.md` черновика навыка содержит строку «Результат: пройден | не пройден» — по ней бот печатает «Тест: …».
 - Черновики базовых помощников: `drafts/agents/{researcher,competitor-analyst,strategist,copywriter,reels-producer,reviewer}.md`; живые — в `.claude/agents/` (папка существует заранее).
+
+### Из таска 09 — статус-карточка
+
+- `status.STATUS_DELAY = 6.0` — карточка появляется только если ход идёт дольше; `StatusReporter(..., start_after=STATUS_DELAY, delete_on_finish=True)`.
+- После ответа карточка удаляется из чата; итоговая строка остаётся только при `delete_on_finish=False`.
+
+### Из таска 10 — приветствие, оформление, карта ESSA
+
+- `gateway.greeting() -> str` — «Привет, <имя>! На связи Джарвис.»; имя из `JARVIS_OWNER_NAME`, пусто → `DEFAULT_OWNER_NAME = "Катерина"`.
+- `integrations.telegram.render`: `to_html(md) -> str`, `split_html(html, limit=TELEGRAM_LIMIT) -> list[str]`, `prepare(text, limit) -> list[str]`, `to_plain(html) -> str`, `is_markup_error(exc) -> bool`, `async send(bot, chat_id, html, **kw)`; `PARSE_MODE = "HTML"`. Разрешённые теги — `<b> <i> <u> <s> <code> <pre> <a>`; таблицы разворачиваются в плоский список.
+- Ответ агента доставляется через `render.prepare` + `render.send`; `status.split_message` в gateway больше не используется, `status.too_long(parts)` остался порогом «ответ уходит файлом». Файл длинного ответа — `answer-YYYY-MM-DD-HHMMSS.md` с исходным markdown, не HTML.
+- Служебные строки бота и тексты кнопок — простой текст через `Gateway._send`.
+- Единственный вход в `essa-ai/` — `essa-ai/00_PROJECT_MAP.md`; `PROFILE.md`, `STRATEGY.md`, `PRODUCTS.md`, `ANALYTICS.md` — не данные, а указатели на файлы с реальными материалами (имена файлов в обратных кавычках).

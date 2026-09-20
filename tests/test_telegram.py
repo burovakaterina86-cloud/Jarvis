@@ -73,6 +73,80 @@ def test_split_message_hard_splits_long_line():
     assert "".join(parts) == "я" * 500
 
 
+# ---------------------------------------------------------------- render
+
+
+def test_markdown_becomes_readable_telegram_html():
+    from integrations.telegram import render
+    md = ("## Итоги дня\n\nСделано **много** и *быстро*.\n\n"
+          "- первый\n- второй\n\n1. раз\n2. два\n")
+    html = render.to_html(md)
+    assert "<b>Итоги дня</b>\n\n" in html
+    assert "#" not in html
+    assert "<b>много</b>" in html and "<i>быстро</i>" in html
+    assert "• первый" in html and "• второй" in html
+    assert "1. раз" in html and "2. два" in html
+    assert "**" not in html and "- первый" not in html
+
+
+def test_table_becomes_pairs_without_pipes():
+    """Колонки на телефоне нечитаемы: таблица разворачивается в «строка: значение»."""
+    from integrations.telegram import render
+    md = ("| Формат | День | Тема |\n|---|---|---|\n"
+          "| Reels | вторник | найм |\n| Пост | среда | цена |\n")
+    html = render.to_html(md)
+    assert "|" not in html
+    assert "<b>Reels</b>" in html and "<b>Пост</b>" in html
+    assert "День: вторник" in html and "Тема: найм" in html
+    assert "День: среда" in html and "Тема: цена" in html
+
+
+def test_only_telegram_markup_refusal_counts_as_markup_error(monkeypatch):
+    """Чужое исключение со словом «tag» — не повод отправлять ответ второй раз."""
+    from telegram.error import BadRequest, NetworkError
+
+    from integrations.telegram import render
+    assert render.is_markup_error(BadRequest("Can't parse entities: unsupported start tag"))
+    assert not render.is_markup_error(NetworkError("tag lookup failed"))
+    assert not render.is_markup_error(TelegramDown("unclosed tag in parse"))
+    monkeypatch.setattr(render, "BadRequest", None)   # telegram не импортировался
+    assert not render.is_markup_error(TelegramDown("unclosed tag in parse"))
+
+
+def test_long_answer_splits_into_valid_html_chunks():
+    """Кусок не должен обрываться внутри тега: Telegram отклонит такое сообщение целиком."""
+    from html.parser import HTMLParser
+
+    from integrations.telegram import render
+
+    class Balance(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.stack = []
+            self.bad = []
+
+        def handle_starttag(self, tag, attrs):
+            self.stack.append(tag)
+
+        def handle_endtag(self, tag):
+            if not self.stack or self.stack.pop() != tag:
+                self.bad.append(tag)
+
+    md = "".join(f"Строка **номер {i}** про [ссылку](https://example.com/{i}).\n\n"
+                 for i in range(120))
+    assert len(md) > status.TELEGRAM_LIMIT
+    parts = render.prepare(md)
+    assert len(parts) > 1 and not status.too_long(parts)   # лентой, а не файлом
+    for part in parts:
+        assert len(part) <= status.TELEGRAM_LIMIT
+        parser = Balance()
+        parser.feed(part)
+        parser.close()
+        assert parser.stack == [] and parser.bad == []
+        assert "<" not in part.rsplit(">", 1)[-1]          # хвост не обрывается внутри тега
+    assert "номер 0" in parts[0] and "номер 119" in parts[-1]
+
+
 # ---------------------------------------------------------------- status
 
 
@@ -82,8 +156,9 @@ class TelegramDown(RuntimeError):
 
 class FakeBot:
     def __init__(self, fail_document=False, fail_get_file=False, fail_message=False,
-                 fail_delete=False):
+                 fail_delete=False, fail_markup=False):
         self.sent: list[dict] = []
+        self.attempts: list[dict] = []
         self.edits: list[dict] = []
         self.documents: list[dict] = []
         self.deleted: list[dict] = []
@@ -91,11 +166,16 @@ class FakeBot:
         self.fail_get_file = fail_get_file
         self.fail_message = fail_message
         self.fail_delete = fail_delete
+        self.fail_markup = fail_markup
         self._next_id = 100
 
     async def send_message(self, chat_id, text, **kw):
+        self.attempts.append({"chat_id": chat_id, "text": text, **kw})
         if self.fail_message:
             raise TelegramDown("send_message")
+        if self.fail_markup and kw.get("parse_mode"):
+            from telegram.error import BadRequest
+            raise BadRequest("Can't parse entities: unsupported start tag")
         self._next_id += 1
         self.sent.append({"chat_id": chat_id, "text": text, **kw})
         return FakeMessage(self._next_id, text)
@@ -452,6 +532,54 @@ async def test_very_long_answer_goes_as_document(tmp_path):
     assert ctx.bot.documents[0]["filename"].endswith(".md")
 
 
+MARKDOWN_ANSWER = "## Итог\n\n- **раз**\n- два\n"
+
+
+async def test_answer_reaches_the_owner_with_markup(tmp_path):
+    """Владелице уходит оформленный HTML, а не решётки со звёздочками."""
+    g = make_gateway(tmp_path, router=FakeRouter(answer=MARKDOWN_ANSWER))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай итог")), ctx)
+    msg = next(m for m in ctx.bot.sent if "раз" in m["text"])
+    assert msg.get("parse_mode") == "HTML"
+    assert "<b>Итог</b>" in msg["text"] and "<b>раз</b>" in msg["text"]
+    assert "•" in msg["text"]
+    assert "##" not in msg["text"] and "**" not in msg["text"]
+
+
+async def test_markup_refusal_never_costs_the_answer(tmp_path):
+    """Telegram не принял теги — тот же текст уходит простым, ответ не теряется."""
+    g = make_gateway(tmp_path, router=FakeRouter(answer=MARKDOWN_ANSWER))
+    ctx = FakeContext(bot=FakeBot(fail_markup=True))
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай итог")), ctx)
+    assert any(m.get("parse_mode") == "HTML" for m in ctx.bot.attempts)   # попытка была
+    msg = next(m for m in ctx.bot.sent if "раз" in m["text"])
+    assert msg.get("parse_mode") is None
+    assert "<b>" not in msg["text"]
+    assert "Итог" in msg["text"] and "раз" in msg["text"]
+
+
+async def test_long_answer_file_keeps_the_original_markdown(tmp_path):
+    """Файл — рабочий материал владелицы: в нём markdown, а не теги Telegram."""
+    long_md = "## Раздел\n\nстрока **ответа**\n" * 500
+    g = make_gateway(tmp_path, router=FakeRouter(answer=long_md))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай много")), ctx)
+    assert len(ctx.bot.documents) == 1
+    body = ctx.bot.documents[0]["document"].decode("utf-8")
+    assert "## Раздел" in body and "**ответа**" in body
+    assert "<b>" not in body
+
+
+async def test_content_buttons_survive_the_markup(tmp_path):
+    (tmp_path / "essa-ai" / "content" / "2026-09-18-tema").mkdir(parents=True)
+    g = make_gateway(tmp_path, router=FakeRouter(
+        answer="## Готово\n\nКомплект в `essa-ai/content/2026-09-18-tema/`"))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="сделай контент")), ctx)
+    assert ctx.bot.sent[-1].get("reply_markup") is not None
+
+
 async def test_new_resets_session_and_stop_stops(tmp_path):
     g = make_gateway(tmp_path)
     ctx = FakeContext()
@@ -642,6 +770,44 @@ async def test_stranger_cannot_press_buttons(tmp_path):
     cb = FakeCallback(g.approval_callback_data("rid-3", "allow"), user_id=STRANGER)
     await g.on_callback(FakeUpdate(STRANGER, callback_query=cb), FakeContext())
     assert g.approvals.calls == []
+
+
+async def test_greeting_calls_the_owner_by_name(tmp_path, monkeypatch):
+    """Владелица просила здороваться по имени: «привет Катерина! На связи Джарвис»."""
+    monkeypatch.delenv("JARVIS_OWNER_NAME", raising=False)
+    g = make_gateway(tmp_path)
+    bot = FakeBot()
+    g.attach(bot)
+    await g.announce()
+    assert bot.sent[-1]["text"] == "Привет, Катерина! На связи Джарвис."
+    monkeypatch.setenv("JARVIS_OWNER_NAME", "Аня")
+    await g.announce()
+    assert bot.sent[-1]["text"] == "Привет, Аня! На связи Джарвис."
+
+
+# ---------------------------------------------------------------- карта essa-ai
+
+
+def test_essa_stubs_point_to_files_that_exist():
+    """Заглушки — указатели: владелица жаловалась, что агент «не видит половины файлов»."""
+    import re
+    root = Path(__file__).resolve().parents[1]
+    essa = root / "essa-ai"
+    for stub in ("PROFILE.md", "STRATEGY.md", "PRODUCTS.md", "ANALYTICS.md"):
+        text = (essa / stub).read_text(encoding="utf-8")
+        assert "00_PROJECT_MAP.md" in text, stub
+        named = set(re.findall(r"`([^`\n]+\.md)`", text))
+        assert named, f"{stub}: указатель никуда не ведёт"
+        for name in named:
+            assert (essa / name).exists(), f"{stub} ссылается на несуществующий {name}"
+
+
+def test_claude_md_map_leads_to_the_project_map():
+    root = Path(__file__).resolve().parents[1]
+    line = next(ln for ln in (root / "CLAUDE.md").read_text(encoding="utf-8").splitlines()
+                if ln.startswith("| `essa-ai/"))
+    assert "00_PROJECT_MAP.md" in line
+    assert "PROFILE" not in line and "ANALYTICS" not in line
 
 
 # ---------------------------------------------------------------- запуск и секреты

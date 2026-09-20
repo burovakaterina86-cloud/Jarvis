@@ -1,18 +1,18 @@
 window.STATE =
 {
   "slug": "essa-jarvis",
-  "dir": "2026-09-17-essa-jarvis",
+  "dir": "2026-09-17-essa-jarvis--wip",
   "title": "ESSA-JARVIS — автономный агент поверх Claude Code",
   "mode": "semi",
   "depth": "normal",
   "polish": null,
   "tier": "T2",
-  "briefFile": "2026-09-17-brief.md",
+  "briefFile": "2026-09-18-brief.md",
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-17T22:36:55+07:00",
-  "updatedAt": "2026-09-18T12:27:12+07:00",
-  "finishedAt": "2026-09-18T12:27:12+07:00",
+  "updatedAt": "2026-09-20T10:45:00+07:00",
+  "finishedAt": null,
   "stages": [
     {
       "id": "preflight",
@@ -23,55 +23,48 @@ window.STATE =
     {
       "id": "manifest",
       "status": "done",
-      "startedAt": "2026-09-17T22:38:44+07:00",
-      "finishedAt": "2026-09-17T22:38:44+07:00"
+      "startedAt": "2026-09-18T15:15:36+07:00",
+      "finishedAt": "2026-09-18T15:22:00+07:00",
+      "note": "добавлены приветствие, оформление Telegram-ответов и полный учёт загруженных файлов"
     },
     {
       "id": "briefing",
-      "status": "done",
-      "startedAt": "2026-09-17T22:38:44+07:00",
-      "finishedAt": "2026-09-17T22:52:14+07:00"
+      "status": "skipped",
+      "note": "вопросов не потребовалось — пример и ожидаемое поведение однозначны"
     },
     {
       "id": "spec",
       "status": "done",
-      "startedAt": "2026-09-17T22:52:14+07:00",
-      "finishedAt": "2026-09-17T23:24:56+07:00",
-      "note": "G2: 30 находок закрыты; дизайн подтверждён «ок»"
+      "startedAt": "2026-09-18T15:22:00+07:00",
+      "finishedAt": "2026-09-20T10:00:00+07:00",
+      "note": "дополнения G12–G15 описаны историями 56–59"
     },
     {
       "id": "plan",
       "status": "done",
-      "startedAt": "2026-09-17T23:24:56+07:00",
-      "finishedAt": "2026-09-17T23:24:56+07:00",
-      "note": "8 тасков, ярус T2, 5 волн"
+      "startedAt": "2026-09-20T10:00:00+07:00",
+      "finishedAt": "2026-09-20T10:05:00+07:00",
+      "note": "два таска на дополнения: 09 (сделан), 10"
     },
     {
       "id": "build",
-      "status": "done",
-      "startedAt": "2026-09-17T23:24:56+07:00",
-      "note": "8 из 8 тасков готовы",
-      "finishedAt": "2026-09-18T12:27:12+07:00"
+      "status": "active",
+      "startedAt": "2026-09-20T10:05:00+07:00",
+      "note": "9 из 10 тасков готовы"
     },
     {
       "id": "review",
-      "status": "done",
-      "startedAt": "2026-09-17T23:33:03+07:00",
-      "finishedAt": "2026-09-18T12:27:12+07:00",
-      "note": "все таски проверены двумя ревьюерами"
+      "status": "pending"
     },
     {
       "id": "final",
-      "status": "done",
-      "startedAt": "2026-09-18T12:27:12+07:00",
-      "finishedAt": "2026-09-18T12:27:12+07:00",
-      "note": "слепая приёмка: живой путь не подтверждён до входа в Claude"
+      "status": "pending"
     }
   ],
   "requirements": {
-    "total": 62,
-    "done": 46,
-    "inTicket": 0,
+    "total": 69,
+    "done": 47,
+    "inTicket": 3,
     "inSpec": 0,
     "placeholder": 2,
     "deferred": 11,
@@ -400,11 +393,71 @@ window.STATE =
         "failed": 0
       },
       "commit": "7f67618"
+    },
+    {
+      "id": "09",
+      "title": "Статус-карточка не засоряет чат",
+      "requirements": [
+        "G12"
+      ],
+      "blockedBy": [],
+      "wave": 6,
+      "zone": [
+        "integrations/telegram/status.py",
+        "integrations/telegram/gateway.py",
+        "tests/test_telegram.py"
+      ],
+      "status": "done",
+      "retries": 0,
+      "repairs": 1,
+      "handoffs": 0,
+      "startedAt": "2026-09-18T12:30:00+07:00",
+      "finishedAt": "2026-09-18T12:58:36+07:00",
+      "tests": {
+        "passed": 311,
+        "failed": 0
+      },
+      "commit": "e1e829b",
+      "repairFindings": [
+        "D03: включение помощников кнопкой убрало черновики из HEAD — два теста состава поставки стали красными; роль теперь проверяется там, где лежит сейчас"
+      ]
+    },
+    {
+      "id": "10",
+      "title": "Приветствие, оформление ответов, видимость файлов ESSA",
+      "requirements": [
+        "G13",
+        "G14",
+        "G15"
+      ],
+      "blockedBy": [
+        "09"
+      ],
+      "wave": 7,
+      "zone": [
+        "integrations/telegram/gateway.py",
+        "integrations/telegram/render.py",
+        "tests/test_telegram.py",
+        ".env.example",
+        "CLAUDE.md",
+        "essa-ai/PROFILE.md",
+        "essa-ai/STRATEGY.md",
+        "essa-ai/PRODUCTS.md",
+        "essa-ai/ANALYTICS.md"
+      ],
+      "status": "repair",
+      "retries": 0,
+      "repairs": 1,
+      "handoffs": 0,
+      "startedAt": "2026-09-20T10:05:00+07:00",
+      "repairFindings": [
+        "нет тестов на таблицы и на нарезку с тегами; is_markup_error ловит чужие исключения без модуля telegram; ссылка без кавычек мимо теста; лишний импорт; порог HTML не назван; CLAUDE.md — карта не единственный вход"
+      ]
     }
   ],
   "singlePass": null,
   "tests": {
-    "passed": 298,
+    "passed": 311,
     "failed": 0
   },
   "debt": {
@@ -422,7 +475,11 @@ window.STATE =
       "TELEGRAM_OWNER_ID"
     ]
   },
-  "additions": [],
+  "additions": [
+    "G13: приветствие «Привет, Катерина! На связи Джарвис.» при запуске",
+    "G14: читаемое оформление ответов в Telegram",
+    "G15: JARVIS должен учитывать все загруженные файлы и реальный ESSA knowledge pack"
+  ],
   "coverage": {
     "findings": 30,
     "missing": 18,
@@ -454,11 +511,16 @@ window.STATE =
     "браузерные ходы не сериализуются глобально (uses_browser всегда False); при одном владельце ходы и так идут по очереди, риск — только при параллельных чатах (T04 долг)",
     "вход в claude на машине владелицы истёк (OAuth session expired) — до `claude` + /login бот получает auth_required (проверка в T08)",
     "сквозным путём не покрыты истёкший таймаут подтверждения и MONEY выше лимита (T08 craft — долг)",
-    "числа таймаутов (590/580/620) названы в трёх местах: policy.yaml, approvals.py, REFERENCE.md (T08 craft)"
+    "числа таймаутов (590/580/620) названы в трёх местах: policy.yaml, approvals.py, REFERENCE.md (T08 craft)",
+    "тесты базовых ролей: ветка activation.validate для роли-черновика сейчас не исполняется — все шесть ролей уже включены владелицей (T09 repair)",
+    "render.py и status.py — два независимых сплиттера по одному лимиту (tag-safe и обычный); дублирование на публичной границе (T10 craft)",
+    "ответ агента уходит через render.send в обход общего Gateway._send: будущие ретраи/троттлинг в _send не доедут до ответа (T10 craft)",
+    "порог «лентой или файлом» считается по кускам HTML, а не markdown — граница сместилась на несколько процентов (T10 craft, решение принято осознанно)",
+    "essa-ai/00_PROJECT_MAP.md (файл владелицы) не упоминает ~13 загруженных файлов и ссылается на три имени с «(1)», которых на диске нет — карта её, мы её не правим (T10 manifest, долг)"
   ],
   "reviewers": {
-    "manifestSpec": "a5b820cc515998171",
-    "craft": "a8e2ba34d51fbe905"
+    "manifestSpec": "ac1c30759adb63eda",
+    "craft": "a50f6ce250882d5b8"
   },
   "blind": {
     "verdict": "собрано; живой путь не подтверждён",

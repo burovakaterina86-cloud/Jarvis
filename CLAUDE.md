@@ -12,7 +12,7 @@
 |---|---|---|
 | `.claude/skills/` | навыки | сами подгружаются по описанию |
 | `.claude/agents/` | субагенты | когда делегируешь (`rules/delegation.md`) |
-| `essa-ai/` | PROFILE, VOICE, AUDIENCE, PRODUCTS, STRATEGY, ANALYTICS, `content/`, `knowledge/` | только если задача про ESSA.AI |
+| `essa-ai/` | вход — `00_PROJECT_MAP.md`: какой файл за что отвечает и кто главнее при расхождении; в папке есть материалы вне карты, поэтому сначала `Glob`/`Grep` по ней | только если задача про ESSA.AI |
 | `memory/` | `decisions/ projects/ people/ episodes/` | когда нужен факт, которого нет в MEMORY.md |
 | `docs/REFERENCE.md` | справка по устройству JARVIS | только при вопросе об устройстве |
 | `inbox/` | файлы и фото из Telegram | путь приходит в сообщении |
