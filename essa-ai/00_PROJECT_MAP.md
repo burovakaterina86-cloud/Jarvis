@@ -502,8 +502,8 @@ AgentOS может усилить hook, структуру или подачу, 
 
 В проекте используются:
 
-### `AGENTOS_CHATGPT_CORE(1).md`
-или файл без `(1)`, если позже будет переименован.
+### `AGENTOS_CHATGPT_CORE.md`
+(имя без `(1)` — файл переименован, ссылки в карте поправлены 2026-09-20).
 
 Назначение:
 
@@ -514,7 +514,7 @@ AgentOS может усилить hook, структуру или подачу, 
 - upstream;
 - runtime-контракт.
 
-### `ROUTER(1).md`
+### `ROUTER.md`
 
 Назначение:
 
@@ -522,7 +522,7 @@ AgentOS может усилить hook, структуру или подачу, 
 - выбрать основной skill;
 - подключить минимально необходимую цепочку skills.
 
-### `CAPABILITY_MAPPING(1).md`
+### `CAPABILITY_MAPPING.md`
 
 Назначение:
 
@@ -578,7 +578,7 @@ AgentOS отвечает на вопрос:
 | Кейс / цифру | `09_CASES_AND_PROOF.md` | `EXPERTISE.md` |
 | Метрики / что менять | `10_METRICS_AND_TESTS.md` | `11_DECISION_LOG.md` |
 | Принято ли решение | `11_DECISION_LOG.md` | профильный файл |
-| Как выполнить задачу skill-ом | `ROUTER(1).md` | `AGENTOS_CHATGPT_CORE(1).md` + `CAPABILITY_MAPPING(1).md` |
+| Как выполнить задачу skill-ом | `ROUTER.md` | `AGENTOS_CHATGPT_CORE.md` + `CAPABILITY_MAPPING.md` |
 | Общую картину проекта | MASTER PROMPT | профильные SOURCE OF TRUTH |
 
 ---
@@ -624,7 +624,7 @@ AgentOS рекомендует маркетинговый или контент�
 ## Сценарий D
 AgentOS предполагает инструмент, которого нет в ChatGPT.
 
-→ использовать `CAPABILITY_MAPPING(1).md`.
+→ использовать `CAPABILITY_MAPPING.md`.
 
 Не утверждать, что исходный инструмент был вызван.
 
