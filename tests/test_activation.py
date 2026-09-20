@@ -258,47 +258,41 @@ BASE_AGENTS = ["researcher", "competitor-analyst", "strategist", "copywriter",
                "reels-producer", "reviewer"]
 
 
-def _git(*args) -> str:
-    """Вывод git или пропуск теста: без git состав поставки проверить нечем."""
-    try:
-        proc = subprocess.run(["git", *args], cwd=str(REPO), capture_output=True)
-    except OSError as exc:
-        pytest.skip(f"git недоступен ({type(exc).__name__}): состав поставки не проверить")
-    if proc.returncode != 0:
-        pytest.skip("git не отдал содержимое drafts/agents: "
-                    + proc.stderr.decode("utf-8", "replace").strip())
-    return proc.stdout.decode("utf-8", "replace")
+def base_agent_file(name: str) -> tuple[str, Path]:
+    """Где базовая роль лежит сейчас: черновиком или уже включённой.
 
-
-def shipped_agents(tmp_path):
-    """Состав поставки — из коммита, а не с диска.
-
-    Владелица включает базовых помощников кнопкой, и тогда drafts/agents/ на диске пуст,
-    а `.claude/agents/` полон. Это правильное поведение продукта, и тест не должен
-    от него зависеть: файлы берём из HEAD и раскладываем во временную папку.
+    Владелица включает базовых помощников кнопкой, и активация переносит файл из
+    `drafts/agents/` в `.claude/agents/`. Это правильное поведение продукта, поэтому
+    роль проверяем там, где она реально лежит, и требуем ровно одно место из двух.
     """
-    listing = _git("ls-tree", "-r", "--name-only", "HEAD", "drafts/agents")
-    names = sorted(n.strip() for n in listing.splitlines() if n.strip().endswith(".md"))
-    copy = tmp_path / "drafts" / "agents"
-    copy.mkdir(parents=True, exist_ok=True)
-    for rel in names:
-        (copy / Path(rel).name).write_text(_git("show", f"HEAD:{rel}"), encoding="utf-8")
-    return sorted(Path(n).stem for n in names)
+    draft = REPO / "drafts" / "agents" / f"{name}.md"
+    live = REPO / ".claude" / "agents" / f"{name}.md"
+    assert draft.is_file() or live.is_file(), f"базовой роли {name} нет ни в drafts/, ни в .claude/"
+    assert not (draft.is_file() and live.is_file()), \
+        f"роль {name} лежит и черновиком, и включённой — активация не убрала черновик"
+    return ("draft", draft) if draft.is_file() else ("live", live)
 
 
 def test_base_agent_drafts_are_shipped_and_valid(tmp_path):
-    assert shipped_agents(tmp_path) == sorted(BASE_AGENTS)
+    # лишнего в drafts/agents/ быть не должно: там только ещё не включённые базовые роли
+    drafts = REPO / "drafts" / "agents"
+    extra = sorted(p.stem for p in drafts.glob("*.md")) if drafts.is_dir() else []
+    assert set(extra) <= set(BASE_AGENTS), f"в drafts/agents/ лишние файлы: {extra}"
+
+    copy = tmp_path / "drafts" / "agents"
+    copy.mkdir(parents=True)
     for name in BASE_AGENTS:
+        path = base_agent_file(name)[1]
+        (copy / f"{name}.md").write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
         assert activation.validate("agent", name, tmp_path) == [], name
 
 
-def test_base_agent_roles_and_minimal_tools(tmp_path):
+def test_base_agent_roles_and_minimal_tools():
     import yaml
 
-    shipped_agents(tmp_path)
     meta = {}
     for name in BASE_AGENTS:
-        text = (tmp_path / "drafts" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+        text = base_agent_file(name)[1].read_text(encoding="utf-8")
         meta[name] = yaml.safe_load(text.split("---\n")[1])
     # история 55: researcher и reviewer — только чтение, без записи и без shell
     for name in ("researcher", "reviewer"):
