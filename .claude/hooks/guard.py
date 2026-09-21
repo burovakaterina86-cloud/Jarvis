@@ -149,6 +149,79 @@ def _outside_targets(command: str, root: Path, base: Path, allow) -> list[str]:
     return found
 
 
+# ---------- большие файлы ----------
+
+def _int(value) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return n if n > 0 else 0
+
+
+def _chunk_bytes(path: str, offset: int, limit: int, cap: int) -> int:
+    """Сколько байт вернёт чтение с offset строки в limit строк. Считает не дальше cap+1 байта.
+
+    Меряем именно байты: `limit` у Read задан в строках, и limit=999999 — это весь файл,
+    а не кусок. Строки считаем сами, потому что их длина заранее не известна.
+    """
+    total = 0
+    read = 0
+    with open(path, "rb") as f:
+        for number, line in enumerate(f, start=1):
+            if number < max(offset, 1):
+                continue
+            total += len(line)
+            read += 1
+            if total > cap or (limit and read >= limit):
+                break
+    return total
+
+
+def _big_read(tool: str, tool_input: dict, policy: dict, base: Path) -> str | None:
+    """Чтение сверх порога → причина для EXTERNAL, иначе None.
+
+    Поиск (Grep/Glob) сюда не попадает: в big_read.tools только инструменты чтения.
+    Кусок проходит, если укладывается в порог по объёму, а не просто назван куском.
+
+    Граница: заслон стоит на инструментах чтения. `Bash: cat <большой файл>` он не ловит —
+    размер в произвольной командной строке надёжно не определить; shell идёт своим путём
+    (WRITE-команда). Заслон не полный, и это сознательное решение, а не пробел.
+    """
+    cfg = policy.get("big_read") or {}
+    field = (cfg.get("tools") or {}).get(tool)
+    if not field:
+        return None
+    try:
+        max_kb = float(cfg.get("max_kb"))
+    except (TypeError, ValueError):
+        raise ValueError("policy.yaml: big_read.max_kb должен быть числом")
+    target = tool_input.get(field)
+    if not isinstance(target, str) or not target:
+        return None
+    path = os.path.expanduser(target)
+    if not os.path.isabs(path):
+        path = os.path.join(str(base), path)
+    cap = int(max_kb * 1024)
+    try:
+        if not os.path.isfile(path):  # нет файла или это каталог — не наше дело
+            return None
+        size = os.path.getsize(path)
+        if size <= cap:
+            return None
+        chunk_fields = cfg.get("chunk_fields") or []
+        if any(tool_input.get(f) not in (None, "", 0) for f in chunk_fields):
+            offset = _int(tool_input.get(chunk_fields[0])) if chunk_fields else 0
+            limit = _int(tool_input.get(chunk_fields[1])) if len(chunk_fields) > 1 else 0
+            if _chunk_bytes(path, offset, limit, cap) <= cap:
+                return None
+    except OSError:  # файл недоступен — не наше дело
+        return None
+    return (f"файл {os.path.basename(path)} — {size / 1024:.0f} КБ, это больше {max_kb:g} КБ. "
+            f"Целиком такой файл читать дорого: найди нужное через Grep "
+            f"или прочитай кусок поменьше, указав offset и limit")
+
+
 # ---------- суммы ----------
 
 _AMOUNT_RE = re.compile(r"(\d[\d\s ]*(?:[.,]\d+)?)\s*(?:₽|руб|rub|р\.)", re.IGNORECASE)
@@ -271,6 +344,12 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
             level, kind, reason = "EXTERNAL", "unknown_tool", f"неизвестный инструмент {tool}"
     elif not any(_tool_matches(t, tool) for t in policy.get("read_tools") or []):
         level, kind, reason = "EXTERNAL", "unknown_tool", f"неизвестный инструмент {tool}"
+
+    # 2б. чтение большого файла целиком — тем же путём, что EXTERNAL
+    if level == "READ":
+        big = _big_read(tool, tool_input, policy, base)
+        if big:
+            level, kind, reason = "EXTERNAL", "big_read", big
 
     # 3. правила: побеждает самый строгий уровень; правило уточняет вид при равном уровне умолчания
     from_rule = False

@@ -15,6 +15,10 @@
 #   protected_write_paths: [<glob>, ...] — запись → DENY
 #   allow_write_paths: [<glob>, ...]     — запись вне корня проекта, разрешённая без запроса
 #                                          (внутри корня WRITE и так автоматически)
+#   big_read: {max_kb: int, tools: {<имя>: <поле пути>}, chunk_fields: [<поле>, ...]}
+#                                        — чтение файла целиком больше max_kb → EXTERNAL (kind big_read).
+#                                          Поиск (Grep/Glob) и чтение куска (указано любое из chunk_fields)
+#                                          не считаются чтением целиком и проходят свободно.
 #   rules: [{tool: <regex имени, полное совпадение; "*" — любой>, match: <regex по JSON аргументов, без учёта регистра>,
 #            level: READ|WRITE|EXTERNAL|MONEY|DENY, kind: <вид>, reason: <текст>}]
 #                                        — срабатывают все подходящие, побеждает самый строгий уровень
@@ -33,6 +37,16 @@ external:
   network_write: ask
   write_outside_root: ask
   unknown_tool: ask
+  big_read: ask
+
+# Порог чтения целиком. Самый большой живой текстовый файл проекта — 59 КБ,
+# так что ложных срабатываний на обычной работе нет.
+big_read:
+  max_kb: 100
+  tools:
+    Read: file_path
+    NotebookRead: notebook_path
+  chunk_fields: [offset, limit]
 
 money_kinds:
   - purchase

@@ -389,3 +389,104 @@ VAR_AND_DOTNET_CASES = [
 def test_variable_targets_and_dotnet_delete(name, event, level, action):
     d = decide(event, REPO)
     assert (d.level, d.action) == (level, action), d.reason
+
+
+# ---------- заслон на чтение больших файлов (S09) ----------
+
+BIG_KB = 150      # заведомо больше порога
+SMALL_KB = 59     # самый большой живой файл репозитория
+
+
+@pytest.fixture
+def big_file(tmp_path):
+    p = tmp_path / "big.md"
+    p.write_text("x" * (BIG_KB * 1024), encoding="utf-8")
+    return p
+
+
+@pytest.fixture
+def small_file(tmp_path):
+    p = tmp_path / "small.md"
+    p.write_text("x" * (SMALL_KB * 1024), encoding="utf-8")
+    return p
+
+
+def test_read_whole_big_file_asks_owner(big_file):
+    d = decide(ev("Read", file_path=str(big_file)), REPO)
+    assert (d.level, d.action) == ("EXTERNAL", "ask"), d.reason
+    assert "big.md" in d.reason and "150" in d.reason and "Grep" in d.reason
+
+
+def test_read_small_file_passes(small_file):
+    d = decide(ev("Read", file_path=str(small_file)), REPO)
+    assert (d.level, d.action) == ("READ", "allow"), d.reason
+
+
+def test_grep_over_big_file_passes(big_file):
+    d = decide(ev("Grep", pattern="стиль", path=str(big_file)), REPO)
+    assert (d.level, d.action) == ("READ", "allow"), d.reason
+
+
+def test_read_chunk_of_big_file_passes(big_file):
+    d = decide(ev("Read", file_path=str(big_file), offset=200, limit=50), REPO)
+    assert (d.level, d.action) == ("READ", "allow"), d.reason
+
+
+@pytest.fixture
+def big_lines(tmp_path):
+    """Большой файл из строк — на нём limit считается в строках, а не в байтах."""
+    p = tmp_path / "lines.md"
+    p.write_text(("строка с текстом" * 6 + "\n") * 1200, encoding="utf-8")
+    assert p.stat().st_size > 100 * 1024
+    return p
+
+
+def test_huge_limit_is_not_a_chunk(big_lines):
+    # limit в строках: 999999 строк = весь файл, заслон не обходится
+    d = decide(ev("Read", file_path=str(big_lines), limit=999999), REPO)
+    assert (d.level, d.action) == ("EXTERNAL", "ask"), d.reason
+
+
+def test_offset_without_limit_reads_to_end_and_asks(big_lines):
+    d = decide(ev("Read", file_path=str(big_lines), offset=2), REPO)
+    assert (d.level, d.action) == ("EXTERNAL", "ask"), d.reason
+
+
+def test_modest_limit_passes(big_lines):
+    d = decide(ev("Read", file_path=str(big_lines), offset=10, limit=40), REPO)
+    assert (d.level, d.action) == ("READ", "allow"), d.reason
+
+
+def test_missing_file_passes(tmp_path):
+    d = decide(ev("Read", file_path=str(tmp_path / "нет-такого.md")), REPO)
+    assert (d.level, d.action) == ("READ", "allow"), d.reason
+
+
+def test_directory_path_passes(tmp_path):
+    d = decide(ev("Read", file_path=str(tmp_path)), REPO)
+    assert (d.level, d.action) == ("READ", "allow"), d.reason
+
+
+def test_non_string_path_passes():
+    d = decide(ev("Read", file_path=123), REPO)
+    assert (d.level, d.action) == ("READ", "allow"), d.reason
+
+
+def test_broken_threshold_in_policy_is_an_error(big_file):
+    base = guard.load_policy(POLICY_PATH).get("big_read") or {}
+    p = _policy(big_read={**base, "max_kb": "сто"})
+    with pytest.raises(ValueError):
+        guard.decide(ev("Read", file_path=str(big_file)), policy=p, root=REPO, env={})
+
+
+def test_broken_threshold_is_fail_closed(root, tmp_path_factory, big_file):
+    bad = tmp_path_factory.mktemp("p") / "policy.yaml"
+    bad.write_text(POLICY_PATH.read_text(encoding="utf-8").replace("max_kb: 100", "max_kb: сто"), encoding="utf-8")
+    assert guard.run(ev("Read", file_path=str(big_file)), root=root, policy_path=bad, env={})[0] == 2
+
+
+def test_big_read_threshold_lives_in_policy(small_file):
+    base = guard.load_policy(POLICY_PATH).get("big_read") or {}
+    p = _policy(big_read={**base, "max_kb": 10})
+    d = guard.decide(ev("Read", file_path=str(small_file)), policy=p, root=REPO, env={})
+    assert (d.level, d.action) == ("EXTERNAL", "ask"), d.reason
