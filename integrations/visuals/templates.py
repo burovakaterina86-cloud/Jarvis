@@ -42,12 +42,20 @@ ICONS = {
     "search": '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>',
     "doc": '<path d="M6 3h8l4 4v14H6z"/><path d="M9 12h6M9 16h6"/>',
     "play": '<circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4z"/>',
-    "gear": '<circle cx="12" cy="12" r="3"/>'
-            '<path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+    # Шестерёнка: обод, втулка и восемь зубцов. Без обода спицы из центра
+    # читались как солнце, а не как шестерня её эталона.
+    "gear": '<circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.4"/>'
+            '<path d="M12 2.4v2.4M12 19.2v2.4M2.4 12h2.4M19.2 12h2.4'
+            'M5.2 5.2l1.7 1.7M17.1 17.1l1.7 1.7M18.8 5.2l-1.7 1.7M6.9 17.1l-1.7 1.7"/>',
     "check": '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
     "clock": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
     "spark": '<path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/>',
-    "hourglass": '<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 0M8 21c0-5 8-5 8 0"/>',
+    # Песочные часы: две воронки, сходящиеся перемычкой в середине сетки.
+    # Прежний путь рисовал две несвязанные дуги — в кадре это выглядело
+    # как два обломка (её рендер carousel-04).
+    "hourglass": '<path d="M7 3 L17 3 M7 21 L17 21"/>'
+                 '<path d="M8.5 3 L8.5 6 L12 12 L15.5 6 L15.5 3"/>'
+                 '<path d="M8.5 21 L8.5 18 L12 12 L15.5 18 L15.5 21"/>',
     "bolt": '<path d="M13 2L5 13h6l-1 9 8-11h-6z"/>',
     "image": '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/>'
              '<path d="M4 18l5-5 4 4 3-3 4 4"/>',
@@ -66,6 +74,14 @@ DEFAULT_STEP_ICON = "dot"
 
 #: Стрелка между карточками — её знак из эталонных слайдов.
 ARROW = "→"
+
+#: Средняя ширина знака Roboto Condensed Bold в верхнем регистре, в долях кегля.
+#: Замерена в браузере: «ВОЗВРАЩЁННОЕ» — 190.4 px при 27 px на 12 знаков.
+#: По ней считается кегль подписи потока, чтобы длинное слово вставало в строку.
+CONDENSED_CAPS_ADVANCE = 0.59
+
+#: Нижняя граница этого кегля: мельче подпись на карточке уже не читается.
+MIN_FLOW_TITLE = 18
 
 #: Ник в шапке слайда — из её вёрстки.
 NICKNAME = "@studio_essa_ai"
@@ -350,10 +366,15 @@ def build_carousel_slide(
     body_size, body_lh = _scale("body")
     label_size, label_lh = _scale("label")
     micro_size, micro_lh = _scale("micro")
-    dot = round(label_size * 3.5)
-    icon_size = round(label_size * 2)
+    # Кружки, иконки и подписи цепочки — в пропорциях её reference/1.webp:
+    # кружок примерно вчетверо крупнее подписи, иконка вдвое.
+    dot = round(label_size * 4)
+    icon_size = round(label_size * 2.2)
     gap = tokens.SAFE_ZONE // 2
     inner = w - 2 * tokens.SAFE_ZONE
+    #: Скриншот владелицы занимает тело слайда, но не выдавливает плашку
+    #: и подвал: потолок — половина холста.
+    shot_max_h = round(h * 0.45)
     # Объём набирается слоями, как в её примерах (reference/2.webp, 3.webp):
     # светлая обводка по верхнему краю, тёмная по нижнему, мягкая тень под блоком.
     depth = (
@@ -370,6 +391,28 @@ def build_carousel_slide(
         cards = derived.get("cards")
         if derived:
             body = ""
+
+    # Кегль подписи потока: чем больше карточек в ряду, тем уже карточка.
+    # Самое длинное слово обязано встать в строку — иначе браузер ломает его
+    # пополам («ВОЗВРАЩЁН/НОЕ» в её рендере carousel-04).
+    flow_gap = 8
+    #: Потолок ряда карточек — треть холста (её reference/3.webp).
+    flow_cap = round(h / 3)
+    flow_pad = gap // 2
+    flow_title_size = label_size
+    if flow:
+        n = len(flow)
+        card_w = (inner - 2 * flow_gap * (n - 1) - label_size * (n - 1)) / n
+        # box-sizing: border-box — рамка съедает ширину наравне с полями
+        content_w = card_w - 2 * flow_pad - 2 * tokens.BORDER_WIDTH
+        longest = max(
+            (len(word) for c in flow for word in str(c.get("title", "")).split()),
+            default=1,
+        )
+        flow_title_size = max(
+            MIN_FLOW_TITLE,
+            min(label_size, int(content_w / (CONDENSED_CAPS_ADVANCE * longest))),
+        )
 
     css = f"""
   .canvas {{ background: {s["bg"]}; color: {s["text"]}; }}
@@ -402,7 +445,7 @@ def build_carousel_slide(
            margin-top: {gap // 2}px; max-width: {inner}px; }}
   .stage {{ position: relative; z-index: 2; flex: 1; display: flex;
             flex-direction: column; justify-content: center; gap: {gap}px;
-            padding-bottom: {gap // 2}px; }}
+            margin-top: {gap // 2}px; padding-bottom: {gap // 2}px; }}
   /* Графики нет — вертикаль между заголовком и подвалом не оставляем дырой:
      заголовок сам занимает тело слайда. */
   .hero.fill {{ flex: 1; display: flex; flex-direction: column; justify-content: center; }}
@@ -417,27 +460,39 @@ def build_carousel_slide(
                margin: 0 auto; background: {s["accent_soft"]}; color: {P["TEXT_ON_LIGHT"]};
                font-size: {label_size + 8}px; line-height: {dot}px;
                box-shadow: {node_glow}; }}
-  .step-icon {{ margin: 44px auto 18px; height: {icon_size}px; }}
+  .step-icon {{ margin: 76px auto 26px; height: {icon_size}px; }}
   .step-caption {{ font-family: '{tokens.FONTS["HEADLINE"]}', {tokens.FALLBACK_STACK};
                    font-weight: {tokens.FONT_WEIGHTS["HEADLINE"]};
-                   font-size: {label_size + 5}px; line-height: 1.15; color: {s["text"]};
-                   min-height: {round((label_size + 5) * 1.15 * 2)}px; }}
-  .step-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 14px;
+                   font-size: {label_size + 8}px; line-height: 1.15; color: {s["text"]};
+                   min-height: {round((label_size + 8) * 1.15 * 2)}px; }}
+  .step-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 38px;
                 color: {s["muted"]}; }}
-  .flow {{ flex: 1; display: flex; align-items: stretch; gap: 14px; }}
-  .flow-card {{ flex: 1; border-radius: {tokens.RADIUS["card"]}px;
+  /* Тело слайда занимает вертикаль от подзаголовка до нижней плашки: ряд
+     растёт, пока не упрётся в её пропорцию из reference/3.webp — карточка
+     не выше трети холста. Дальше лишнее уходит в отступы вокруг ряда. */
+  .flow {{ flex: 1; max-height: {flow_cap}px;
+           display: flex; align-items: stretch; gap: {flow_gap}px; }}
+  /* Карточка потока — в пропорции её reference/3.webp: около четверти холста
+     по высоте. Это нижняя граница, а не растяжка: текст длиннее — карточка выше. */
+  /* min-width: 0 — иначе длинное слово («ВОЗВРАЩЁННОЕ») не даёт карточке
+     сузиться и ряд вылезает за правый край холста. */
+  .flow-card {{ flex: 1 1 0; min-width: 0; overflow-wrap: break-word;
+                display: flex; flex-direction: column; justify-content: center;
+                border-radius: {tokens.RADIUS["card"]}px;
                 background: {s["surface"]}; border: {tokens.BORDER_WIDTH}px solid
-                {_rgba(s["accent"], 0.28)}; padding: {gap // 2}px;
+                {_rgba(s["accent"], 0.28)}; padding: {gap}px {flow_pad}px;
                 box-shadow: {depth}; }}
   .flow-card.accent {{ background: {P["LAVENDER"]}; border-color: {s["accent"]};
                        box-shadow: {node_glow}; }}
   .flow-card.accent .flow-title, .flow-card.accent .flow-note {{ color: {P["TEXT_ON_LIGHT"]}; }}
-  .flow-title {{ font-size: {label_size + 3}px; line-height: 1.15; margin-top: 18px;
+  /* Кегль подписи потока — базовый label: на четырёх карточках длинное слово
+     («ВОЗВРАЩЁННОЕ») должно вставать в строку, а не ломаться переносом. */
+  .flow-title {{ font-size: {flow_title_size}px; line-height: 1.15; margin-top: 18px;
                  text-transform: uppercase; color: {s["text"]}; }}
-  .flow-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 10px;
+  .flow-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 14px;
                 color: {s["muted"]}; }}
-  .flow-arrow {{ align-self: center; font-size: {label_size + 6}px; color: {s["accent_soft"]}; }}
-  .cards {{ flex: 1; display: grid; gap: 16px; grid-auto-rows: 1fr; }}
+  .flow-arrow {{ align-self: center; font-size: {label_size}px; color: {s["accent_soft"]}; }}
+  .cards {{ display: grid; gap: 16px; grid-auto-rows: 1fr; }}
   .card {{ border-radius: {tokens.RADIUS["card"]}px; background: {s["surface"]};
            border: {tokens.BORDER_WIDTH}px solid {_rgba(s["accent"], 0.28)};
            padding: {gap // 2}px; box-shadow: {depth};
@@ -449,8 +504,9 @@ def build_carousel_slide(
                  text-transform: uppercase; color: {s["text"]}; }}
   .card-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 10px;
                 color: {s["muted"]}; }}
-  .shot {{ flex: 1; display: flex; justify-content: center; align-items: center; }}
-  .shot-img {{ max-width: 100%; max-height: 560px; width: auto; height: auto;
+  .shot {{ display: flex; justify-content: center; align-items: center; }}
+  .shot-img {{ display: block; max-width: 100%; max-height: {shot_max_h}px;
+               width: auto; height: auto;
                object-fit: contain; border-radius: {tokens.RADIUS["card"]}px;
                border: {tokens.BORDER_WIDTH}px solid {_rgba(s["accent"], 0.38)};
                box-shadow: 0 0 64px {_rgba(s["accent"], 0.35)}; }}

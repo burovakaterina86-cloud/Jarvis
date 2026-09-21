@@ -527,7 +527,9 @@ def test_canvas_keeps_a_background_glow_behind_the_content():
 
 
 def test_stage_fills_the_vertical_between_hero_and_footer():
-    for selector in (".stage", ".cards", ".flow", ".steps"):
+    # тело слайда забирает вертикаль между заголовком и подвалом; сами блоки
+    # при этом высотой по содержимому — вертикаль уходит в отступы вокруг них
+    for selector in (".stage", ".steps"):
         assert "flex: 1" in _rule(GRID, selector), selector
     # безопасные поля при этом на месте
     assert f"padding: {tokens.SAFE_ZONE}px" in GRID
@@ -574,3 +576,152 @@ def test_step_captions_share_one_grid():
     )
     caption = _rule(one_and_two_lines, ".step-caption")
     assert re.search(r"min-height: \d+px", caption)
+
+
+# --- доводка по её замечанию: карточки по содержимому, иконки целые ---------
+
+def test_icon_paths_stay_inside_the_viewbox_and_the_hourglass_has_a_waist():
+    # иконка живёт в сетке 24×24: координата за её пределами — сломанный путь
+    for name, path in templates.ICONS.items():
+        nums = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", path)]
+        assert nums, name
+        # абсолютные координаты и относительные смещения — всё внутри сетки
+        assert all(abs(n) <= 25 for n in nums), name
+    # песочные часы: верхняя и нижняя воронки сходятся перемычкой посередине,
+    # иначе в кадре два несвязанных треугольника (её рендер carousel-04)
+    pairs = re.findall(
+        r"(-?\d+(?:\.\d+)?)[ ,](-?\d+(?:\.\d+)?)", templates.ICONS["hourglass"]
+    )
+    ys = [float(y) for _, y in pairs]
+    assert any(11 <= y <= 13 for y in ys), "нет перемычки в середине"
+    assert any(y <= 4 for y in ys) and any(y >= 20 for y in ys), "нет крышек"
+
+
+def test_flow_row_grows_to_the_body_but_not_past_her_third_of_the_canvas():
+    # тело слайда занимает вертикаль от подзаголовка до нижней плашки, но
+    # карточка не выше трети холста — её пропорция из reference/3.webp
+    html = templates.build_carousel_slide(
+        hook="Не нужно знать всё",
+        flow=[{"title": "Задача"}, {"title": "Как теперь"}, {"title": "Время"}],
+        style="STYLE_01",
+    )
+    _, h = tokens.CANVAS["carousel"]
+    flow = _rule(html, ".flow")
+    assert "flex: 1" in flow
+    assert f"max-height: {round(h / 3)}px" in flow
+    assert "align-items: stretch" in flow
+    assert "justify-content: center" in _rule(html, ".stage")
+
+
+def test_her_screenshot_becomes_a_rounded_glowing_block_without_cropping(tmp_path):
+    shot = tmp_path / "экран.png"
+    shot.write_bytes(b"png")
+    html = templates.build_carousel_slide(hook="Скрин", screenshot=shot, notes=[])
+    assert 'class="shot-img"' in html and f'src="{shot.name}"' in html
+    rule = _rule(html, ".shot-img")
+    assert "object-fit: contain" in rule and "cover" not in rule
+    assert f'border-radius: {tokens.RADIUS["card"]}px' in rule
+    assert re.search(r"box-shadow: 0 0 \d+px", rule)
+    assert "flex: 1" not in _rule(html, ".shot")
+
+
+def test_long_flow_title_fits_the_card_instead_of_breaking_mid_word():
+    # «ВОЗВРАЩЁННОЕ» в ряду из четырёх карточек ломалось посреди слова:
+    # кегль подписи потока считается от ширины карточки и длины слова
+    def size(html):
+        return int(re.search(r"font-size: (\d+)px", _rule(html, ".flow-title")).group(1))
+
+    long_row = templates.build_carousel_slide(
+        hook="Поток",
+        flow=[{"title": t} for t in
+              ("Задача", "Сколько времени", "Как теперь", "Возвращённое время")],
+    )
+    short_row = templates.build_carousel_slide(
+        hook="Поток", flow=[{"title": t} for t in ("Раз", "Два", "Три", "Итог")],
+    )
+    assert size(short_row) == tokens.TYPE_SCALE["label"]["size"]
+    assert size(long_row) < size(short_row)
+
+
+# --- тело слайда занимает вертикаль, а не висит по центру -------------------
+#: Доля холста, которую разрешено занимать пустоте вокруг тела слайда.
+#: Замер её образцового кадра (carousel-02, сетка карточек): 158 px из 1350,
+#: то есть 11.7 %. Потолок взят с запасом на слайд без нижней плашки, где ряд
+#: упирается в её пропорцию «карточка не выше трети холста».
+MAX_EMPTY_SHARE = 0.20
+
+#: Как меряем: от низа подзаголовка до верха тела и от низа тела до ближайшей
+#: нижней границы (плашка-итог, рукописная строка или подвал).
+_EMPTY_JS = """() => {
+  const r = e => e.getBoundingClientRect();
+  const stage = document.querySelector('.stage');
+  const block = stage.children[0];
+  const inner = [...block.children].filter(x => !x.classList.contains('steps-line'));
+  const boxes = inner.length ? inner : [block];
+  const top = Math.min(...boxes.map(x => r(x).top));
+  const bottom = Math.max(...boxes.map(x => r(x).bottom));
+  const lead = document.querySelector('.lead') || document.querySelector('.hero');
+  const below = document.querySelector('.summary')
+             || document.querySelector('.hand')
+             || document.querySelector('.footer');
+  return (top - r(lead).bottom) + (r(below).top - bottom);
+}"""
+
+
+def _empty_px(html, tmp_path, name):
+    sync_playwright = render._playwright_module()
+    if sync_playwright is None:
+        pytest.skip("меряем в браузере: питоновского playwright нет")
+    page_path = tmp_path / f"{name}.html"
+    page_path.write_text(html, encoding="utf-8")
+    w, h = tokens.CANVAS["carousel"]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page(viewport={"width": w, "height": h})
+        page.goto(page_path.resolve().as_uri())
+        try:
+            page.wait_for_function("document.fonts.ready", timeout=render.PAGE_TIMEOUT_MS)
+        except Exception:  # noqa: BLE001
+            pass
+        empty = page.evaluate(_EMPTY_JS)
+        browser.close()
+    return empty
+
+
+@pytest.mark.parametrize("name", ["cards", "steps", "flow"])
+def test_body_fills_the_vertical_instead_of_hanging_in_the_middle(name, tmp_path):
+    blocks = {
+        "cards": {"cards": [
+            {"title": "Монтажёр", "note": "склейки", "icon": "play"},
+            {"title": "Дизайнер", "note": "обложки", "icon": "image"},
+            {"title": "Копирайтер", "note": "посты", "icon": "doc"},
+            {"title": "Сценарист", "note": "рилсы", "icon": "spark"},
+        ]},
+        "steps": {"steps": [
+            {"caption": "Выбери\nзадачу", "note": "Из реальной жизни", "icon": "search"},
+            {"caption": "Разбери\nпроцесс", "note": "Как делаю сейчас", "icon": "doc"},
+            {"caption": "Отдай\nповторяемое", "note": "Нейросети", "icon": "gear"},
+            {"caption": "Проверь\nсама", "note": "Контроль за тобой", "icon": "check"},
+        ]},
+        "flow": {"flow": [
+            {"title": "Задача", "note": "как делала раньше", "icon": "doc"},
+            {"title": "Сколько времени", "note": "это занимало", "icon": "clock"},
+            {"title": "Как теперь", "note": "с нейросетью", "icon": "spark"},
+            {"title": "Возвращённое время", "note": "твоя выгода", "icon": "hourglass"},
+        ]},
+    }[name]
+    # окружение — как в её комплекте: под сеткой и цепочкой стоит плашка-итог,
+    # под потоком последнего слайда — рукописная строка
+    around = (
+        {"handwritten": "Всё получится ♡"} if name == "flow"
+        else {"summary": "одна задача → реальный результат → больше уверенности"}
+    )
+    html = templates.build_carousel_slide(
+        hook="Не нужно знать всё",
+        body="Нужно увидеть одну задачу, которая забирает время.",
+        label="Моя воронка",
+        index=4, total=4, style="STYLE_01", **blocks, **around,
+    )
+    _, h = tokens.CANVAS["carousel"]
+    empty = _empty_px(html, tmp_path, name)
+    assert empty <= MAX_EMPTY_SHARE * h, f"{name}: пустоты {empty:.0f} px из {h}"
