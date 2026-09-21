@@ -11,3 +11,5 @@ state/
 inbox/
 .venv/
 .pytest_cache/
+
+.playwright-mcp/
