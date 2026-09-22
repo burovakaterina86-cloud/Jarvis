@@ -292,10 +292,18 @@ def _icon(name: str, size: int, stroke: str) -> str:
     )
 
 
+#: Картинки правой сцены — те, что размываются всегда (G19).
+#: Её фото (`portrait`) сюда не входит: оно должно читаться.
+BLURRED_KINDS = ("screen", "shot")
+
+
 def _image_block(kind: str, path, caption: str, notes: list) -> str:
     """Картинка владелицы: её файл или честная строка о том, что файла нет.
 
     Заглушку не рисуем и чужого не подставляем (таск 05, пп. 5 и 7).
+
+    Скрины правой сцены размываются здесь и всегда: размытие стоит прямо
+    на элементе, данными слайда не выключается (G19, её слова 2026-09-22).
     """
     if not path:
         return ""
@@ -305,7 +313,12 @@ def _image_block(kind: str, path, caption: str, notes: list) -> str:
         return f"<!-- {kind}: файла нет — {_t(p)} -->"
     notes.append(f"{kind}: {p.name}")
     alt = _t(caption or p.name)
-    return f'<img class="{kind}-img" src="{_t(p.name)}" alt="{alt}">'
+    blur = (
+        f' style="filter: blur({tokens.SCREEN_BLUR}px);"'
+        if kind in BLURRED_KINDS
+        else ""
+    )
+    return f'<img class="{kind}-img" src="{_t(p.name)}" alt="{alt}"{blur}>'
 
 
 def _mark_accent(line: str, words) -> str:
@@ -328,24 +341,56 @@ def _mark_accent(line: str, words) -> str:
     return out
 
 
-def _hand_html(handwritten) -> str:
+def _words(text: str) -> list:
+    """Слова строки без регистра и знаков — чтобы сравнивать смысл, а не набор
+    кавычек, переводов строк и вопросительных знаков."""
+    low = re.sub(r"[^\w\s]+", " ", str(text or ""), flags=re.UNICODE).casefold()
+    return low.split()
+
+
+def _echoes(note: list, said: list) -> bool:
+    """Пометка пересказывает то, что на слайде уже написано?
+
+    Да — если все её слова встречаются в тексте слайда по порядку:
+    «что не хочу делать руками» внутри «что я больше не хочу делать руками».
+    Своё слово хотя бы одно («сохранённого много» против «у тебя куча
+    сохранённого») — это уже комментарий, а не повтор.
+    """
+    if not note:
+        return False
+    rest = iter(said)
+    return all(word in rest for word in note)
+
+
+def _hand_html(handwritten, said=()) -> str:
     """Рукописные пометки: две-три на слайд, оранжевые, со стрелкой к тому,
     что комментируют (её слова 2026-09-22 и слайды 5..9).
+
+    Пометка приходит **своим полем** данных слайда и больше ниоткуда
+    (G20, её слова: «пометки отдельно пиши»). Поля нет — пометок на слайде нет:
+    молчаливого повтора заголовка вёрстка не делает.
 
     Текст приходит данными: строка — одна пометка, список — несколько.
     Место можно задать явно (`{"text": …, "at": "bottom-left"}`), не задали —
     слоты раздаются по порядку её слайдов.
+
+    `said` — то, что на слайде уже написано (заголовок, лид). Пометка, которая
+    это повторяет, не рисуется: у неё пометка — комментарий сбоку
+    («сохранённого много», «инструменты ≠ система»), а не второй заголовок.
     """
     if not handwritten:
         return ""
+    spoken = [w for w in (_words(s) for s in said) if w]
     items = [handwritten] if isinstance(handwritten, (str, dict)) else list(handwritten)
     parts = []
-    for i, item in enumerate(items):
+    for item in items:
         data = item if isinstance(item, dict) else {"text": item}
         text = str(data.get("text", "")).strip()
         if not text:
             continue
-        slot = data.get("at") or HAND_SLOTS[i % len(HAND_SLOTS)]
+        if any(_echoes(_words(text), s) for s in spoken):
+            continue
+        slot = data.get("at") or HAND_SLOTS[len(parts) % len(HAND_SLOTS)]
         parts.append(
             f'<div class="hand-note at-{_t(slot)}">'
             f'<span class="hand-text">{_t(text)}</span>'
@@ -846,7 +891,12 @@ def build_carousel_slide(
     scene = " scene" if shot_html else ""
     if screens_html:
         scene += " screens-scene"
-    hand_html = _hand_html(handwritten)
+    # Пометка — комментарий сбоку, а не повтор того, что на слайде уже
+    # написано: сверяем со всем текстом кадра, а не только с заголовком.
+    said = [hook, body, summary]
+    said += [str(s.get("caption", "")) for s in (steps or [])]
+    said += [str(c.get("title", "")) for c in (flow or []) + (cards or [])]
+    hand_html = _hand_html(handwritten, said=said)
     # низ занят пометкой — оставляем ей место, а не кладём поверх текста
     if "at-bottom-left" in hand_html:
         scene += " bottom-note"

@@ -1106,3 +1106,72 @@ def test_kit_carries_a_whole_list_of_screens_next_to_the_layout(tmp_path, monkey
     html = items[0].html_path.read_text(encoding="utf-8")
     for src in HER_SCREENS:
         assert f'src="{src.name}"' in html
+
+
+# --- G19: скрины размыты ------------------------------------------------------
+# Ожидаемое — из её слов 2026-09-22 («делай скрины размытыми») и из таска 09:
+# скрин узнаётся как интерфейс, но ни одна надпись не читается.
+
+def test_every_screen_of_the_scene_is_blurred_by_default(tmp_path):
+    html = templates.build_carousel_slide(hook="Скрины", screens=HER_SCREENS, notes=[])
+    imgs = re.findall(r"<img class=\"screen-img\"[^>]*>", html)
+    assert len(imgs) == 3
+    assert all(f"blur({tokens.SCREEN_BLUR}px)" in img for img in imgs)
+    # степень названа в токенах, а не числом внутри разметки
+    assert tokens.SCREEN_BLUR >= 6
+
+    shot = tmp_path / "скрин.png"
+    shot.write_bytes(b"")
+    single = templates.build_carousel_slide(hook="Скрин", screenshot=shot, notes=[])
+    assert f"blur({tokens.SCREEN_BLUR}px)" in re.search(
+        r"<img class=\"shot-img\"[^>]*>", single
+    ).group(0)
+
+
+def test_slide_data_cannot_turn_the_blur_off():
+    off = templates.build_carousel_slide(
+        hook="Скрины",
+        screens=[{"src": s, "blur": False, "filter": "none"} for s in HER_SCREENS],
+        notes=[],
+    )
+    assert off.count(f"blur({tokens.SCREEN_BLUR}px)") == 3
+    assert "filter: none" not in off
+
+
+# --- G20: пометки пишутся отдельно -------------------------------------------
+# Её слова: «пометки отдельно пиши». У неё это комментарий сбоку
+# («сохранённого много», «инструменты ≠ система»), а не повтор заголовка.
+
+def test_a_slide_without_the_field_has_no_handwritten_notes():
+    html = templates.build_carousel_slide(
+        hook="Ты эксперт\nв своём деле",
+        body="Ты годами учился.",
+        index=2, total=9, notes=[],
+    )
+    assert 'class="hand-note' not in html
+
+
+def test_a_note_repeating_the_headline_or_the_lead_is_not_drawn():
+    # её слайд 06: обе пометки были пересказом заголовка и лида
+    html = templates.build_carousel_slide(
+        hook="Вопрос не «что мне выучить»",
+        body="Вопрос: «что я больше\nне хочу делать руками?»",
+        handwritten=[
+            "что мне выучить",
+            "что не хочу делать руками",
+            "инструменты ≠ система",
+        ],
+        index=6, total=9, notes=[],
+    )
+    assert html.count('class="hand-note') == 1
+    assert "инструменты ≠ система" in html
+    assert "что мне выучить</span>" not in html
+
+    # её слайд 07: пометка повторяла подпись шага, которая тут же и стоит
+    chain = templates.build_carousel_slide(
+        hook="Задача → Процесс → Нейросеть → Контроль",
+        steps=[{"caption": "Что за задача"}, {"caption": "Проверяю результат сама"}],
+        handwritten=["проверяю результат сама"],
+        index=7, total=9, notes=[],
+    )
+    assert 'class="hand-note' not in chain
