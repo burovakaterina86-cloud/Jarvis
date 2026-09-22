@@ -26,27 +26,33 @@
   .glow-2 { position: absolute; border-radius: 50%; pointer-events: none;
              width: 760px; height: 760px; bottom: -320px; left: -280px;
              background: radial-gradient(circle closest-side, rgba(200,191,231,0.18) 0%, transparent 100%); }
-  .header { position: relative; z-index: 2; display: flex; align-items: flex-start;
-             justify-content: space-between; gap: 40px; }
-  .header-left { display: flex; align-items: center; gap: 20px; }
-  .header-num { font-size: 27px; line-height: 1.2;
-                 color: #592DE2; }
-  .header-rule { width: 2px; height: 27px;
-                  background: rgba(20,21,26,0.38); }
-  .header-rubric { font-weight: 600; font-size: 24px;
-                    line-height: 1.3; letter-spacing: 0.16em;
-                    text-transform: uppercase; color: #686775; }
-  .header-thesis { font-weight: 600; font-size: 24px;
-                    line-height: 1.5; letter-spacing: 0.16em; text-align: right;
-                    text-transform: uppercase; color: #686775; }
-  .hero { position: relative; z-index: 2; margin-top: 40px;
+  /* Шапка её второго эталона: `02 / 09`, тонкая линия через слайд, короткая
+     метка справа. Двухстрочного тезиса тут больше нет — он был «хаотично». */
+  .header { position: relative; z-index: 2; display: flex; align-items: center;
+             gap: 28px; }
+  .header-count { font-size: 27px; line-height: 1.2;
+                   letter-spacing: 0.04em; white-space: nowrap; }
+  .header-num { color: #FB9D5B; }
+  .header-total { color: #686775; margin-left: 10px; }
+  .header-line { flex: 1; height: 1px; background: rgba(20,21,26,0.45); }
+  .header-label { font-weight: 600; font-size: 24px;
+                   line-height: 1.3; letter-spacing: 0.18em; white-space: nowrap;
+                   text-transform: uppercase; color: #686775; }
+  .hero { position: relative; z-index: 2; margin-top: 40px; max-width: 78%;
            font-size: 84px; line-height: 1.08;
            letter-spacing: -0.01em; text-transform: uppercase; color: #14151A;
            margin-bottom: 20px; }
-  .hero .accent, .hero em { font-style: normal; color: #592DE2; }
+  .hero-line { display: block; }
+  .hero .accent, .hero em { font-style: normal; color: #FB9D5B; }
   .lead { position: relative; z-index: 2; font-weight: 400;
-           font-size: 38px; line-height: 1.42; color: #686775;
+           font-size: 38px; line-height: 1.42; color: #14151A;
            margin-top: 20px; max-width: 920px; }
+  /* Оранжевая отбивка под текстовой колонкой — держит низ колонки (её 5..9). */
+  .rule-accent { position: relative; z-index: 2; width: 150px; height: 8px;
+                  border-radius: 4px; background: #FB9D5B; margin-top: 20px; }
+  /* Текст слева, предметная сцена справа — её раскладка со скриншотом. */
+  .canvas.scene .hero, .canvas.scene .lead { max-width: 56%; }
+  .canvas.bottom-note { padding-bottom: 256px; }
   .stage { position: relative; z-index: 2; flex: 1; display: flex;
             flex-direction: column; justify-content: center; gap: 40px;
             margin-top: 20px; padding-bottom: 20px; }
@@ -55,8 +61,10 @@
   .hero.fill { flex: 1; display: flex; flex-direction: column; justify-content: center; }
   .steps { position: relative; flex: 1; display: flex;
             flex-direction: column; justify-content: center; }
-  .steps-line { position: absolute; left: 54px; right: 54px;
-                 top: 52px; height: 4px; background: rgba(113,88,231,0.55); }
+  /* Соединение цепочки — отрезки между кружками, а не черта сквозь цифры:
+     сквозная линия читалась как перечёркивание (её замечание 2026-09-22). */
+  .step-link { flex: 0 0 auto; width: 44px; height: 4px; border-radius: 2px;
+                background: #FB9D5B; margin-top: 52px; align-self: flex-start; }
   .steps-row { position: relative; display: flex; justify-content: space-between;
                 align-items: flex-start; gap: 16px; }
   .step { flex: 1; text-align: center; }
@@ -86,7 +94,7 @@
                 background: #ECE9FA; border: 2px solid
                 rgba(113,88,231,0.28); padding: 40px 20px;
                 box-shadow: inset 0 2px 0 rgba(20,21,26,0.1), inset 0 -2px 0 rgba(13,16,21,0.45), 0 24px 48px rgba(13,16,21,0.55); }
-  .flow-card.accent { background: #C8BFE7; border-color: #7158E7;
+  .flow-card.accent { background: #C8BFE7; border-color: #FB9D5B;
                        box-shadow: 0 0 64px rgba(113,88,231,0.55); }
   .flow-card.accent .flow-title, .flow-card.accent .flow-note { color: #14151A; }
   /* Кегль подписи потока — базовый label: на четырёх карточках длинное слово
@@ -96,19 +104,22 @@
   .flow-note { font-size: 24px; line-height: 1.3; margin-top: 14px;
                 color: #686775; }
   .flow-arrow { align-self: center; font-size: 27px; color: #592DE2; }
-  .cards { display: grid; gap: 16px; grid-auto-rows: 1fr; }
+  .cards { flex: 1; display: grid; gap: 16px; grid-auto-rows: 1fr; }
   .card { border-radius: 24px; background: #ECE9FA;
            border: 2px solid rgba(113,88,231,0.28);
            padding: 20px; box-shadow: inset 0 2px 0 rgba(20,21,26,0.1), inset 0 -2px 0 rgba(13,16,21,0.45), 0 24px 48px rgba(13,16,21,0.55);
            display: flex; flex-direction: column; justify-content: center; }
-  .card.accent { background: #C8BFE7; border-color: #7158E7;
+  .card.accent { background: #C8BFE7; border-color: #FB9D5B;
                   box-shadow: 0 0 64px rgba(113,88,231,0.55); }
   .card.accent .card-title, .card.accent .card-note { color: #14151A; }
   .card-title { font-size: 30px; line-height: 1.15; margin-top: 16px;
                  text-transform: uppercase; color: #14151A; }
   .card-note { font-size: 24px; line-height: 1.3; margin-top: 10px;
                 color: #686775; }
-  .shot { display: flex; justify-content: center; align-items: center; }
+  /* Скриншот — предметная сцена правой половины, как в её 5, 6 и 9 слайдах:
+     не блок посреди колонки, а картинка, уходящая к краю холста. */
+  .shot { position: absolute; z-index: 1; right: 0; bottom: 216px;
+           width: 56%; display: flex; justify-content: flex-end; align-items: center; }
   .shot-img { display: block; max-width: 100%; max-height: 608px;
                width: auto; height: auto;
                object-fit: contain; border-radius: 24px;
@@ -124,46 +135,68 @@
                    mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 100%),
                      linear-gradient(270deg, #000 0%, #000 62%, transparent 100%);
                    mask-composite: intersect; }
+  /* Плашка-сноска её слайда 04: оранжевый кружок `!`, вертикальная черта,
+     первая строка белая, вторая сиреневая. */
   .summary { position: relative; z-index: 2; display: flex; align-items: center;
-              gap: 24px; border-radius: 24px;
-              background: rgba(113,88,231,0.16);
-              border: 2px solid rgba(113,88,231,0.38);
-              padding: 20px 40px; margin-bottom: 20px;
+              gap: 20px; border-radius: 24px;
+              background: #ECE9FA;
+              border: 2px solid rgba(20,21,26,0.1);
+              padding: 20px 40px; margin: 40px 0 20px;
               box-shadow: inset 0 2px 0 rgba(20,21,26,0.1), inset 0 -2px 0 rgba(13,16,21,0.45), 0 24px 48px rgba(13,16,21,0.55); }
-  .summary-text { font-weight: 600; font-size: 27px;
-                   line-height: 1.2; letter-spacing: 0.1em;
-                   text-transform: uppercase; color: #592DE2; }
+  .summary-mark { flex: 0 0 auto; width: 77px; height: 77px;
+                   border-radius: 50%; border: 2px solid #FB9D5B;
+                   color: #FB9D5B; font-size: 33px;
+                   line-height: 73px; text-align: center; }
+  .summary-divider { flex: 0 0 auto; width: 2px;
+                      height: 77px; background: rgba(20,21,26,0.22); }
+  .summary-line { font-weight: 400; font-size: 31px;
+                   line-height: 1.45; color: #14151A; }
+  .summary-line.accent { font-weight: 600;
+                          color: #9F87EC; }
   .footer { position: relative; z-index: 2; display: flex; align-items: flex-end;
-             justify-content: space-between; gap: 40px; }
+             justify-content: space-between; gap: 40px; min-height: 24px; }
   .footer-thesis { font-weight: 600; font-size: 24px;
                     line-height: 1.5; letter-spacing: 0.16em; text-transform: uppercase;
                     color: #686775; }
-  .footer-num { font-size: 24px; line-height: 1.3;
-                 letter-spacing: 0.08em; color: #686775; }
-  .hand { position: relative; z-index: 3; text-align: right;
-           margin-bottom: 40px;
-           font-family: 'Marck Script', cursive;
-           font-size: 42px; line-height: 1.2; color: #592DE2; }
+  /* Рукописные пометки: оранжевые, под наклоном, с рисованной стрелкой
+     к тому, что комментируют. Их две-три на слайд (её слайды 5..9). */
+  .hand-note { position: absolute; z-index: 4; display: flex; align-items: flex-start;
+                width: 331px;
+                font-family: 'Marck Script', cursive;
+                font-size: 42px; line-height: 1.15; color: #FB9D5B; }
+  .hand-text { display: block; }
+  .hand-arrow { flex: 0 0 auto; width: 50px;
+                 height: 67px; }
+  .at-top-right { top: 162px; right: 40px; justify-content: flex-end; }
+  .at-top-right .hand-text { transform: rotate(-7deg); }
+  .at-top-right .hand-arrow { order: 2; margin-top: -8px; transform: scaleX(-1); }
+  .at-bottom-left { bottom: 27px; left: 40px; }
+  .at-bottom-left .hand-text { transform: rotate(-6deg); }
+  .at-bottom-left .hand-arrow { order: 2; margin-top: 4px; }
+  .at-mid-right { top: 634px; right: 40px; justify-content: flex-end; }
+  .at-mid-right .hand-text { transform: rotate(-8deg); }
+  .at-mid-right .hand-arrow { order: 2; margin-top: -6px; transform: scaleX(-1); }
+  .at-top-left { top: 162px; left: 40px; }
+  .at-top-left .hand-text { transform: rotate(-5deg); }
+  .at-top-left .hand-arrow { order: 2; margin-top: 4px; }
 
 </style>
 </head>
 <body>
-<div class="canvas" id="slide">
+<div class="canvas bottom-note" id="slide">
   <div class="glow"></div>
   <div class="glow-2"></div>
   
-  <div class="header">
-    <div class="header-left"><span class="header-num headline">04</span><span class="header-rule"></span><span class="header-rubric">МОЯ ВОРОНКА</span></div>
-    <div class="header-thesis">ОДНО СООБЩЕСТВО.<br>МНОГО ВОЗМОЖНОСТЕЙ.</div>
-  </div>
-  <div class="hero headline">Вот как это выглядит</div>
-  <p class="lead">Один экран — и понятно, что делать дальше.</p>
-  <div class="stage"><div class="shot"><img class="shot-img" src="2.webp" alt="скриншот владелицы"></div></div>
   
-  <div class="summary"><svg class="icon" viewBox="0 0 24 24" width="59" height="59" fill="none" stroke="#592DE2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L5 13h6l-1 9 8-11h-6z"/></svg><span class="summary-text">ВИДЕО → ТЕКСТЫ → ВИЗУАЛ → РЕЗУЛЬТАТ</span></div>
+  <div class="header"><div class="header-count headline"><span class="header-num">04</span><span class="header-total">/ 09</span></div><div class="header-line"></div><div class="header-label">Моя воронка</div></div>
+  <div class="hero headline fill"><div class="hero-line">«Ещё надо стать</div><div class="hero-line"><span class="accent">специалистом</span></div><div class="hero-line">по нейросетям»</div></div>
+  <p class="lead">Каждый день новый сервис.<br>Закладки копятся.<br>Быстрее не становится.</p>
+  <div class="rule-accent"></div>
+  
+  <div class="hand-note at-top-right"><span class="hand-text">закладки копятся</span><svg class="hand-arrow" viewBox="0 0 64 86" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M54 6C28 16 10 36 14 68"/><path d="M5 55l9 15 15-8"/></svg></div><div class="hand-note at-bottom-left"><span class="hand-text">быстрее не становится</span><svg class="hand-arrow" viewBox="0 0 64 86" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M54 6C28 16 10 36 14 68"/><path d="M5 55l9 15 15-8"/></svg></div>
+  
   <div class="footer">
-    <div class="footer-thesis">РЕАЛЬНЫЕ ЛЮДИ. РЕАЛЬНЫЕ РЕЗУЛЬТАТЫ.</div>
-    <div class="footer-num headline">04/05</div>
+    <div class="footer-thesis"></div>
   </div>
 </div>
 </body>

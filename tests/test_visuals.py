@@ -53,9 +53,11 @@ import pytest
 from integrations.visuals import templates
 
 HEX = re.compile(r"#[0-9A-Fa-f]{6}\b")
-ALLOWED_HEX = {c.upper() for c in tokens.PALETTE.values()} | {
-    c.upper() for c in tokens.OPTIONAL.values()
-}
+ALLOWED_HEX = (
+    {c.upper() for c in tokens.PALETTE.values()}
+    | {c.upper() for c in tokens.OPTIONAL.values()}
+    | {c.upper() for c in tokens.ACCENT.values()}
+)
 
 
 def _hexes(html):
@@ -295,10 +297,11 @@ def test_slide_has_every_zone_of_her_reference():
         assert f'class="{zone}' in DENSE, zone
 
 
-def test_header_and_footer_carry_rubric_thesis_and_numbers():
+def test_header_and_footer_carry_rubric_and_numbers():
+    # второй эталон: счёт `03 / 08` и метка стоят в шапке, тезиса в шапке нет
     assert "МОЯ ВОРОНКА" in DENSE.upper()
-    assert "МАЛЕНЬКИЕ ШАГИ." in DENSE.upper() and "БОЛЬШИЕ ИЗМЕНЕНИЯ." in DENSE.upper()
-    assert "03" in DENSE and "03/08" in DENSE.replace(" ", "")
+    assert ">03<" in DENSE and "/ 08" in DENSE
+    assert "МАЛЕНЬКИЕ ШАГИ." not in DENSE.upper()
     assert "РЕАЛЬНЫЕ ЛЮДИ." in DENSE.upper()
 
 
@@ -335,7 +338,7 @@ def test_steps_chain_draws_circles_icons_captions_and_notes():
     # её слайд 1: кружки 1–5 на линии, под каждым иконка, подпись, пояснение
     assert DENSE.count('class="step-dot') == 5
     assert DENSE.count('class="step-note') == 5
-    assert 'class="steps-line"' in DENSE
+    assert DENSE.count('class="step-link"') == 4
     assert DENSE.count("<svg") >= 5
     assert "Выбери задачу" in DENSE and "Из реальной жизни" in DENSE
 
@@ -387,19 +390,17 @@ def test_icons_are_inline_svg_without_files_or_icon_fonts():
     assert tokens.PALETTE["VIOLET_SOFT"] in DENSE
 
 
-def test_handwritten_line_is_hers_and_only_on_first_and_last():
+def test_handwritten_notes_are_hers_and_stand_on_any_slide():
+    # второй эталон (2026-09-22): пометок две-три на каждом слайде, а не одна
+    # подпись на крайних — прежнее правило снято её же словами
     first = templates.build_carousel_slide(
         hook="Как пользоваться", handwritten="Всё получится ♡", index=1, total=9
     )
     middle = templates.build_carousel_slide(
         hook="Середина", handwritten="Всё получится ♡", index=5, total=9
     )
-    last = templates.build_carousel_slide(
-        hook="Финал", handwritten="Всё получится ♡", index=9, total=9
-    )
-    assert 'class="hand"' in first and 'class="hand"' in last
-    assert 'class="hand"' not in middle
-    assert "Всё получится" not in middle
+    assert 'class="hand-note' in first and 'class="hand-note' in middle
+    assert "Всё получится" in middle
     assert f"'{tokens.HAND_FONT}', {tokens.HAND_FALLBACK}" in first
     assert "Marck+Script" in tokens.GOOGLE_FONTS_URL
 
@@ -564,8 +565,8 @@ def test_every_step_gets_an_icon_and_a_connecting_line():
     )
     assert unnamed.count('class="step-icon"><svg') == 2
     assert templates.ICONS[templates.DEFAULT_STEP_ICON] in unnamed
-    # линия лежит в ряду кружков, а не отдельно над ним
-    assert '<div class="steps-row"><div class="steps-line"></div>' in named
+    # отрезки лежат в самом ряду между кружками, а не чертой поверх цифр
+    assert '<div class="steps-row"><div class="step"' in named
     assert "position: relative" in _rule(named, ".steps-row")
 
 
@@ -660,9 +661,9 @@ _EMPTY_JS = """() => {
   const boxes = inner.length ? inner : [block];
   const top = Math.min(...boxes.map(x => r(x).top));
   const bottom = Math.max(...boxes.map(x => r(x).bottom));
-  const lead = document.querySelector('.lead') || document.querySelector('.hero');
+  const lead = document.querySelector('.rule-accent')
+            || document.querySelector('.lead') || document.querySelector('.hero');
   const below = document.querySelector('.summary')
-             || document.querySelector('.hand')
              || document.querySelector('.footer');
   return (top - r(lead).bottom) + (r(below).top - bottom);
 }"""
@@ -725,3 +726,163 @@ def test_body_fills_the_vertical_instead_of_hanging_in_the_middle(name, tmp_path
     _, h = tokens.CANVAS["carousel"]
     empty = _empty_px(html, tmp_path, name)
     assert empty <= MAX_EMPTY_SHARE * h, f"{name}: пустоты {empty:.0f} px из {h}"
+
+
+# --- G09–G15: второй эталон владелицы (reference/5..9.webp), 2026-09-22 -------
+# Ожидаемое взято из её пяти слайдов и её же слов, а не из кода под тестом:
+# шапка `02 / 09` + тонкая линия + метка «ПРИЗНАК 1», оранжевое ключевое слово
+# заголовка, рукописные пометки со стрелками, оранжевая отбивка, плашка-сноска.
+
+SECOND = templates.build_carousel_slide(
+    hook="1. У тебя куча\nсохранённого",
+    accent_word="сохранённого",
+    body="Промты.\nГайды.\nПодборки сервисов.",
+    label="Признак 1",
+    index=2,
+    total=9,
+    style="STYLE_01",
+    role="slide",
+    handwritten=["сохранённого много", "ясности мало"],
+    summary="Вроде нейросеть помогла.\nНо ручная работа никуда не исчезла.",
+)
+
+ORANGE = "#FB9D5B"
+
+
+def test_orange_is_her_measured_accent_and_not_a_core_color():
+    # тон снят с её слайдов reference/5,7,8,9.webp: медиана заливки (251,157,91)
+    assert tokens.ACCENT == {"ORANGE_ACCENT": ORANGE}
+    assert ORANGE not in tokens.PALETTE.values()
+    assert ORANGE not in tokens.OPTIONAL.values()
+
+
+def test_header_is_a_count_a_thin_line_and_a_short_label():
+    # G09: «нет тонких линий сверху» — её шапка: `02 / 09` ── ПРИЗНАК 1
+    assert 'class="header-num' in SECOND and ">02<" in SECOND
+    assert "/ 09" in SECOND
+    assert 'class="header-line"' in SECOND
+    assert "ПРИЗНАК 1" in SECOND.upper()
+    line = _rule(SECOND, ".header-line")
+    assert "flex: 1" in line
+    assert int(re.search(r"height: (\d+)px", line).group(1)) <= 2
+    assert f'color: {ORANGE}' in _rule(SECOND, ".header-num")
+
+
+def test_the_chaotic_two_line_thesis_is_gone_from_the_header():
+    # G10: «вот эти тезисы сверху смотрятся хаотично»
+    noisy = templates.build_carousel_slide(
+        hook="Заголовок", thesis="Маленькие шаги.\nБольшие изменения.", index=2, total=9
+    )
+    assert "header-thesis" not in noisy
+    assert "МАЛЕНЬКИЕ ШАГИ." not in noisy.upper()
+
+
+def test_one_key_word_of_the_headline_is_orange_not_the_whole_line():
+    # G11: «оранжевым выделяем главное»
+    assert '<span class="accent">сохранённого</span>' in SECOND
+    assert SECOND.count('<span class="accent">') == 1
+    assert "У тебя куча" in SECOND
+    assert f'color: {ORANGE}' in _rule(SECOND, ".hero .accent, .hero em")
+    plain = templates.build_carousel_slide(hook="Первая\nВторая", index=2, total=9)
+    assert '<span class="accent">' not in plain
+
+
+def test_the_chain_line_never_crosses_the_numbers():
+    # G12: «где цифры прочерчена линия как будто перечеркнуто, так быть не должно»
+    html = templates.build_carousel_slide(
+        hook="Шаги",
+        steps=[{"caption": "Раз"}, {"caption": "Два"}, {"caption": "Три"}],
+    )
+    assert "steps-line" not in html
+    assert html.count('class="step-link"') == 2
+    link = _rule(html, ".step-link")
+    assert "position: absolute" not in link
+    assert ORANGE in link
+
+
+def test_thin_rules_and_accent_borders_are_orange():
+    # G13: «линии тоже можно делать оранжевыми и обводки плашек»
+    assert 'class="rule-accent"' in SECOND
+    rule = _rule(SECOND, ".rule-accent")
+    assert f"background: {ORANGE}" in rule
+    assert int(re.search(r"width: (\d+)px", rule).group(1)) <= 240
+    accented = templates.build_carousel_slide(
+        hook="Ряд",
+        cards=[{"title": "Раз"}, {"title": "Два", "accent": True}],
+        style="STYLE_01",
+    )
+    assert f"border-color: {ORANGE}" in _rule(accented, ".card.accent")
+
+
+def test_handwritten_notes_are_orange_slanted_and_carry_an_arrow():
+    # G14: по две-три пометки на слайд, у каждой изогнутая стрелка
+    assert SECOND.count('class="hand-note') == 2
+    assert SECOND.count('class="hand-arrow"') == 2
+    assert "сохранённого много" in SECOND and "ясности мало" in SECOND
+    note = _rule(SECOND, ".hand-note")
+    assert f"color: {ORANGE}" in note
+    assert f"'{tokens.HAND_FONT}', {tokens.HAND_FALLBACK}" in note
+    assert "rotate(" in _css(SECOND)
+    # пометки стоят на любом слайде, а не только на первом и последнем
+    middle = templates.build_carousel_slide(
+        hook="Середина", handwritten=["поиск не решает хаос"], index=5, total=9
+    )
+    assert middle.count('class="hand-note') == 1
+
+
+def test_footnote_plate_has_an_orange_bang_and_two_lines():
+    # её слайд 04: кружок `!`, вертикальная черта, белая строка и сиреневая
+    assert 'class="summary-mark"' in SECOND and ">!<" in SECOND
+    assert 'class="summary-divider"' in SECOND
+    assert SECOND.count('class="summary-line"') == 1
+    assert SECOND.count('class="summary-line accent"') == 1
+    assert "Вроде нейросеть помогла." in SECOND
+    assert f'color: {ORANGE}' in _rule(SECOND, ".summary-mark")
+    assert tokens.PALETTE["VIOLET_SOFT"] in _rule(SECOND, ".summary-line.accent")
+
+
+def test_the_screenshot_becomes_the_scene_on_the_right(tmp_path):
+    shot = tmp_path / "экран.png"
+    shot.write_bytes(b"png")
+    html = templates.build_carousel_slide(
+        hook="Скрин", body="Слева текст.", screenshot=shot, notes=[]
+    )
+    assert 'class="canvas scene"' in html
+    scene = _rule(html, ".canvas.scene .hero, .canvas.scene .lead")
+    assert "max-width" in scene
+    assert "position: absolute" in _rule(html, ".shot")
+
+
+def test_skill_describes_the_second_reference():
+    text = SKILL.read_text(encoding="utf-8")
+    for word in ("accent_word", "hand-note", "ORANGE_ACCENT", "step-link"):
+        assert word in text, word
+
+
+# --- G15: её портрет без белого фона -----------------------------------------
+# «Убери фон, раствори край» (2026-09-22). Проверяем не картинку на глаз, а то,
+# что в сохранённом файле у краёв нет непрозрачного белого прямоугольника.
+
+from integrations.visuals import cutout
+
+PORTRAIT = Path(__file__).resolve().parents[1] / "essa-ai" / "photo" / "katerina-portrait.webp"
+
+
+def test_cutout_drops_the_white_wall_and_keeps_the_face(tmp_path):
+    if render._playwright_module() is None:
+        pytest.skip("вырезаем браузером: питоновского playwright нет")
+    assert PORTRAIT.is_file(), PORTRAIT
+    out = cutout.make_cutout(PORTRAIT, tmp_path / "cut.png")
+    assert out is not None and out.is_file()
+    # читаем обратно уже сохранённый файл, а не то, что посчитал вырезатель
+    probe = cutout.alpha_probe(out)
+    assert probe["top_left"] < 24, probe
+    assert probe["top_right"] < 24, probe
+    assert probe["center"] > 230, probe
+    # исходник владелицы не тронут
+    assert PORTRAIT.suffix == ".webp" and PORTRAIT.stat().st_size > 0
+
+
+def test_cutout_says_plainly_when_the_browser_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(render, "_playwright_module", lambda: None)
+    assert cutout.make_cutout(PORTRAIT, tmp_path / "cut.png") is None
