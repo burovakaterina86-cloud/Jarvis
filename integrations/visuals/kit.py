@@ -54,8 +54,23 @@ def _make(kind: str, name: str, html: str, out_dir: Path, notes=None) -> VisualI
     )
 
 
-#: Поля слайда, значение которых — файл владелицы (фото, скриншот).
+#: Поля слайда, значение которых — один файл владелицы (фото, скриншот).
 ASSET_FIELDS = ("photo", "screenshot")
+
+#: Поля слайда, значение которых — список её файлов (скрины правой сцены).
+ASSET_LIST_FIELDS = ("screens",)
+
+
+def _carry_one(src, out_dir: Path):
+    """Один её файл — рядом с вёрсткой. Нет файла — значение не трогаем."""
+    path = Path(src)
+    if not path.is_file():
+        return src
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dst = out_dir / path.name
+    if path.resolve() != dst.resolve():
+        shutil.copyfile(path, dst)
+    return dst
 
 
 def _carry_assets(slide: dict[str, Any], out_dir: Path) -> dict[str, Any]:
@@ -63,16 +78,14 @@ def _carry_assets(slide: dict[str, Any], out_dir: Path) -> dict[str, Any]:
     только соседние файлы. Чужого не подставляем — нет файла, идём дальше."""
     data = dict(slide)
     for key in ASSET_FIELDS:
-        src = data.get(key)
-        if not src:
+        if data.get(key):
+            data[key] = _carry_one(data[key], out_dir)
+    for key in ASSET_LIST_FIELDS:
+        value = data.get(key)
+        if not value:
             continue
-        src = Path(src)
-        if src.is_file():
-            out_dir.mkdir(parents=True, exist_ok=True)
-            dst = out_dir / src.name
-            if src.resolve() != dst.resolve():
-                shutil.copyfile(src, dst)
-            data[key] = dst
+        items = [value] if isinstance(value, (str, Path)) else list(value)
+        data[key] = [_carry_one(item, out_dir) for item in items]
     return data
 
 
@@ -87,7 +100,7 @@ def build_kit_visuals(
 
     `carousel_slides` — словари с полями `build_carousel_slide`: `hook`, `body`,
     `label`, `role`, `thesis`, `footer_thesis`, `steps`, `flow`, `cards`,
-    `summary`, `handwritten`, `photo`, `screenshot`.
+    `summary`, `handwritten`, `photo`, `screenshot`, `screens`.
     `cover` — `hook`, `subtitle`; `story` — `key_phrase`, `caption`.
     Вид без данных просто не строится; переданный — строится всегда.
 

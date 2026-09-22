@@ -77,18 +77,70 @@ ICONS = {
 }
 
 #: Иконка шага по умолчанию: в её эталоне под каждым кружком иконка есть
-#: всегда. Имя не дали или оно незнакомое — ставим нейтральный геометрический
-#: маркер (DESIGN.md §15), а не пустое место.
+#: всегда. Имя не дали и по подписи ничего не узналось — ставим нейтральный
+#: геометрический маркер (DESIGN.md §15), а не пустое место.
 DEFAULT_STEP_ICON = "dot"
 
-#: Стрелка между карточками — её знак из эталонных слайдов.
+#: Подбор иконки по смыслу подписи, когда имя не задано (G16).
+#: Раньше во всём ряду стоял один и тот же кружок `dot` — ряд выходил
+#: одинаковым (её рендер carousel-07). Словарь ведёт только к уже имеющимся
+#: иконкам `ICONS`: ничего нового не рисуется и не выдумывается.
+#: Порядок важен — первое совпадение выигрывает, поэтому узкие темы стоят
+#: раньше широких.
+ICON_HINTS = (
+    ("play", ("монтаж", "видео", "рилс", "reels", "ролик", "съёмк", "съемк")),
+    ("image", ("дизайн", "обложк", "визуал", "фото", "картинк", "изображ", "баннер")),
+    ("doc", ("текст", "пост", "копирайт", "сценар", "промт", "гайд", "докумен",
+             "файл", "стать", "подпис", "письм", "конспект")),
+    ("check", ("провер", "контрол", "результат", "готов", "качеств", "сама")),
+    ("clock", ("врем", "час", "минут", "срок", "сколько", "долго", "быстре")),
+    ("hourglass", ("ждать", "ожидан", "дедлайн", "откладыва", "потом")),
+    ("search", ("поиск", "ищеш", "иска", "найд", "выбер", "выбор", "разбер")),
+    ("gear", ("процесс", "систем", "настрой", "автоматиз", "инструмент",
+              "механизм", "шаблон", "повторя")),
+    ("chart", ("цифр", "статист", "аналит", "охват", "рост", "метрик", "smm",
+               "соцсет", "блог", "аккаунт", "отчёт", "отчет")),
+    ("flask", ("тест", "эксперимент", "пробу", "гипотез")),
+    ("bolt", ("энерг", "сразу", "мгновен", "разгон", "ускор")),
+    ("map", ("задач", "план", "шаг", "маршрут", "воронк", "путь", "карт")),
+    ("question", ("вопрос", "зачем", "почему", "что-нибудь", "непонят")),
+    ("spark", ("нейросет", "нейронк", "ai", "идея", "идеи", "мастерск", "новое")),
+)
+
+
+def pick_icon(caption: str) -> str:
+    """Имя иконки по смыслу подписи — только из её же словаря `ICONS`.
+
+    Ничего не подошло — нейтральный маркер: это честнее, чем подставить
+    иконку про другое.
+    """
+    text = str(caption or "").casefold().replace("ё", "е")
+    for name, keys in ICON_HINTS:
+        for key in keys:
+            if key.replace("ё", "е") in text:
+                return name
+    return DEFAULT_STEP_ICON
+
+
+#: Стрелка между карточками — её знак из эталонных слайдов. Служит и
+#: разделителем в тексте слайда (`auto_blocks`).
 ARROW = "→"
+
+#: Нарисованная стрелка между карточками потока (G17): не тонкая палочка и не
+#: типографский знак, а заметная дуга с открытым наконечником — как оранжевые
+#: дуги в `reference/8.webp`.
+FLOW_ARROW = (
+    '<svg class="flow-arrow-svg" viewBox="0 0 48 34" fill="none" stroke="currentColor" '
+    'stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M4 28C13 8 31 5 43 19"/>'
+    '<path d="M31 15L43 19L41 6"/></svg>'
+)
 
 #: Рисованная стрелка от рукописной пометки к тому, что она комментирует
 #: (её слайды 5..9): изогнутая дуга и открытый наконечник, inline SVG.
 HAND_ARROW = (
     '<svg class="hand-arrow" viewBox="0 0 64 86" fill="none" stroke="currentColor" '
-    'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
+    'stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">'
     '<path d="M54 6C28 16 10 36 14 68"/>'
     '<path d="M5 55l9 15 15-8"/></svg>'
 )
@@ -313,7 +365,7 @@ def _steps_html(steps: list, icon_size: int, stroke: str) -> str:
         if i > 1:
             cells.append('<div class="step-link"></div>')
         icon = _icon(step.get("icon", ""), icon_size, stroke) or _icon(
-            DEFAULT_STEP_ICON, icon_size, stroke
+            pick_icon(step.get("caption", "")), icon_size, stroke
         )
         note = step.get("note", "")
         cells.append(
@@ -333,9 +385,12 @@ def _flow_html(flow: list, icon_size: int, stroke: str, accent_stroke: str) -> s
     last = len(flow) - 1
     for i, card in enumerate(flow):
         if i:
-            parts.append(f'<div class="flow-arrow">{ARROW}</div>')
+            parts.append(f'<div class="flow-arrow">{FLOW_ARROW}</div>')
         accent = " accent" if i == last and card.get("accent", True) else ""
-        icon = _icon(card.get("icon", ""), icon_size, accent_stroke if accent else stroke)
+        pen = accent_stroke if accent else stroke
+        icon = _icon(card.get("icon", ""), icon_size, pen) or _icon(
+            pick_icon(card.get("title", "")), icon_size, pen
+        )
         note = card.get("note", "")
         parts.append(
             f'<div class="flow-card{accent}">{icon}'
@@ -347,12 +402,21 @@ def _flow_html(flow: list, icon_size: int, stroke: str, accent_stroke: str) -> s
 
 
 def _cards_html(cards: list, icon_size: int, stroke: str, accent_stroke: str) -> str:
-    """Сетка карточек со скруглением."""
+    """Сетка карточек со скруглением.
+
+    Под карточками нет пояснений — ряд становится компактным (`cards compact`):
+    пустая коробка на треть холста была дефектом её рендера carousel-03,
+    а не воздухом (G16).
+    """
     columns = 2 if len(cards) <= 4 else 3
+    dense = any(str(c.get("note", "")).strip() for c in cards)
     cells = []
     for card in cards:
         accent = " accent" if card.get("accent") else ""
-        icon = _icon(card.get("icon", ""), icon_size, accent_stroke if accent else stroke)
+        pen = accent_stroke if accent else stroke
+        icon = _icon(card.get("icon", ""), icon_size, pen) or _icon(
+            pick_icon(card.get("title", "")), icon_size, pen
+        )
         note = card.get("note", "")
         cells.append(
             f'<div class="card{accent}">{icon}'
@@ -360,9 +424,46 @@ def _cards_html(cards: list, icon_size: int, stroke: str, accent_stroke: str) ->
             + (f'<div class="card-note">{_t(note)}</div>' if note else "")
             + "</div>"
         )
+    klass = "cards" if dense else "cards compact"
     return (
-        f'<div class="cards" style="grid-template-columns: repeat({columns}, 1fr);">'
+        f'<div class="{klass}" style="grid-template-columns: repeat({columns}, 1fr);">'
         + "".join(cells)
+        + "</div>"
+    )
+
+
+#: Правая сцена из её скринов (G18, `reference/5.webp`): один-три снимка лежат
+#: стопкой, каждый чуть повёрнут и сдвинут. Слоты заданы явно, чтобы стопка
+#: была предсказуемой, а не случайной.
+SCREEN_SLOTS = (
+    {"top": "0%", "right": "6%", "rot": -7},
+    {"top": "30%", "right": "18%", "rot": -4},
+    {"top": "60%", "right": "6%", "rot": -9},
+)
+
+
+def _screens_html(screens, notes: list) -> str:
+    """Карточки-скрины правой сцены: её файлы, ничего не подставляется.
+
+    Смысл снимков не разбирается — это фактура. Снимок не увеличивается
+    (`.screen-img` живёт в потолках `max-width`/`max-height`), чтобы мелкий
+    текст на нём не становился читаемым крупно.
+    """
+    if not screens:
+        return ""
+    items = [screens] if isinstance(screens, (str, Path, dict)) else list(screens)
+    cards = []
+    for item in items[: len(SCREEN_SLOTS)]:
+        data = item if isinstance(item, dict) else {"src": item}
+        img = _image_block("screen", data.get("src"), "скрин владелицы", notes)
+        if not img or img.startswith("<!--"):
+            continue
+        cards.append(f'<div class="screen-card s{len(cards) + 1}">{img}</div>')
+    if not cards:
+        return ""
+    return (
+        f'<div class="screens n{len(cards)}"><div class="screens-glow"></div>'
+        + "".join(cards)
         + "</div>"
     )
 
@@ -408,6 +509,7 @@ def build_carousel_slide(
     handwritten: str = "",
     photo=None,
     screenshot=None,
+    screens=None,
     notes: list = None,
 ) -> str:
     """Слайд карусели 1080×1350 по её второму эталону (`reference/5–9.webp`).
@@ -426,6 +528,9 @@ def build_carousel_slide(
     `steps` / `flow` / `cards` — графические блоки; не переданы — собираются из
     текста слайда (`auto_blocks`). `photo` и `screenshot` — файлы владелицы:
     файла нет → слайд собирается без него, а в `notes` ложится строка об этом.
+    `screens` — список её скринов (один-три) для правой сцены: они ложатся
+    стопкой под наклоном, текст уходит в левую колонку. Пути приходят данными
+    слайда, сами не подбираются.
     `style` — только из `tokens.STYLES` (§5).
     """
     if style not in tokens.STYLES:
@@ -444,7 +549,9 @@ def build_carousel_slide(
     # Кружки, иконки и подписи цепочки — в пропорциях её reference/1.webp:
     # кружок примерно вчетверо крупнее подписи, иконка вдвое.
     dot = round(label_size * 4)
-    icon_size = round(label_size * 2.2)
+    # G17: иконки крупнее, чем были (2.2 — они терялись в карточке) и с
+    # собственной подсветкой (`.icon` ниже).
+    icon_size = round(label_size * 3.0)
     gap = tokens.SAFE_ZONE // 2
     inner = w - 2 * tokens.SAFE_ZONE
     #: Скриншот владелицы занимает тело слайда, но не выдавливает плашку
@@ -452,12 +559,18 @@ def build_carousel_slide(
     shot_max_h = round(h * 0.45)
     # Объём набирается слоями, как в её примерах (reference/2.webp, 3.webp):
     # светлая обводка по верхнему краю, тёмная по нижнему, мягкая тень под блоком.
+    # G17: к трём слоям добавлены внутренняя подсветка сверху и короткая
+    # контактная тень снизу — без них плашка читалась как плоский прямоугольник.
     depth = (
-        f'inset 0 2px 0 {_rgba(s["text"], 0.10)}, '
-        f'inset 0 -2px 0 {_rgba(P["BG_DARK_PRIMARY"], 0.45)}, '
-        f'0 24px 48px {_rgba(P["BG_DARK_PRIMARY"], 0.55)}'
+        f'inset 0 2px 0 {_rgba(s["text"], 0.16)}, '
+        f'inset 0 -2px 0 {_rgba(P["BG_DARK_PRIMARY"], 0.55)}, '
+        f'inset 0 20px 44px -20px {_rgba(s["text"], 0.16)}, '
+        f'0 24px 48px {_rgba(P["BG_DARK_PRIMARY"], 0.55)}, '
+        f'0 6px 14px {_rgba(P["BG_DARK_PRIMARY"], 0.45)}'
     )
     node_glow = f'0 0 64px {_rgba(s["accent"], 0.55)}'
+    #: Собственная подсветка иконки (G17): она светится, а не лежит плашмя.
+    icon_glow = f'drop-shadow(0 0 14px {_rgba(s["accent"], 0.55)})'
 
     if not (steps or flow or cards):
         derived = auto_blocks(body)
@@ -534,15 +647,17 @@ def build_carousel_slide(
             flex-direction: column; justify-content: center; }}
   /* Соединение цепочки — отрезки между кружками, а не черта сквозь цифры:
      сквозная линия читалась как перечёркивание (её замечание 2026-09-22). */
-  .step-link {{ flex: 0 0 auto; width: 44px; height: 4px; border-radius: 2px;
-                background: {O}; margin-top: {dot // 2 - 2}px; align-self: flex-start; }}
+  .step-link {{ flex: 0 0 auto; width: 56px; height: 8px; border-radius: 4px;
+                background: {O}; margin-top: {dot // 2 - 4}px; align-self: flex-start;
+                box-shadow: 0 0 16px {_rgba(O, 0.55)}; }}
   .steps-row {{ position: relative; display: flex; justify-content: space-between;
                 align-items: flex-start; gap: 16px; }}
   .step {{ flex: 1; text-align: center; }}
   .step-dot {{ width: {dot}px; height: {dot}px; border-radius: 50%;
                margin: 0 auto; background: {s["accent_soft"]}; color: {P["TEXT_ON_LIGHT"]};
                font-size: {label_size + 8}px; line-height: {dot}px;
-               box-shadow: {node_glow}; }}
+               box-shadow: {node_glow}, inset 0 3px 0 {_rgba(P["TEXT_ON_DARK"], 0.55)},
+                 inset 0 -4px 0 {_rgba(P["BG_DARK_PRIMARY"], 0.22)}; }}
   .step-icon {{ margin: 76px auto 26px; height: {icon_size}px; }}
   .step-caption {{ font-family: '{tokens.FONTS["HEADLINE"]}', {tokens.FALLBACK_STACK};
                    font-weight: {tokens.FONT_WEIGHTS["HEADLINE"]};
@@ -574,7 +689,12 @@ def build_carousel_slide(
                  text-transform: uppercase; color: {s["text"]}; }}
   .flow-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 14px;
                 color: {s["muted"]}; }}
-  .flow-arrow {{ align-self: center; font-size: {label_size}px; color: {s["accent_soft"]}; }}
+  /* G17: между карточками — рисованная дуга, а не типографская стрелка. */
+  .flow-arrow {{ align-self: center; flex: 0 0 auto; color: {O};
+                 width: {label_size * 2}px; height: {round(label_size * 1.4)}px; }}
+  .flow-arrow-svg {{ width: 100%; height: 100%;
+                     filter: drop-shadow(0 0 12px {_rgba(O, 0.45)}); }}
+  .icon {{ filter: {icon_glow}; }}
   .cards {{ flex: 1; display: grid; gap: 16px; grid-auto-rows: 1fr; }}
   .card {{ border-radius: {tokens.RADIUS["card"]}px; background: {s["surface"]};
            border: {tokens.BORDER_WIDTH}px solid {_rgba(s["accent"], 0.28)};
@@ -587,6 +707,13 @@ def build_carousel_slide(
                  text-transform: uppercase; color: {s["text"]}; }}
   .card-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 10px;
                 color: {s["muted"]}; }}
+  /* G16: под карточками нет пояснений — ряд компактный, а не коробка на треть
+     холста (её carousel-03: пять пустых плашек во весь экран). */
+  .cards.compact {{ flex: 0 0 auto; grid-auto-rows: auto; }}
+  .cards.compact .card {{ flex-direction: row; align-items: center; gap: 18px;
+                          padding: {gap // 3}px {gap // 2}px; }}
+  .cards.compact .card .icon {{ flex: 0 0 auto; }}
+  .cards.compact .card-title {{ margin-top: 0; }}
   /* Скриншот — предметная сцена правой половины, как в её 5, 6 и 9 слайдах:
      не блок посреди колонки, а картинка, уходящая к краю холста. */
   .shot {{ position: absolute; z-index: 1; right: 0; bottom: {round(h * 0.16)}px;
@@ -596,6 +723,34 @@ def build_carousel_slide(
                object-fit: contain; border-radius: {tokens.RADIUS["card"]}px;
                border: {tokens.BORDER_WIDTH}px solid {_rgba(s["accent"], 0.38)};
                box-shadow: 0 0 64px {_rgba(s["accent"], 0.35)}; }}
+  /* G18: правая сцена из её скринов — стопка карточек под наклоном, как
+     карточки-скриншоты в reference/5.webp. Сцена занимает правую половину,
+     текст — левую (`canvas.screens-scene`). */
+  .screens {{ position: absolute; z-index: 1; top: {round(h * 0.20)}px; right: 0;
+              width: {round(w * 0.52)}px; height: {round(h * 0.68)}px; }}
+  .screens-glow {{ position: absolute; inset: -8%; border-radius: 50%;
+                   background: {_glow(s["accent"], 0.30)}; }}
+  .screen-card {{ position: absolute; padding: 10px;
+                  border-radius: {tokens.RADIUS["card"]}px; background: {s["surface"]};
+                  border: {tokens.BORDER_WIDTH}px solid {_rgba(s["text"], 0.14)};
+                  box-shadow: {depth}; }}
+  /* Снимок не увеличивается: потолки по ширине и высоте плюс `width: auto` —
+     мелкий текст на нём остаётся мелким, это фактура, а не документ. */
+  .screen-img {{ display: block; max-width: {round(w * 0.40)}px;
+                 max-height: {round(h * 0.34)}px; width: auto; height: auto;
+                 border-radius: {tokens.RADIUS["chip"]}px; }}
+  .screen-card.s1 {{ top: {SCREEN_SLOTS[0]["top"]}; right: {SCREEN_SLOTS[0]["right"]};
+                     z-index: 1; transform: rotate({SCREEN_SLOTS[0]["rot"]}deg); }}
+  .screen-card.s2 {{ top: {SCREEN_SLOTS[1]["top"]}; right: {SCREEN_SLOTS[1]["right"]};
+                     z-index: 2; transform: rotate({SCREEN_SLOTS[1]["rot"]}deg); }}
+  .screen-card.s3 {{ top: {SCREEN_SLOTS[2]["top"]}; right: {SCREEN_SLOTS[2]["right"]};
+                     z-index: 3; transform: rotate({SCREEN_SLOTS[2]["rot"]}deg); }}
+  /* Стопка раскладывается по числу снимков: один — по центру сцены, два —
+     в разбег, три — лесенкой. Иначе одинокий снимок висит в верхнем углу. */
+  .screens.n1 .s1 {{ top: 22%; right: 9%; }}
+  .screens.n2 .s1 {{ top: 0%; }}
+  .screens.n2 .s2 {{ top: 36%; }}
+  .canvas.screens-scene .hero, .canvas.screens-scene .lead {{ max-width: 46%; }}
   .portrait {{ position: absolute; z-index: 1; right: 0; bottom: 0;
                width: {inner // 2 + tokens.SAFE_ZONE}px; height: {h - 2 * tokens.SAFE_ZONE}px;
                display: flex; align-items: flex-end; justify-content: flex-end; }}
@@ -687,7 +842,10 @@ def build_carousel_slide(
     portrait_html = f'<div class="portrait">{portrait}</div>' if portrait else ""
     shot = _image_block("shot", screenshot, "скриншот владелицы", notes)
     shot_html = f'<div class="shot">{shot}</div>' if shot else ""
+    screens_html = _screens_html(screens, notes)
     scene = " scene" if shot_html else ""
+    if screens_html:
+        scene += " screens-scene"
     hand_html = _hand_html(handwritten)
     # низ занят пометкой — оставляем ей место, а не кладём поверх текста
     if "at-bottom-left" in hand_html:
@@ -715,6 +873,7 @@ def build_carousel_slide(
   <div class="glow-2"></div>
   {portrait_html}
   {shot_html}
+  {screens_html}
   <div class="header">{header_html}</div>
   <div class="hero headline{hero_fill}">{hero_html}</div>
   {lead_html}

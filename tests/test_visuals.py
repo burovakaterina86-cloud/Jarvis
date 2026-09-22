@@ -352,7 +352,10 @@ def test_flow_cards_have_arrows_and_violet_accent_on_the_last():
             {"title": "Возвращённое время", "icon": "hourglass"},
         ],
     )
-    assert html.count('class="flow-arrow"') == 2 and templates.ARROW in html
+    # G17: между карточками рисованная дуга, а не типографский знак `→`;
+    # сам `ARROW` остался разделителем в тексте слайда (`auto_blocks`)
+    assert html.count('class="flow-arrow"') == 2
+    assert html.count(templates.FLOW_ARROW) == 2
     assert html.count('class="flow-card') == 3
     assert 'class="flow-card accent"' in html
     assert f'background: {tokens.PALETTE["LAVENDER"]}' in html
@@ -886,3 +889,220 @@ def test_cutout_drops_the_white_wall_and_keeps_the_face(tmp_path):
 def test_cutout_says_plainly_when_the_browser_is_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(render, "_playwright_module", lambda: None)
     assert cutout.make_cutout(PORTRAIT, tmp_path / "cut.png") is None
+
+
+# --- G16–G18: объём и предметная сцена из её скринов (2026-09-22) ------------
+# Ожидаемое — из её слов («делай объемнее плашки, иконки и стрелки», «скрины
+# приложи как на референсе было на слайд») и из reference/5.webp и 8.webp,
+# а не из кода под тестом.
+
+#: Её четыре скрина, присланные 2026-09-22. Лежат в её папке, только читаются.
+SCREENS_DIR = Path(__file__).resolve().parents[1] / "essa-ai" / "photo" / "screens"
+HER_SCREENS = [
+    SCREENS_DIR / "files-list.png",
+    SCREENS_DIR / "project-menu.png",
+    SCREENS_DIR / "deck-preview.jpg",
+]
+
+
+def _measure(html, tmp_path, name, js):
+    """Померить готовый кадр в браузере — там же, где его увидит владелица."""
+    sync_playwright = render._playwright_module()
+    if sync_playwright is None:
+        pytest.skip("меряем в браузере: питоновского playwright нет")
+    page_path = tmp_path / f"{name}.html"
+    page_path.write_text(html, encoding="utf-8")
+    w, h = tokens.CANVAS["carousel"]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page(viewport={"width": w, "height": h})
+        page.goto(page_path.resolve().as_uri())
+        try:
+            page.wait_for_function("document.fonts.ready", timeout=render.PAGE_TIMEOUT_MS)
+        except Exception:  # noqa: BLE001
+            pass
+        value = page.evaluate(js)
+        browser.close()
+    return value
+
+
+# --- G16: карточка без пояснения не занимает треть холста --------------------
+
+ROLES = ("Монтажёр", "Дизайнер", "Копирайтер", "Сценарист", "SMM")
+
+
+def test_a_row_of_cards_without_notes_does_not_eat_a_third_of_the_canvas(tmp_path):
+    # её carousel-03: пять плашек с одним словом растянулись на пол-слайда
+    bare = templates.build_carousel_slide(
+        hook="А теперь ты ещё",
+        cards=[{"title": t} for t in ROLES],
+        style="STYLE_01",
+    )
+    assert 'class="cards compact"' in bare
+    _, h = tokens.CANVAS["carousel"]
+    height = _measure(
+        bare, tmp_path, "bare-cards",
+        "() => document.querySelector('.cards').getBoundingClientRect().height",
+    )
+    assert height <= h / 3, f"ряд без пояснений занял {height:.0f} px из {h}"
+
+
+def test_a_row_of_cards_with_notes_still_fills_the_body():
+    # пояснения есть — карточка снова полноценная коробка, ряд занимает тело
+    dense = templates.build_carousel_slide(
+        hook="Одно сообщество",
+        cards=[{"title": "Видео", "note": "склейки"}, {"title": "Тексты", "note": "посты"}],
+    )
+    assert 'class="cards"' in dense and "cards compact" not in dense
+    assert "flex: 1" in _rule(dense, ".cards")
+
+
+# --- G16: иконки в ряду различаются ------------------------------------------
+
+def test_icons_are_picked_by_the_meaning_of_her_caption():
+    # имя иконки не задано — берётся по смыслу подписи из её же словаря ICONS
+    assert templates.pick_icon("Монтаж роликов") == "play"
+    assert templates.pick_icon("Тексты и посты") == "doc"
+    assert templates.pick_icon("Проверяю результат сама") == "check"
+    assert templates.pick_icon("Сколько времени это занимало") == "clock"
+    # ничего не подошло — честный нейтральный маркер, а не иконка про другое
+    assert templates.pick_icon("Ыыы") == templates.DEFAULT_STEP_ICON
+    for name, _keys in templates.ICON_HINTS:
+        assert name in templates.ICONS, name
+
+
+def test_a_row_of_different_captions_gets_different_icons():
+    html = templates.build_carousel_slide(
+        hook="Четыре шага",
+        steps=[
+            {"caption": "Что за задача"},
+            {"caption": "Как делаю сейчас, по шагам"},
+            {"caption": "Что из этого повторяется"},
+            {"caption": "Проверяю результат сама"},
+        ],
+    )
+    drawn = {p for p in templates.ICONS.values() if p in html}
+    assert len(drawn) >= 3, "ряд снова вышел одинаковым"
+    assert templates.ICONS[templates.DEFAULT_STEP_ICON] not in drawn
+
+
+# --- G17: объём плашек, иконок и стрелок -------------------------------------
+
+def test_plates_have_a_lit_top_a_dark_bottom_and_an_inner_glow():
+    card = _rule(GRID, ".card")
+    assert "inset 0 2px 0" in card                       # светлая кромка сверху
+    assert "inset 0 -2px 0" in card                      # тёмная снизу
+    assert re.search(r"inset 0 20px 44px -20px", card)   # внутренняя подсветка
+    assert re.search(r"0 24px 48px", card)               # мягкая тень
+    assert re.search(r"0 6px 14px", card)                # короткая контактная тень
+
+
+def test_icons_are_bigger_than_the_caption_and_glow():
+    label = tokens.TYPE_SCALE["label"]["size"]
+    size = int(re.search(r'class="icon" viewBox="0 0 24 24" width="(\d+)"', GRID).group(1))
+    assert size >= label * 2.5, "иконка всё ещё мельче её эталона"
+    assert "drop-shadow" in _rule(GRID, ".icon")
+
+
+def test_the_arrow_between_cards_is_a_drawn_arc_not_a_stick():
+    html = templates.build_carousel_slide(
+        hook="Механизм", body="Задача → Процесс → Контроль", style="STYLE_01"
+    )
+    assert templates.FLOW_ARROW in html
+    assert "C" in templates.FLOW_ARROW, "дуга, а не прямая палочка"
+    assert templates.FLOW_ARROW.count("<path") == 2, "нет открытого наконечника"
+    assert float(re.search(r'stroke-width="([\d.]+)"', templates.FLOW_ARROW).group(1)) >= 3
+    assert tokens.ACCENT["ORANGE_ACCENT"] in _rule(html, ".flow-arrow")
+    assert "drop-shadow" in _rule(html, ".flow-arrow-svg")
+
+
+def test_the_handwritten_arrow_is_thick_enough_to_be_seen():
+    width = float(re.search(r'stroke-width="([\d.]+)"', templates.HAND_ARROW).group(1))
+    assert width >= 3
+
+
+# --- G18: предметная сцена из её скринов -------------------------------------
+
+def test_her_screens_lie_tilted_in_a_stack_on_the_right():
+    notes = []
+    html = templates.build_carousel_slide(
+        hook="У тебя куча сохранённого",
+        body="Промты.\nГайды.",
+        screens=HER_SCREENS,
+        style="STYLE_01",
+        notes=notes,
+    )
+    assert html.count('class="screen-card') == 3
+    assert len(notes) == 3 and all(n.startswith("screen:") for n in notes)
+    # каждый снимок повёрнут, и повороты разные — это стопка, а не колонка
+    tilts = {
+        a for a in re.findall(r"transform: rotate\((-?[\d.]+)deg\)", _css(html))
+        if abs(float(a)) >= 3
+    }
+    assert len(tilts) >= 3, "скрины лежат без наклона или под одним углом"
+    # текст ушёл в левую половину, сцена — правая
+    assert "screens-scene" in html
+    text_width = int(
+        re.search(
+            r"max-width: (\d+)%",
+            _rule(html, ".canvas.screens-scene .hero, .canvas.screens-scene .lead"),
+        ).group(1)
+    )
+    assert text_width <= 50
+    assert "position: absolute" in _rule(html, ".screens")
+
+
+def test_a_screen_is_texture_and_is_never_enlarged():
+    # её слова: «на смысл скринов не смотри» — но и не раздувай их так, чтобы
+    # мелкий текст читался крупно: снимок не растягивается выше своего размера
+    rule = _rule(
+        templates.build_carousel_slide(hook="Скрины", screens=HER_SCREENS, notes=[]),
+        ".screen-img",
+    )
+    assert "width: auto" in rule and "height: auto" in rule
+    assert "max-width" in rule and "max-height" in rule
+
+
+def test_the_rendered_screens_stay_inside_the_canvas_and_their_own_size(tmp_path):
+    import shutil as _shutil
+
+    html = templates.build_carousel_slide(
+        hook="У тебя куча\nсохранённого",
+        accent_word="сохранённого",
+        body="Промты.\nГайды.",
+        screens=HER_SCREENS,
+        index=2, total=9, style="STYLE_01", notes=[],
+    )
+    for src in HER_SCREENS:
+        _shutil.copyfile(src, tmp_path / src.name)
+    w, h = tokens.CANVAS["carousel"]
+    measured = _measure(
+        html, tmp_path, "screens",
+        """() => [...document.querySelectorAll('.screen-img')].map(i => {
+             // getBoundingClientRect у повёрнутой карточки — габарит, а не размер
+             // самой картинки: свой размер берём из offsetWidth
+             const r = i.getBoundingClientRect();
+             return [i.offsetWidth, i.offsetHeight, i.naturalWidth,
+                     r.left, r.right, r.bottom];
+        })""",
+    )
+    assert len(measured) == 3
+    for width, height, natural, left, right, bottom in measured:
+        assert width <= natural + 1, "снимок раздут крупнее оригинала"
+        assert left >= w * 0.40, "сцена залезла в текстовую колонку"
+        assert right <= w + 1 and bottom <= h, "скрин вылез за холст"
+        assert height > 0
+
+
+def test_kit_carries_a_whole_list_of_screens_next_to_the_layout(tmp_path, monkeypatch):
+    monkeypatch.setattr(render, "_playwright_module", lambda: None)
+    items = kit.build_kit_visuals(
+        tmp_path / "комплект",
+        carousel_slides=[{"hook": "Скрины", "screens": HER_SCREENS}],
+    )
+    out = tmp_path / "комплект" / kit.VISUALS_DIR
+    for src in HER_SCREENS:
+        assert (out / src.name).is_file(), src.name
+    html = items[0].html_path.read_text(encoding="utf-8")
+    for src in HER_SCREENS:
+        assert f'src="{src.name}"' in html
