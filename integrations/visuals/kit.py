@@ -62,7 +62,13 @@ ASSET_LIST_FIELDS = ("screens",)
 
 
 def _carry_one(src, out_dir: Path):
-    """Один её файл — рядом с вёрсткой. Нет файла — значение не трогаем."""
+    """Один её файл — рядом с вёрсткой. Нет файла — значение не трогаем.
+
+    Скрин может приходить словарём (`{"src": …, "device": "phone"}`): тогда
+    переносится файл, а остальные поля остаются при нём.
+    """
+    if isinstance(src, dict):
+        return {**src, "src": _carry_one(src.get("src"), out_dir)}
     path = Path(src)
     if not path.is_file():
         return src

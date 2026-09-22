@@ -57,6 +57,8 @@ ALLOWED_HEX = (
     {c.upper() for c in tokens.PALETTE.values()}
     | {c.upper() for c in tokens.OPTIONAL.values()}
     | {c.upper() for c in tokens.ACCENT.values()}
+    | {c.upper() for c in tokens.CAROUSEL_PALETTE.values()}
+    | {c.upper() for c in tokens.PLATE.values()}
 )
 
 
@@ -100,7 +102,8 @@ def test_canvas_size_matches_her_files(html, kind):
 
 def test_carousel_uses_her_type_scale_and_safe_zone():
     assert f"font-size: {tokens.TYPE_SCALE['hook']['size']}px" in CAROUSEL
-    assert f"padding: {tokens.SAFE_ZONE}px" in CAROUSEL
+    # у карусели поля свои (её §1), общий safe zone остался за обложкой и сторис
+    assert f"padding: {tokens.SAFE_ZONE}px" in COVER
 
 
 def test_text_is_substituted_and_escaped():
@@ -358,7 +361,7 @@ def test_flow_cards_have_arrows_and_violet_accent_on_the_last():
     assert html.count(templates.FLOW_ARROW) == 2
     assert html.count('class="flow-card') == 3
     assert 'class="flow-card accent"' in html
-    assert f'background: {tokens.PALETTE["LAVENDER"]}' in html
+    assert f'background: {templates.STYLE_SURFACES["STYLE_01"]["fill"]}' in html
 
 
 def test_cards_grid_is_rounded_within_her_radius_range():
@@ -390,7 +393,8 @@ def test_icons_are_inline_svg_without_files_or_icon_fonts():
     assert "<svg" in DENSE and "</svg>" in DENSE
     assert "<img" not in DENSE
     assert "url(" not in DENSE.split("</style>")[0].replace("fonts.googleapis.com", "")
-    assert tokens.PALETTE["VIOLET_SOFT"] in DENSE
+    # §12 ИКОНКИ: белые или светло-фиолетовые
+    assert tokens.CAROUSEL_PALETTE["VIOLET_LIGHT"] in DENSE
 
 
 def test_handwritten_notes_are_hers_and_stand_on_any_slide():
@@ -443,7 +447,7 @@ def test_kit_sets_the_alternation_once_for_the_whole_carousel(tmp_path, monkeypa
     light = templates.STYLE_SURFACES["STYLE_02_LIGHT"]["bg"]
     backs = [
         re.search(
-            r"\.canvas \{ background: (#[0-9A-Fa-f]{6})",
+            r"background: linear-gradient\(152deg, (#[0-9A-Fa-f]{6})",
             item.html_path.read_text(encoding="utf-8"),
         ).group(1)
         for item in plan
@@ -520,14 +524,16 @@ def test_cards_are_layered_not_flat_rectangles():
 
 def test_accent_node_glows_and_is_filled():
     accent = _rule(GRID, ".card.accent")
-    assert f'background: {tokens.PALETTE["LAVENDER"]}' in accent
+    assert f'background: {templates.STYLE_SURFACES["STYLE_01"]["fill"]}' in accent
     assert re.search(r"box-shadow: 0 0 \d+px", accent)  # свечение вокруг узла
     assert 'class="card accent"' in GRID
 
 
 def test_canvas_keeps_a_background_glow_behind_the_content():
-    assert "radial-gradient" in _rule(GRID, ".glow")
-    assert 'class="glow"' in GRID
+    # §14 отменил пятно-blob; глубина за контентом осталась — её даёт
+    # направленный свет §10, а не круг
+    assert "linear-gradient" in _rule(GRID, ".light")
+    assert 'class="light"' in GRID
 
 
 def test_stage_fills_the_vertical_between_hero_and_footer():
@@ -535,8 +541,9 @@ def test_stage_fills_the_vertical_between_hero_and_footer():
     # при этом высотой по содержимому — вертикаль уходит в отступы вокруг них
     for selector in (".stage", ".steps"):
         assert "flex: 1" in _rule(GRID, selector), selector
-    # безопасные поля при этом на месте
-    assert f"padding: {tokens.SAFE_ZONE}px" in GRID
+    # безопасные поля при этом на месте — по её §1
+    m = tokens.CAROUSEL_MARGIN
+    assert f'padding: {m["top"]}px {m["right"]}px {m["bottom"]}px {m["left"]}px' in GRID
 
 
 def test_a_slide_without_graphics_does_not_leave_a_hole_in_the_middle():
@@ -621,11 +628,13 @@ def test_her_screenshot_becomes_a_rounded_glowing_block_without_cropping(tmp_pat
     shot = tmp_path / "экран.png"
     shot.write_bytes(b"png")
     html = templates.build_carousel_slide(hook="Скрин", screenshot=shot, notes=[])
-    assert 'class="shot-img"' in html and f'src="{shot.name}"' in html
-    rule = _rule(html, ".shot-img")
-    assert "object-fit: contain" in rule and "cover" not in rule
-    assert f'border-radius: {tokens.RADIUS["card"]}px' in rule
-    assert re.search(r"box-shadow: 0 0 \d+px", rule)
+    # §8 TYPE B: скрин живёт внутри корпуса, а не лежит прямоугольником
+    assert 'class="device-screen"' in html and f'src="{shot.name}"' in html
+    rule = _rule(html, ".device-screen")
+    assert f"border-radius: {tokens.PLATE_RADIUS}px" not in rule  # это экран, не плашка
+    assert "overflow: hidden" in rule
+    # объём корпуса: мягкая тень и подсветка, а не плоский прямоугольник
+    assert re.search(r"box-shadow: .*0 0 \d+px", _rule(html, ".device-body"))
     assert "flex: 1" not in _rule(html, ".shot")
 
 
@@ -749,11 +758,12 @@ SECOND = templates.build_carousel_slide(
     summary="Вроде нейросеть помогла.\nНо ручная работа никуда не исчезла.",
 )
 
-ORANGE = "#FB9D5B"
+ORANGE = "#FF955E"
 
 
 def test_orange_is_her_measured_accent_and_not_a_core_color():
-    # тон снят с её слайдов reference/5,7,8,9.webp: медиана заливки (251,157,91)
+    # 2026-09-22 она прислала точное значение сама: §3 её системы каруселей.
+    # Прежний тон #FB9D5B был замером пипеткой по reference/5,7,8,9.webp.
     assert tokens.ACCENT == {"ORANGE_ACCENT": ORANGE}
     assert ORANGE not in tokens.PALETTE.values()
     assert ORANGE not in tokens.OPTIONAL.values()
@@ -841,7 +851,9 @@ def test_footnote_plate_has_an_orange_bang_and_two_lines():
     assert SECOND.count('class="summary-line accent"') == 1
     assert "Вроде нейросеть помогла." in SECOND
     assert f'color: {ORANGE}' in _rule(SECOND, ".summary-mark")
-    assert tokens.PALETTE["VIOLET_SOFT"] in _rule(SECOND, ".summary-line.accent")
+    assert tokens.CAROUSEL_PALETTE["VIOLET_LIGHT"] in _rule(
+        SECOND, ".summary-line.accent"
+    )
 
 
 def test_the_screenshot_becomes_the_scene_on_the_right(tmp_path):
@@ -850,7 +862,7 @@ def test_the_screenshot_becomes_the_scene_on_the_right(tmp_path):
     html = templates.build_carousel_slide(
         hook="Скрин", body="Слева текст.", screenshot=shot, notes=[]
     )
-    assert 'class="canvas scene"' in html
+    assert 'class="canvas scene type-b"' in html
     scene = _rule(html, ".canvas.scene .hero, .canvas.scene .lead")
     assert "max-width" in scene
     assert "position: absolute" in _rule(html, ".shot")
@@ -1055,12 +1067,14 @@ def test_her_screens_lie_tilted_in_a_stack_on_the_right():
 def test_a_screen_is_texture_and_is_never_enlarged():
     # её слова: «на смысл скринов не смотри» — но и не раздувай их так, чтобы
     # мелкий текст читался крупно: снимок не растягивается выше своего размера
-    rule = _rule(
-        templates.build_carousel_slide(hook="Скрины", screens=HER_SCREENS, notes=[]),
-        ".screen-img",
-    )
-    assert "width: auto" in rule and "height: auto" in rule
-    assert "max-width" in rule and "max-height" in rule
+    html = templates.build_carousel_slide(hook="Скрины", screens=HER_SCREENS, notes=[])
+    # снимок живёт в экране корпуса и не вырастает больше него
+    img = _rule(html, ".device-screen img")
+    assert "width: auto" in img and "height: auto" in img
+    assert "max-width" in img and "max-height" in img
+    card = _rule(html, ".screen-card")
+    assert "width:" in card
+    assert "scale(0." in _css(html)  # дальние карточки ещё и мельче
 
 
 def test_the_rendered_screens_stay_inside_the_canvas_and_their_own_size(tmp_path):
@@ -1175,3 +1189,284 @@ def test_a_note_repeating_the_headline_or_the_lead_is_not_drawn():
         index=7, total=9, notes=[],
     )
     assert 'class="hand-note' not in chain
+
+
+# --- G21 / D03–D05: её дизайн-система каруселей ------------------------------
+# `essa-ai/18_CAROUSEL_VISUAL_SYSTEM.md`, прислана 2026-09-22 целиком.
+# Значения ниже переписаны из её файла руками, раздел за разделом.
+
+HER_CAROUSEL_PALETTE = {
+    "BG_DEEP": "#0D0D10",
+    "BG_BASE": "#111115",
+    "BG_RAISED": "#17151A",
+    "TEXT": "#F5F3F0",
+    "TEXT_MUTED": "#C9C6C3",
+    "TEXT_DIM": "#A8A5A5",
+    "ORANGE": "#FF955E",
+    "ORANGE_WARM": "#FF9D66",
+    "ORANGE_DEEP": "#F58C54",
+    "VIOLET": "#A77BFF",
+    "VIOLET_DEEP": "#8B63DA",
+    "VIOLET_LIGHT": "#C2A5FF",
+}
+
+
+def test_her_carousel_palette_is_taken_from_her_file_verbatim():
+    # §3 ЦВЕТОВАЯ СИСТЕМА
+    assert tokens.CAROUSEL_PALETTE == HER_CAROUSEL_PALETTE
+    # оранжевый карусели — из её §3, а не прежний снятый пипеткой тон
+    assert tokens.ACCENT["ORANGE_ACCENT"] == "#FF955E"
+
+
+def test_plate_colors_and_radius_come_from_her_section_13():
+    # §13 ИНФОРМАЦИОННЫЕ ПЛАШКИ: #18171E / #211E29, radius 20–28
+    assert tokens.PLATE == {"BASE": "#18171E", "RAISED": "#211E29"}
+    assert tokens.PLATE_RADIUS_RANGE == (20, 28)
+    lo, hi = tokens.PLATE_RADIUS_RANGE
+    assert lo <= tokens.PLATE_RADIUS <= hi
+
+
+def test_carousel_margins_are_inside_her_section_1_ranges():
+    # §1 ФОРМАТ: слева/справа 55–70, сверху 45–60, снизу 60–80
+    assert tokens.CAROUSEL_MARGIN_RANGE == {
+        "top": (45, 60), "right": (55, 70), "bottom": (60, 80), "left": (55, 70),
+    }
+    for side, (lo, hi) in tokens.CAROUSEL_MARGIN_RANGE.items():
+        assert lo <= tokens.CAROUSEL_MARGIN[side] <= hi, side
+
+
+def test_headline_area_and_second_level_ratio_are_her_numbers():
+    # §4: заголовок 30–50% площади слайда; §5: второй уровень меньше в 2,5–4 раза
+    assert tokens.HEADLINE_AREA_RANGE == (0.30, 0.50)
+    assert tokens.BODY_RATIO_RANGE == (2.5, 4.0)
+    assert tokens.BODY_WORDS_PER_LINE == (4, 8)
+
+
+def test_five_composition_types_exist():
+    # §8 КОМПОЗИЦИЯ: A photo, B object/device, C diagram, D ui chaos, E typographic
+    assert tokens.COMPOSITION_TYPES == ("A", "B", "C", "D", "E")
+
+
+# --- D04: §14 — фоновых пятен нет, есть пространство и направленный свет ------
+
+SYSTEM = templates.build_carousel_slide(
+    hook="1. У тебя куча\nсохранённого",
+    accent_word="сохранённого",
+    body="Промты и гайды копятся, а ясности от этого не прибавляется совсем.",
+    label="Признак 1",
+    index=2, total=9, style="STYLE_01", role="slide",
+    handwritten=["сохранённого много", "ясности мало"],
+    summary="Вроде нейросеть помогла.\nНо ручная работа никуда не исчезла.",
+)
+
+SYSTEM_PLATES = templates.build_carousel_slide(
+    hook="Плашки",
+    cards=[{"title": "Раз"}, {"title": "Два"}],
+    flow=[{"title": "А"}, {"title": "Б"}],
+    summary="Первая строка.\nВторая строка.",
+    index=4, total=9, style="STYLE_01",
+)
+
+
+def test_no_abstract_circles_or_blobs_in_the_background():
+    # §14 ДЕКОР: «Не использовать: абстрактные кружки; случайные blobs»
+    assert 'class="glow"' not in SYSTEM
+    assert 'class="glow-2"' not in SYSTEM
+
+
+def test_background_gives_space_and_warm_directional_light():
+    # §10 СВЕТ: фон не просто чёрный, ощущается пространство и направленный свет
+    canvas = _rule(SYSTEM, ".canvas#slide")
+    assert "linear-gradient" in canvas  # чёрный → тёмный фиолетовый (§3)
+    assert tokens.CAROUSEL_PALETTE["BG_DEEP"] in canvas
+    beam = _rule(SYSTEM, ".light")
+    assert "linear-gradient" in beam and "border-radius: 50%" not in beam
+    assert 'class="light"' in SYSTEM
+    # §10 «размытая поверхность»: дальний план размыт
+    assert "blur(" in _rule(SYSTEM, ".surface")
+    assert 'class="surface"' in SYSTEM
+
+
+def test_slide_has_three_layers_background_content_foreground():
+    # §11 ГЛУБИНА: минимум три визуальных слоя
+    zs = {
+        int(re.search(r"z-index: (-?\d+)", _rule(SYSTEM, sel)).group(1))
+        for sel in (".light", ".hero", ".hand-note")
+    }
+    assert len(zs) >= 3
+
+
+# --- D05: §8 TYPE B — скрин внутри корпуса устройства, в перспективе ---------
+
+
+def _with_shot(tmp_path, **kw):
+    shot = tmp_path / "экран.png"
+    shot.write_bytes(b"png")
+    return templates.build_carousel_slide(
+        hook="Скрин", body="Слева текст.", screenshot=shot, notes=[], **kw
+    )
+
+
+def test_a_screenshot_never_lies_flat_it_sits_in_a_device_body(tmp_path):
+    # §8 TYPE B: «Не использовать плоский screenshot, лежащий прямоугольником
+    # поверх фона. Screenshot должен быть встроен в физический объект»
+    html = _with_shot(tmp_path)
+    assert 'class="device' in html
+    assert "perspective:" in _rule(html, ".device")
+    body = _rule(html, ".device-body")
+    assert "rotateY(" in body
+    assert "overflow: hidden" in _rule(html, ".device-screen")
+    # корпус — не рамка вокруг пустоты: скрин лежит внутри него
+    assert re.search(r'<div class="device-screen">\s*<img', html)
+
+
+def test_the_device_kind_comes_from_the_slide_and_both_bodies_exist(tmp_path):
+    laptop = _with_shot(tmp_path, device="laptop")
+    phone = _with_shot(tmp_path, device="phone")
+    assert 'class="device laptop"' in laptop
+    assert 'class="device-base"' in laptop  # у ноутбука есть основание с петлёй
+    assert 'class="device phone"' in phone
+    assert 'class="device-notch"' in phone
+
+
+def test_blur_of_her_screens_survives_the_device_body(tmp_path):
+    # G19 принято отдельно и корпусом не отменяется
+    assert f"blur({tokens.SCREEN_BLUR}px)" in _with_shot(tmp_path)
+
+
+def test_every_screen_of_the_stack_also_gets_a_body(tmp_path):
+    files = []
+    for name in ("a.png", "b.png"):
+        f = tmp_path / name
+        f.write_bytes(b"png")
+        files.append(f)
+    html = templates.build_carousel_slide(
+        hook="Хаос", screens=files, index=5, total=9, style="STYLE_01", notes=[]
+    )
+    assert html.count('class="device-screen"') == 2
+    # §8 TYPE D: дальние карточки темнее
+    assert "brightness(" in _css(html)
+
+
+# --- §1, §4, §5, §13: числа её системы ---------------------------------------
+
+
+def test_carousel_margins_are_her_section_1_and_not_the_common_safe_zone():
+    m = tokens.CAROUSEL_MARGIN
+    assert (
+        f'padding: {m["top"]}px {m["right"]}px {m["bottom"]}px {m["left"]}px'
+        in _css(SYSTEM)
+    )
+    assert f"padding: {tokens.SAFE_ZONE}px" not in _css(SYSTEM)
+
+
+def test_headline_takes_between_a_third_and_a_half_of_the_slide():
+    h = tokens.CANVAS["carousel"][1]
+    lo, hi = tokens.HEADLINE_AREA_RANGE
+    hero = _rule(SYSTEM, ".hero")
+    assert f"min-height: {round(h * lo)}px" in hero
+    assert f"max-height: {round(h * hi)}px" in hero
+
+
+def test_second_level_text_is_another_face_and_2_5_to_4_times_smaller():
+    hero_size = int(re.search(r"font-size: (\d+)px", _rule(SYSTEM, ".hero")).group(1))
+    lead_size = int(re.search(r"font-size: (\d+)px", _rule(SYSTEM, ".lead")).group(1))
+    lo, hi = tokens.BODY_RATIO_RANGE
+    assert lo <= hero_size / lead_size <= hi
+    assert tokens.FONTS["BODY"] != tokens.FONTS["HEADLINE"]
+
+
+def test_a_long_line_of_her_text_is_broken_at_her_word_limit():
+    # §5: 4–8 слов в строке
+    lead = re.search(r'<p class="lead">(.*?)</p>', SYSTEM, re.S).group(1)
+    for line in lead.split("<br>"):
+        assert len(re.sub(r"<[^>]+>", " ", line).split()) <= tokens.BODY_WORDS_PER_LINE[1]
+
+
+def test_plates_use_her_section_13_colors_and_radius():
+    for selector in (".summary", ".flow-card", ".card"):
+        rule = _rule(SYSTEM_PLATES, selector)
+        assert f"border-radius: {tokens.PLATE_RADIUS}px" in rule, selector
+        assert tokens.PLATE["BASE"] in rule, selector
+        assert tokens.CAROUSEL_PALETTE["VIOLET_DEEP"] in rule, selector
+
+
+def test_icons_are_white_or_light_violet_line_icons():
+    # §12 ИКОНКИ: одинаковая толщина штриха, белые или светло-фиолетовые
+    strokes = set(
+        re.findall(r'<svg class="icon"[^>]*stroke="(#[0-9A-Fa-f]{6})"', SYSTEM_PLATES)
+    )
+    assert strokes <= {
+        tokens.CAROUSEL_PALETTE["TEXT"],
+        tokens.CAROUSEL_PALETTE["VIOLET_LIGHT"],
+    }, strokes
+    widths = set(
+        re.findall(r'<svg class="icon"[^>]*stroke-width="([\d.]+)"', SYSTEM_PLATES)
+    )
+    assert len(widths) == 1
+
+
+# --- §8 / §17: пять типов композиции и ритм карусели -------------------------
+
+
+def test_composition_type_is_written_into_the_slide():
+    assert 'data-composition="E"' in SYSTEM  # только текст и плашка
+    assert "type-e" in SYSTEM
+
+
+def test_composition_type_is_derived_from_what_the_slide_carries(tmp_path):
+    f = tmp_path / "s.png"
+    f.write_bytes(b"png")
+
+    def kind(**kw):
+        html = templates.build_carousel_slide(hook="X", notes=[], **kw)
+        return re.search(r'data-composition="([A-E])"', html).group(1)
+
+    assert kind(photo=f) == "A"
+    assert kind(screenshot=f) == "B"
+    assert kind(steps=[{"caption": "раз"}, {"caption": "два"}]) == "C"
+    assert kind(cards=[{"title": "раз"}, {"title": "два"}]) == "D"
+    assert kind(body="Просто текст.") == "E"
+
+
+def test_a_given_type_wins_over_the_derived_one():
+    html = templates.build_carousel_slide(hook="X", body="текст", composition="C")
+    assert 'data-composition="C"' in html
+    with pytest.raises(ValueError):
+        templates.build_carousel_slide(hook="X", composition="Z")
+
+
+def test_nine_slides_do_not_end_up_as_nine_identical_grids(tmp_path, monkeypatch):
+    # §17 РИТМ КАРУСЕЛИ: «Не делать девять одинаковых слайдов»
+    monkeypatch.setattr(render, "_playwright_module", lambda: None)
+    shot = tmp_path / "s.png"
+    shot.write_bytes(b"png")
+    slides = [
+        {"hook": "Обложка", "photo": shot},
+        {"hook": "Скрины", "screenshot": shot},
+        {"hook": "Текст", "body": "Одна мысль на слайд."},
+        {"hook": "Схема", "steps": [{"caption": "раз"}, {"caption": "два"}]},
+        {"hook": "Ряд", "cards": [{"title": "раз"}, {"title": "два"}]},
+        {"hook": "Текст 2", "body": "Ещё одна мысль."},
+        {"hook": "Поток", "flow": [{"title": "А"}, {"title": "Б"}]},
+        {"hook": "Текст 3", "body": "И ещё одна."},
+        {"hook": "Финал", "photo": shot},
+    ]
+    items = kit.build_kit_visuals(tmp_path / "k", carousel_slides=slides)
+    kinds = {
+        re.search(
+            r'data-composition="([A-E])"', i.html_path.read_text(encoding="utf-8")
+        ).group(1)
+        for i in items
+    }
+    assert len(kinds) >= 3, kinds
+
+
+def test_skill_teaches_her_carousel_visual_system():
+    # навык обязан называть её файл и то, что он отменил
+    text = SKILL.read_text(encoding="utf-8")
+    assert "18_CAROUSEL_VISUAL_SYSTEM.md" in text
+    for mark in ("CAROUSEL_PALETTE", "CAROUSEL_MARGIN", "PLATE", "composition"):
+        assert mark in text, mark
+    assert "blobs" in text  # §14: пятен в фоне нет
+    assert "корпуса" in text and "перспективе" in text  # §8 TYPE B

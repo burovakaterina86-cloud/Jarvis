@@ -12,6 +12,7 @@
 
 Ни одного значения не придумано: всё, что попадает в CSS, приходит из `tokens`.
 """
+import math
 import re
 from html import escape
 from pathlib import Path
@@ -20,9 +21,13 @@ from . import tokens
 
 P = tokens.PALETTE
 
-#: Оранжевый акцент второго эталона (reference/5..9.webp), DESIGN.md §3 от
-#: 2026-09-22. Им красятся: ключевое слово заголовка, отбивка под текстовой
-#: колонкой, обводка акцентной плашки, отрезки цепочки и рукописные пометки.
+#: Палитра каруселей — её `18_CAROUSEL_VISUAL_SYSTEM.md` §3. Обложка поста и
+#: сторис остаются на `PALETTE`: её система написана про карусели и презентации.
+C = tokens.CAROUSEL_PALETTE
+
+#: Оранжевый акцент — её §3 «Главный акцент: тёплый оранжевый / apricot orange».
+#: Им красятся: ключевое слово заголовка, отбивка под текстовой колонкой,
+#: обводка акцентной плашки, отрезки цепочки и рукописные пометки.
 O = tokens.ACCENT["ORANGE_ACCENT"]
 
 #: Куда ложатся рукописные пометки. Порядок — как в её слайдах: первая сверху
@@ -162,35 +167,76 @@ COVER_MICROTEXT = "ТЕСТИРУЮ / АНАЛИЗИРУЮ / УЛУЧШАЮ"
 
 #: Оформление разрешённых стилей карусели.
 #: Ключи — только из `tokens.STYLES`; цвета — только из `tokens.PALETTE`.
+#: Ключи поверхностей: `bg` и `deep` — два конца фонового градиента (§3
+#: «чёрный → тёмный фиолетовый»), `plate` и `plate_border` — плашки §13,
+#: `accent` / `accent_soft` — muted violet §3, `fill` — заливка акцентного узла.
 STYLE_SURFACES = {
-    # §7: dark graphite, white, violet/lavender accents.
+    # §3: основной фон #0D0D10 / #111115, основной текст #F5F3F0.
     "STYLE_01": {
-        "bg": P["BG_DARK_PRIMARY"],
-        "surface": P["BG_DARK_SECONDARY"],
-        "text": P["TEXT_ON_DARK"],
-        "muted": P["TEXT_MUTED_DARK"],
-        "accent": P["VIOLET_PRIMARY"],
-        "accent_soft": P["VIOLET_SOFT"],
+        "bg": C["BG_BASE"],
+        "deep": C["BG_DEEP"],
+        "surface": C["BG_RAISED"],
+        "plate": tokens.PLATE["BASE"],
+        "plate_border": C["VIOLET_DEEP"],
+        "text": C["TEXT"],
+        "muted": C["TEXT_MUTED"],
+        "accent": C["VIOLET_DEEP"],
+        "accent_soft": C["VIOLET_LIGHT"],
+        "fill": C["VIOLET_DEEP"],
     },
-    # §8: light / lavender base, graphite text, violet accents.
+    # Светлый полюс чередования (её слова 2026-09-21: «чередуем тёмный
+    # и светлый»). Светлых значений её новая система не задаёт — они остаются
+    # из DESIGN.md, а акценты приходят из её §3.
     "STYLE_02_LIGHT": {
         "bg": P["BG_LIGHT_PRIMARY"],
+        "deep": P["BG_LIGHT_SECONDARY"],
         "surface": P["BG_LIGHT_SECONDARY"],
+        "plate": P["BG_LIGHT_SECONDARY"],
+        "plate_border": C["VIOLET_DEEP"],
         "text": P["TEXT_ON_LIGHT"],
         "muted": P["TEXT_MUTED_LIGHT"],
-        "accent": P["VIOLET_PRIMARY"],
-        "accent_soft": P["VIOLET_STRONG"],
+        "accent": C["VIOLET_DEEP"],
+        "accent_soft": C["VIOLET_DEEP"],
+        "fill": C["VIOLET_DEEP"],
     },
-    # §9: dark-variant того же editorial.
+    # §3: третий её фон #17151A — dark-variant того же editorial.
     "STYLE_02_DARK": {
-        "bg": P["BG_DARK_SECONDARY"],
-        "surface": P["BG_DARK_PRIMARY"],
-        "text": P["TEXT_ON_DARK"],
-        "muted": P["TEXT_MUTED_DARK"],
-        "accent": P["VIOLET_PRIMARY"],
-        "accent_soft": P["VIOLET_SOFT"],
+        "bg": C["BG_RAISED"],
+        "deep": C["BG_DEEP"],
+        "surface": C["BG_BASE"],
+        "plate": tokens.PLATE["RAISED"],
+        "plate_border": C["VIOLET_DEEP"],
+        "text": C["TEXT"],
+        "muted": C["TEXT_MUTED"],
+        "accent": C["VIOLET_DEEP"],
+        "accent_soft": C["VIOLET_LIGHT"],
+        "fill": C["VIOLET_DEEP"],
     },
 }
+
+
+def pick_composition(
+    photo=None, screenshot=None, screens=None, steps=None, flow=None, cards=None
+) -> str:
+    """Тип композиции по тому, что несёт слайд (§8, §17).
+
+    Её правило: «Не использовать одну сетку на всех слайдах». Тип задаётся
+    данными слайда явно; не задан — выводится отсюда, чтобы девять слайдов
+    не оказались девятью одинаковыми сетками.
+
+    A — её портрет; B — один объект с экраном; C — последовательность шагов;
+    D — несколько интерфейсных карточек или ряд плашек; E — только текст.
+    """
+    many = screens if isinstance(screens, (list, tuple)) else ([screens] if screens else [])
+    if photo:
+        return "A"
+    if screenshot or len(many) == 1:
+        return "B"
+    if steps or flow:
+        return "C"
+    if len(many) > 1 or cards:
+        return "D"
+    return "E"
 
 
 def _rgba(hex_color: str, alpha: float) -> str:
@@ -220,9 +266,17 @@ def _scale(name: str) -> tuple:
     return s["size"], s["line_height"]
 
 
-def _document(title: str, width: int, height: int, css: str, body: str) -> str:
-    """Страница-холст: ровно один кадр нужного размера, без полей и прокрутки."""
+def _document(
+    title: str, width: int, height: int, css: str, body: str, padding: str = ""
+) -> str:
+    """Страница-холст: ровно один кадр нужного размера, без полей и прокрутки.
+
+    `padding` — поля холста. У карусели они её собственные и несимметричные
+    (§1: слева/справа 55–70, сверху 45–60, снизу 60–80); у обложки и сторис
+    остаётся общий safe zone DESIGN.md §11.
+    """
     head = tokens.FONTS["HEADLINE"]
+    padding = padding or f"{tokens.SAFE_ZONE}px"
     return f"""<!doctype html>
 <html lang="ru">
 <head>
@@ -239,7 +293,7 @@ def _document(title: str, width: int, height: int, css: str, body: str) -> str:
     width: {width}px; height: {height}px;
     position: relative; overflow: hidden;
     display: flex; flex-direction: column;
-    padding: {tokens.SAFE_ZONE}px;
+    padding: {padding};
   }}
   .headline {{ font-family: '{head}', {tokens.FALLBACK_STACK};
                font-weight: {tokens.FONT_WEIGHTS["HEADLINE"]}; }}
@@ -319,6 +373,59 @@ def _image_block(kind: str, path, caption: str, notes: list) -> str:
         else ""
     )
     return f'<img class="{kind}-img" src="{_t(p.name)}" alt="{alt}"{blur}>'
+
+
+#: Корпуса, в которые встраивается её скрин (§8 TYPE B). Ничего третьего:
+#: телефон и экран ноутбука — те объекты, что названы в её же списке.
+DEVICE_KINDS = ("laptop", "phone")
+DEFAULT_DEVICE = "laptop"
+
+
+def _device_html(kind: str, img: str) -> str:
+    """Её скрин внутри корпуса устройства (§8 TYPE B).
+
+    «Не использовать плоский screenshot, лежащий прямоугольником поверх фона.
+    Screenshot должен быть встроен в физический объект или композицию.»
+    Поэтому снимок никогда не кладётся на холст сам: он всегда живёт внутри
+    `.device-screen` — экрана телефона или ноутбука, стоящего в перспективе.
+
+    Корпус рисуется CSS: ни одного придуманного изображения здесь нет,
+    картинка — только её файл.
+    """
+    kind = kind if kind in DEVICE_KINDS else DEFAULT_DEVICE
+    extra = (
+        '<div class="device-notch"></div>'
+        if kind == "phone"
+        else '<div class="device-hinge"></div>'
+    )
+    base = '<div class="device-base"></div>' if kind == "laptop" else ""
+    return (
+        f'<div class="device {kind}">'
+        f'<div class="device-body">'
+        f'<div class="device-screen">{img}<div class="device-glare"></div></div>'
+        f"{extra}</div>{base}</div>"
+    )
+
+
+def _wrap_words(lines: list, limit: int) -> list:
+    """Строки второго уровня — не длиннее её нормы (§5: 4–8 слов в строке).
+
+    Текст владелицы не переписывается: он только переносится. Её собственные
+    переводы строки остаются границами, длинная строка делится по словам.
+    """
+    out = []
+    for line in lines:
+        words = line.split()
+        if len(words) <= limit:
+            out.append(line)
+            continue
+        # делим на примерно равные куски, чтобы не осталось строки из одного слова
+        chunks = math.ceil(len(words) / limit)
+        size = math.ceil(len(words) / chunks)
+        out.extend(
+            " ".join(words[i:i + size]) for i in range(0, len(words), size)
+        )
+    return out
 
 
 def _mark_accent(line: str, words) -> str:
@@ -480,10 +587,13 @@ def _cards_html(cards: list, icon_size: int, stroke: str, accent_stroke: str) ->
 #: Правая сцена из её скринов (G18, `reference/5.webp`): один-три снимка лежат
 #: стопкой, каждый чуть повёрнут и сдвинут. Слоты заданы явно, чтобы стопка
 #: была предсказуемой, а не случайной.
+#: §8 TYPE D: карточки в перспективе, на разных уровнях, частично перекрываются
+#: и становятся темнее вдали. `kind` — корпус, в котором лежит снимок (§8 TYPE B:
+#: плоских прямоугольников в кадре не бывает вовсе).
 SCREEN_SLOTS = (
-    {"top": "0%", "right": "6%", "rot": -7},
-    {"top": "30%", "right": "18%", "rot": -4},
-    {"top": "60%", "right": "6%", "rot": -9},
+    {"top": "2%", "right": "2%", "rot": -6, "yaw": -18, "kind": "laptop"},
+    {"top": "34%", "right": "22%", "rot": -3, "yaw": -12, "kind": "phone"},
+    {"top": "62%", "right": "4%", "rot": -8, "yaw": -22, "kind": "phone"},
 )
 
 
@@ -503,14 +613,16 @@ def _screens_html(screens, notes: list) -> str:
         img = _image_block("screen", data.get("src"), "скрин владелицы", notes)
         if not img or img.startswith("<!--"):
             continue
-        cards.append(f'<div class="screen-card s{len(cards) + 1}">{img}</div>')
+        slot = SCREEN_SLOTS[len(cards)]
+        kind = str(data.get("device") or slot["kind"])
+        cards.append(
+            f'<div class="screen-card s{len(cards) + 1}">'
+            + _device_html(kind, img)
+            + "</div>"
+        )
     if not cards:
         return ""
-    return (
-        f'<div class="screens n{len(cards)}"><div class="screens-glow"></div>'
-        + "".join(cards)
-        + "</div>"
-    )
+    return f'<div class="screens n{len(cards)}">' + "".join(cards) + "</div>"
 
 
 def auto_blocks(text: str) -> dict:
@@ -555,6 +667,8 @@ def build_carousel_slide(
     photo=None,
     screenshot=None,
     screens=None,
+    device: str = "",
+    composition: str = "",
     notes: list = None,
 ) -> str:
     """Слайд карусели 1080×1350 по её второму эталону (`reference/5–9.webp`).
@@ -583,22 +697,40 @@ def build_carousel_slide(
             f"стиль {style!r} не разрешён; допустимы {', '.join(tokens.STYLES)} "
             "(SKILL_carousel-instagram.md §5)"
         )
+    if composition and composition not in tokens.COMPOSITION_TYPES:
+        raise ValueError(
+            f"тип композиции {composition!r} не из её §8; допустимы "
+            f"{', '.join(tokens.COMPOSITION_TYPES)}"
+        )
     s = STYLE_SURFACES[style]
     w, h = tokens.CANVAS["carousel"]
     if notes is None:
         notes = []
+    m = tokens.CAROUSEL_MARGIN
+    pad = f'{m["top"]}px {m["right"]}px {m["bottom"]}px {m["left"]}px'
     hook_size, hook_lh = _scale("hook" if role == "cover" else "slide_title")
     body_size, body_lh = _scale("body")
     label_size, label_lh = _scale("label")
     micro_size, micro_lh = _scale("micro")
+    #: §5: второй уровень меньше заголовка в 2,5–4 раза — считается от
+    #: заголовка, а не берётся из шкалы вслепую, и всё равно остаётся внутри
+    #: её рабочего диапазона body.
+    lo_body, hi_body = tokens.TYPE_SCALE["body"]["range"]
+    lead_size = min(
+        hi_body,
+        max(lo_body, math.floor(hook_size / tokens.BODY_RATIO_RANGE[0])),
+    )
+    #: §4: заголовок занимает 30–50% площади слайда.
+    hero_min = round(h * tokens.HEADLINE_AREA_RANGE[0])
+    hero_max = round(h * tokens.HEADLINE_AREA_RANGE[1])
     # Кружки, иконки и подписи цепочки — в пропорциях её reference/1.webp:
     # кружок примерно вчетверо крупнее подписи, иконка вдвое.
     dot = round(label_size * 4)
     # G17: иконки крупнее, чем были (2.2 — они терялись в карточке) и с
     # собственной подсветкой (`.icon` ниже).
     icon_size = round(label_size * 3.0)
-    gap = tokens.SAFE_ZONE // 2
-    inner = w - 2 * tokens.SAFE_ZONE
+    gap = m["top"] // 2
+    inner = w - m["left"] - m["right"]
     #: Скриншот владелицы занимает тело слайда, но не выдавливает плашку
     #: и подвал: потолок — половина холста.
     shot_max_h = round(h * 0.45)
@@ -648,13 +780,27 @@ def build_carousel_slide(
         )
 
     css = f"""
-  .canvas {{ background: {s["bg"]}; color: {s["text"]}; }}
-  .glow {{ position: absolute; border-radius: 50%; pointer-events: none;
-           width: 900px; height: 900px; top: -300px; right: -260px;
-           background: {_glow(s["accent"], 0.28)}; }}
-  .glow-2 {{ position: absolute; border-radius: 50%; pointer-events: none;
-             width: 760px; height: 760px; bottom: -320px; left: -280px;
-             background: {_glow(P["LAVENDER"], 0.18)}; }}
+  /* §10 СВЕТ: «Фон не должен быть просто чёрным». Должно ощущаться
+     пространство: фон — мягкий градиент её §3 («чёрный → тёмный фиолетовый»),
+     а не плоская заливка; угол даёт ощущение стены и угла помещения.
+     §14 ДЕКОР: абстрактных кружков и случайных blobs здесь нет — они убраны. */
+  .canvas#slide {{ color: {s["text"]};
+    background: linear-gradient(152deg, {s["bg"]} 0%, {s["deep"]} 46%,
+      {_rgba(C["VIOLET_DEEP"], 0.16)} 100%), {s["deep"]}; }}
+  /* Направленный тёплый свет и мягкое фиолетовое отражение: два наклонных
+     луча, а не пятна. Форма — полоса под углом, как свет из окна. */
+  .light {{ position: absolute; inset: 0; z-index: 0; pointer-events: none;
+            background:
+              linear-gradient(118deg, {_rgba(C["ORANGE_DEEP"], 0.20)} 0%,
+                {_rgba(C["ORANGE_DEEP"], 0.05)} 22%, transparent 42%),
+              linear-gradient(292deg, {_rgba(C["VIOLET"], 0.16)} 0%,
+                transparent 38%); }}
+  /* §10 «размытая поверхность»: дальний план — стол или пол под контентом. */
+  .surface {{ position: absolute; z-index: 0; left: 0; right: 0; bottom: 0;
+              height: {round(h * 0.26)}px; pointer-events: none;
+              filter: blur(70px);
+              background: linear-gradient(180deg, transparent 0%,
+                {_rgba(s["deep"], 0.0)} 30%, {_rgba(C["VIOLET_DEEP"], 0.09)} 100%); }}
   /* Шапка её второго эталона: `02 / 09`, тонкая линия через слайд, короткая
      метка справа. Двухстрочного тезиса тут больше нет — он был «хаотично». */
   .header {{ position: relative; z-index: 2; display: flex; align-items: center;
@@ -667,14 +813,19 @@ def build_carousel_slide(
   .header-label {{ font-weight: {tokens.FONT_WEIGHTS["SUPPORT"]}; font-size: {micro_size}px;
                    line-height: {micro_lh}; letter-spacing: 0.18em; white-space: nowrap;
                    text-transform: uppercase; color: {s["muted"]}; }}
+  /* §4: заголовок — важнейший элемент, занимает 30–50% площади слайда. */
+  /* Короткий заголовок не висит вверху зарезервированной полосы, а стоит
+     в её середине: иначе под одной строкой остаётся дыра на треть холста. */
   .hero {{ position: relative; z-index: 2; margin-top: {gap}px; max-width: 78%;
+           min-height: {hero_min}px; max-height: {hero_max}px;
+           display: flex; flex-direction: column; justify-content: center;
            font-size: {hook_size}px; line-height: {hook_lh};
            letter-spacing: -0.01em; text-transform: uppercase; color: {s["text"]};
            margin-bottom: {gap // 2}px; }}
   .hero-line {{ display: block; }}
   .hero .accent, .hero em {{ font-style: normal; color: {O}; }}
   .lead {{ position: relative; z-index: 2; font-weight: {tokens.FONT_WEIGHTS["BODY"]};
-           font-size: {body_size}px; line-height: {body_lh}; color: {s["text"]};
+           font-size: {lead_size}px; line-height: {body_lh}; color: {s["text"]};
            margin-top: {gap // 2}px; max-width: {inner}px; }}
   /* Оранжевая отбивка под текстовой колонкой — держит низ колонки (её 5..9). */
   .rule-accent {{ position: relative; z-index: 2; width: 150px; height: 8px;
@@ -692,23 +843,28 @@ def build_carousel_slide(
             flex-direction: column; justify-content: center; }}
   /* Соединение цепочки — отрезки между кружками, а не черта сквозь цифры:
      сквозная линия читалась как перечёркивание (её замечание 2026-09-22). */
-  .step-link {{ flex: 0 0 auto; width: 56px; height: 8px; border-radius: 4px;
-                background: {O}; margin-top: {dot // 2 - 4}px; align-self: flex-start;
+  .step-link {{ flex: 0 0 auto; width: 48px; height: 8px; border-radius: 4px;
+                background: {O}; align-self: center;
                 box-shadow: 0 0 16px {_rgba(O, 0.55)}; }}
   .steps-row {{ position: relative; display: flex; justify-content: space-between;
-                align-items: flex-start; gap: 16px; }}
-  .step {{ flex: 1; text-align: center; }}
+                align-items: stretch; gap: 16px; }}
+  /* §8 TYPE C: «одинаковые компактные блоки — тёмный фон, тонкая violet border,
+     минималистичная line icon»; стрелки между ними оранжевые. */
+  .step {{ flex: 1; text-align: center; padding: {gap // 2}px {gap // 3}px;
+           border-radius: {tokens.PLATE_RADIUS}px; background: {s["plate"]};
+           border: 1px solid {s["plate_border"]}; box-shadow: {depth};
+           display: flex; flex-direction: column; align-items: center; }}
   .step-dot {{ width: {dot}px; height: {dot}px; border-radius: 50%;
-               margin: 0 auto; background: {s["accent_soft"]}; color: {P["TEXT_ON_LIGHT"]};
+               margin: 0 auto; background: {s["fill"]}; color: {C["TEXT"]};
                font-size: {label_size + 8}px; line-height: {dot}px;
                box-shadow: {node_glow}, inset 0 3px 0 {_rgba(P["TEXT_ON_DARK"], 0.55)},
                  inset 0 -4px 0 {_rgba(P["BG_DARK_PRIMARY"], 0.22)}; }}
-  .step-icon {{ margin: 76px auto 26px; height: {icon_size}px; }}
+  .step-icon {{ margin: {gap // 2}px auto {gap // 3}px; height: {icon_size}px; }}
   .step-caption {{ font-family: '{tokens.FONTS["HEADLINE"]}', {tokens.FALLBACK_STACK};
                    font-weight: {tokens.FONT_WEIGHTS["HEADLINE"]};
                    font-size: {label_size + 8}px; line-height: 1.15; color: {s["text"]};
                    min-height: {round((label_size + 8) * 1.15 * 2)}px; }}
-  .step-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 38px;
+  .step-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 20px;
                 color: {s["muted"]}; }}
   /* Тело слайда занимает вертикаль от подзаголовка до нижней плашки: ряд
      растёт, пока не упрётся в её пропорцию из reference/3.webp — карточка
@@ -719,15 +875,18 @@ def build_carousel_slide(
      по высоте. Это нижняя граница, а не растяжка: текст длиннее — карточка выше. */
   /* min-width: 0 — иначе длинное слово («ВОЗВРАЩЁННОЕ») не даёт карточке
      сузиться и ряд вылезает за правый край холста. */
+  /* §13 ИНФОРМАЦИОННЫЕ ПЛАШКИ: её фон, скругление 20–28 и тонкая violet-обводка.
+     Плашка не должна читаться как стандартный UI card — отсюда мягкая тень
+     и слои по краю, а не ровный прямоугольник. */
   .flow-card {{ flex: 1 1 0; min-width: 0; overflow-wrap: break-word;
                 display: flex; flex-direction: column; justify-content: center;
-                border-radius: {tokens.RADIUS["card"]}px;
-                background: {s["surface"]}; border: {tokens.BORDER_WIDTH}px solid
-                {_rgba(s["accent"], 0.28)}; padding: {gap}px {flow_pad}px;
+                border-radius: {tokens.PLATE_RADIUS}px;
+                background: {s["plate"]}; border: 1px solid
+                {s["plate_border"]}; padding: {gap}px {flow_pad}px;
                 box-shadow: {depth}; }}
-  .flow-card.accent {{ background: {P["LAVENDER"]}; border-color: {O};
+  .flow-card.accent {{ background: {s["fill"]}; border-color: {O};
                        box-shadow: {node_glow}; }}
-  .flow-card.accent .flow-title, .flow-card.accent .flow-note {{ color: {P["TEXT_ON_LIGHT"]}; }}
+  .flow-card.accent .flow-title, .flow-card.accent .flow-note {{ color: {C["TEXT"]}; }}
   /* Кегль подписи потока — базовый label: на четырёх карточках длинное слово
      («ВОЗВРАЩЁННОЕ») должно вставать в строку, а не ломаться переносом. */
   .flow-title {{ font-size: {flow_title_size}px; line-height: 1.15; margin-top: 18px;
@@ -741,13 +900,13 @@ def build_carousel_slide(
                      filter: drop-shadow(0 0 12px {_rgba(O, 0.45)}); }}
   .icon {{ filter: {icon_glow}; }}
   .cards {{ flex: 1; display: grid; gap: 16px; grid-auto-rows: 1fr; }}
-  .card {{ border-radius: {tokens.RADIUS["card"]}px; background: {s["surface"]};
-           border: {tokens.BORDER_WIDTH}px solid {_rgba(s["accent"], 0.28)};
+  .card {{ border-radius: {tokens.PLATE_RADIUS}px; background: {s["plate"]};
+           border: 1px solid {s["plate_border"]};
            padding: {gap // 2}px; box-shadow: {depth};
            display: flex; flex-direction: column; justify-content: center; }}
-  .card.accent {{ background: {P["LAVENDER"]}; border-color: {O};
+  .card.accent {{ background: {s["fill"]}; border-color: {O};
                   box-shadow: {node_glow}; }}
-  .card.accent .card-title, .card.accent .card-note {{ color: {P["TEXT_ON_LIGHT"]}; }}
+  .card.accent .card-title, .card.accent .card-note {{ color: {C["TEXT"]}; }}
   .card-title {{ font-size: {label_size + 3}px; line-height: 1.15; margin-top: 16px;
                  text-transform: uppercase; color: {s["text"]}; }}
   .card-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 10px;
@@ -759,45 +918,77 @@ def build_carousel_slide(
                           padding: {gap // 3}px {gap // 2}px; }}
   .cards.compact .card .icon {{ flex: 0 0 auto; }}
   .cards.compact .card-title {{ margin-top: 0; }}
-  /* Скриншот — предметная сцена правой половины, как в её 5, 6 и 9 слайдах:
-     не блок посреди колонки, а картинка, уходящая к краю холста. */
-  .shot {{ position: absolute; z-index: 1; right: 0; bottom: {round(h * 0.16)}px;
-           width: 56%; display: flex; justify-content: flex-end; align-items: center; }}
-  .shot-img {{ display: block; max-width: 100%; max-height: {shot_max_h}px;
-               width: auto; height: auto;
-               object-fit: contain; border-radius: {tokens.RADIUS["card"]}px;
-               border: {tokens.BORDER_WIDTH}px solid {_rgba(s["accent"], 0.38)};
-               box-shadow: 0 0 64px {_rgba(s["accent"], 0.35)}; }}
-  /* G18: правая сцена из её скринов — стопка карточек под наклоном, как
-     карточки-скриншоты в reference/5.webp. Сцена занимает правую половину,
-     текст — левую (`canvas.screens-scene`). */
-  .screens {{ position: absolute; z-index: 1; top: {round(h * 0.20)}px; right: 0;
-              width: {round(w * 0.52)}px; height: {round(h * 0.68)}px; }}
-  .screens-glow {{ position: absolute; inset: -8%; border-radius: 50%;
-                   background: {_glow(s["accent"], 0.30)}; }}
-  .screen-card {{ position: absolute; padding: 10px;
-                  border-radius: {tokens.RADIUS["card"]}px; background: {s["surface"]};
-                  border: {tokens.BORDER_WIDTH}px solid {_rgba(s["text"], 0.14)};
-                  box-shadow: {depth}; }}
-  /* Снимок не увеличивается: потолки по ширине и высоте плюс `width: auto` —
-     мелкий текст на нём остаётся мелким, это фактура, а не документ. */
-  .screen-img {{ display: block; max-width: {round(w * 0.40)}px;
-                 max-height: {round(h * 0.34)}px; width: auto; height: auto;
-                 border-radius: {tokens.RADIUS["chip"]}px; }}
+  /* §8 TYPE B: «Не использовать плоский screenshot, лежащий прямоугольником
+     поверх фона. Screenshot должен быть встроен в физический объект». Поэтому
+     её снимок всегда лежит внутри корпуса — телефона или экрана ноутбука,
+     стоящего в перспективе. Корпус нарисован CSS: изображений не сочиняем. */
+  .shot {{ position: absolute; z-index: 1; right: {m["right"] // 3}px;
+           top: {round(h * 0.32)}px; width: 54%;
+           display: flex; justify-content: flex-end; align-items: center; }}
+  .device {{ position: relative; perspective: 1800px; width: 100%; }}
+  .device-body {{ position: relative; transform-style: preserve-3d;
+                  width: max-content; margin-left: auto;
+                  transform: rotateY(-17deg) rotateX(6deg) rotateZ(-1.5deg);
+                  background: linear-gradient(145deg, {C["BG_RAISED"]} 0%,
+                    {C["BG_DEEP"]} 100%);
+                  border: 1px solid {_rgba(C["TEXT"], 0.12)};
+                  box-shadow: {depth}, 0 0 90px {_rgba(C["VIOLET_DEEP"], 0.30)}; }}
+  .device-screen {{ position: relative; overflow: hidden;
+                    background: {C["BG_DEEP"]};
+                    box-shadow: inset 0 0 0 1px {_rgba(C["TEXT"], 0.10)}; }}
+  /* Снимок не растягивается под корпус — корпус обнимает снимок. Её решение
+     «скрин это фактура, не раздувай мелкий текст» корпусом не отменяется. */
+  .device-screen img {{ display: block; width: auto; height: auto;
+                        max-width: {round(w * 0.42)}px;
+                        max-height: {round(h * 0.34)}px; }}
+  /* Блик стекла — тонкая наклонная полоса, а не фигура (§14). */
+  .device-glare {{ position: absolute; inset: 0; pointer-events: none;
+                   background: linear-gradient(118deg, {_rgba(C["TEXT"], 0.14)} 0%,
+                     transparent 34%); }}
+  .device.laptop .device-body {{ border-radius: 18px; padding: 16px 16px 22px; }}
+  .device.laptop .device-screen {{ border-radius: 8px; }}
+  .device-hinge {{ position: absolute; left: 50%; bottom: 7px; width: 92px;
+                   height: 5px; margin-left: -46px; border-radius: 3px;
+                   background: {_rgba(C["TEXT"], 0.22)}; }}
+  /* Основание ноутбука: та же перспектива, корпус не висит в воздухе. */
+  .device-base {{ height: 16px; margin: -4px auto 0; width: 112%;
+                  transform: rotateY(-17deg) rotateX(6deg) rotateZ(-1.5deg);
+                  border-radius: 0 0 16px 16px;
+                  background: linear-gradient(180deg, {C["BG_RAISED"]} 0%,
+                    {C["BG_DEEP"]} 100%);
+                  box-shadow: 0 26px 50px {_rgba(C["BG_DEEP"], 0.75)}; }}
+  .device.phone .device-body {{ border-radius: 54px; padding: 14px;
+                                width: max-content; margin-left: auto; }}
+  .device.phone .device-screen {{ border-radius: 42px; }}
+  .device.phone .device-screen img {{ max-width: {round(w * 0.30)}px; }}
+  .device-notch {{ position: absolute; top: 24px; left: 50%; width: 104px;
+                   height: 20px; margin-left: -52px; border-radius: 999px;
+                   background: {C["BG_DEEP"]}; z-index: 2; }}
+  /* §8 TYPE D: несколько интерфейсных карточек в перспективе, на разных
+     уровнях, частично перекрываются и темнеют вдали. */
+  .screens {{ position: absolute; z-index: 1; top: {round(h * 0.18)}px;
+              right: {m["right"] // 4}px;
+              width: {round(w * 0.54)}px; height: {round(h * 0.70)}px; }}
+  .screen-card {{ position: absolute; width: {round(w * 0.40)}px; }}
   .screen-card.s1 {{ top: {SCREEN_SLOTS[0]["top"]}; right: {SCREEN_SLOTS[0]["right"]};
-                     z-index: 1; transform: rotate({SCREEN_SLOTS[0]["rot"]}deg); }}
+                     z-index: 1; transform: rotate({SCREEN_SLOTS[0]["rot"]}deg)
+                     scale(0.92); filter: brightness(0.66) blur(1.6px); }}
   .screen-card.s2 {{ top: {SCREEN_SLOTS[1]["top"]}; right: {SCREEN_SLOTS[1]["right"]};
-                     z-index: 2; transform: rotate({SCREEN_SLOTS[1]["rot"]}deg); }}
+                     z-index: 2; transform: rotate({SCREEN_SLOTS[1]["rot"]}deg)
+                     scale(0.82); filter: brightness(0.82); }}
   .screen-card.s3 {{ top: {SCREEN_SLOTS[2]["top"]}; right: {SCREEN_SLOTS[2]["right"]};
-                     z-index: 3; transform: rotate({SCREEN_SLOTS[2]["rot"]}deg); }}
-  /* Стопка раскладывается по числу снимков: один — по центру сцены, два —
-     в разбег, три — лесенкой. Иначе одинокий снимок висит в верхнем углу. */
-  .screens.n1 .s1 {{ top: 22%; right: 9%; }}
+                     z-index: 3; transform: rotate({SCREEN_SLOTS[2]["rot"]}deg)
+                     scale(0.78); filter: brightness(1); }}
+  /* Одна карточка активна — оранжевая обводка (её §8 TYPE D). */
+  .screen-card.live .device-body {{ border-color: {O};
+                                    box-shadow: {depth}, 0 0 70px {_rgba(O, 0.45)}; }}
+  /* Стопка раскладывается по числу снимков: один — по центру сцены. */
+  .screens.n1 .s1 {{ top: 20%; right: 6%; filter: brightness(1); }}
   .screens.n2 .s1 {{ top: 0%; }}
-  .screens.n2 .s2 {{ top: 36%; }}
+  .screens.n2 .s2 {{ top: 40%; }}
   .canvas.screens-scene .hero, .canvas.screens-scene .lead {{ max-width: 46%; }}
   .portrait {{ position: absolute; z-index: 1; right: 0; bottom: 0;
-               width: {inner // 2 + tokens.SAFE_ZONE}px; height: {h - 2 * tokens.SAFE_ZONE}px;
+               width: {inner // 2 + m["right"]}px; height: {h - m["top"] - m["bottom"]}px;
                display: flex; align-items: flex-end; justify-content: flex-end; }}
   .portrait-img {{ max-width: 100%; max-height: 100%; object-fit: contain;
                    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%,
@@ -809,9 +1000,9 @@ def build_carousel_slide(
   /* Плашка-сноска её слайда 04: оранжевый кружок `!`, вертикальная черта,
      первая строка белая, вторая сиреневая. */
   .summary {{ position: relative; z-index: 2; display: flex; align-items: center;
-              gap: {gap // 2}px; border-radius: {tokens.RADIUS["card"]}px;
-              background: {s["surface"]};
-              border: {tokens.BORDER_WIDTH}px solid {_rgba(s["text"], 0.10)};
+              gap: {gap // 2}px; border-radius: {tokens.PLATE_RADIUS}px;
+              background: {s["plate"]};
+              border: 1px solid {s["plate_border"]};
               padding: {gap // 2}px {gap}px; margin: {gap}px 0 {gap // 2}px;
               box-shadow: {depth}; }}
   .summary-mark {{ flex: 0 0 auto; width: {icon_size + 18}px; height: {icon_size + 18}px;
@@ -823,7 +1014,7 @@ def build_carousel_slide(
   .summary-line {{ font-weight: {tokens.FONT_WEIGHTS["BODY"]}; font-size: {label_size + 4}px;
                    line-height: 1.45; color: {s["text"]}; }}
   .summary-line.accent {{ font-weight: {tokens.FONT_WEIGHTS["SUPPORT"]};
-                          color: {P["VIOLET_SOFT"]}; }}
+                          color: {s["accent_soft"]}; }}
   .footer {{ position: relative; z-index: 2; display: flex; align-items: flex-end;
              justify-content: space-between; gap: {gap}px; min-height: {micro_size}px; }}
   .footer-thesis {{ font-weight: {tokens.FONT_WEIGHTS["SUPPORT"]}; font-size: {micro_size}px;
@@ -867,14 +1058,15 @@ def build_carousel_slide(
         f'<div class="hero-line">{_mark_accent(_quotes(line), words)}</div>'
         for line in hero_lines
     )
-    lead_lines = _lines(body)
+    lead_lines = _wrap_words(_lines(body), tokens.BODY_WORDS_PER_LINE[1])
     lead_html = (
         '<p class="lead">' + "<br>".join(_t(line) for line in lead_lines) + "</p>"
         if lead_lines
         else ""
     )
 
-    stroke, accent_stroke = s["accent_soft"], P["VIOLET_STRONG"]
+    # §12 ИКОНКИ: только белые или светло-фиолетовые, штрих одной толщины
+    stroke, accent_stroke = s["accent_soft"], C["TEXT"]
     stage = []
     if steps:
         stage.append(_steps_html(steps, icon_size, stroke))
@@ -882,11 +1074,19 @@ def build_carousel_slide(
         stage.append(_flow_html(flow, icon_size, stroke, accent_stroke))
     if cards:
         stage.append(_cards_html(cards, icon_size, stroke, accent_stroke))
+    kind = composition or pick_composition(
+        photo=photo, screenshot=screenshot, screens=screens,
+        steps=steps, flow=flow, cards=cards,
+    )
     portrait = _image_block("portrait", photo, "фото владелицы", notes)
     # сцена — это её правая половина: портрет или скриншот
     portrait_html = f'<div class="portrait">{portrait}</div>' if portrait else ""
     shot = _image_block("shot", screenshot, "скриншот владелицы", notes)
-    shot_html = f'<div class="shot">{shot}</div>' if shot else ""
+    shot_html = (
+        f'<div class="shot">{_device_html(device or DEFAULT_DEVICE, shot)}</div>'
+        if shot and not shot.startswith("<!--")
+        else ""
+    )
     screens_html = _screens_html(screens, notes)
     scene = " scene" if shot_html else ""
     if screens_html:
@@ -918,9 +1118,9 @@ def build_carousel_slide(
             f'<div class="summary-body">{rows}</div></div>'
         )
 
-    markup = f"""<div class="canvas{scene}" id="slide">
-  <div class="glow"></div>
-  <div class="glow-2"></div>
+    markup = f"""<div class="canvas{scene} type-{kind.lower()}" id="slide" data-composition="{kind}">
+  <div class="light"></div>
+  <div class="surface"></div>
   {portrait_html}
   {shot_html}
   {screens_html}
@@ -935,7 +1135,7 @@ def build_carousel_slide(
     <div class="footer-thesis">{"<br>".join(_t(l) for l in _lines(footer_thesis, 2))}</div>
   </div>
 </div>"""
-    return _document(f"Слайд {index}", w, h, css, markup)
+    return _document(f"Слайд {index}", w, h, css, markup, padding=pad)
 
 
 def build_post_cover(
