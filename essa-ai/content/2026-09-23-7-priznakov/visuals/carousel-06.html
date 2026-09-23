@@ -115,6 +115,11 @@
      не выше трети холста. Дальше лишнее уходит в отступы вокруг ряда. */
   .flow { flex: 1; max-height: 450px;
            display: flex; align-items: stretch; gap: 8px; }
+  /* Ряд карточек живёт внутри `.flow`: на одном ряду он просто растягивается
+     на всю его высоту и ширину (как раньше стоял сам `.flow`); на переносе
+     (G25) `.flow` становится колонкой из двух таких рядов — см. .flow-wrap. */
+  .flow-row { flex: 1; min-width: 0; display: flex; align-items: stretch;
+               justify-content: center; gap: 8px; }
   /* Карточка потока — в пропорции её reference/3.webp: около четверти холста
      по высоте. Это нижняя граница, а не растяжка: текст длиннее — карточка выше. */
   /* min-width: 0 — иначе длинное слово («ВОЗВРАЩЁННОЕ») не даёт карточке
@@ -122,8 +127,11 @@
   /* §13 ИНФОРМАЦИОННЫЕ ПЛАШКИ: её фон, скругление 20–28 и тонкая violet-обводка.
      Плашка не должна читаться как стандартный UI card — отсюда мягкая тень
      и слои по краю, а не ровный прямоугольник. */
+  /* G24: иконка и подпись — по центру блока, по горизонтали и вертикали
+     (justify-content — вертикаль, align-items — горизонталь). */
   .flow-card { flex: 1 1 0; min-width: 0; overflow-wrap: break-word;
                 display: flex; flex-direction: column; justify-content: center;
+                align-items: center; text-align: center;
                 border-radius: 24px;
                 background: #18171E; border: 1px solid
                 #8B63DA; padding: 28px 14px;
@@ -133,15 +141,31 @@
   .flow-card.accent .flow-title, .flow-card.accent .flow-note { color: #F5F3F0; }
   /* Кегль подписи потока — базовый label: на четырёх карточках длинное слово
      («ВОЗВРАЩЁННОЕ») должно вставать в строку, а не ломаться переносом. */
-  .flow-title { font-size: 18px; line-height: 1.15; margin-top: 18px;
-                 text-transform: uppercase; color: #F5F3F0; }
+  .flow-title { font-size: 27px; line-height: 1.15; margin-top: 18px;
+                 text-transform: uppercase; color: #F5F3F0; text-align: center; }
   .flow-note { font-size: 24px; line-height: 1.3; margin-top: 14px;
-                color: #C9C6C3; }
+                color: #C9C6C3; text-align: center; }
   /* G17: между карточками — рисованная дуга, а не типографская стрелка. */
   .flow-arrow { align-self: center; flex: 0 0 auto; color: #FF955E;
                  width: 32px; height: 38px; }
   .flow-arrow-svg { width: 100%; height: 100%;
                      filter: drop-shadow(0 0 12px rgba(255,149,94,0.45)); }
+  /* G25: цепочка длиннее четырёх блоков — перенос в два ряда, три сверху и два
+     снизу, нижний ряд центрируется под верхним; блоки остаются одинаковыми и
+     компактными (её §8 TYPE C), а не растянутыми на всю высоту `.flow`. */
+  .flow.flow-wrap { flex-direction: column; align-items: stretch;
+                      justify-content: center; max-height: none;
+                      gap: 16px; }
+  .flow-wrap .flow-row { flex: 0 0 auto; }
+  .flow-wrap .flow-card { flex: 0 0 283px;
+                            width: 283px; }
+  /* Стрелка-переход с конца верхнего ряда в начало нижнего — та же дуга, что
+     ведёт финальную цепочку сверху вниз (`CHAIN_ARROW`), развёрнутая на конец
+     верхнего ряда, чтобы порядок читался однозначно. */
+  .flow-turn { align-self: flex-end;
+                margin-right: 141px;
+                width: 27px; height: 43px;
+                color: #FF955E; }
   .icon { filter: drop-shadow(0 0 14px rgba(139,99,218,0.55)); }
   .cards { flex: 1; display: grid; gap: 16px; grid-auto-rows: 1fr; }
   .card { border-radius: 24px; background: #18171E;
@@ -394,7 +418,7 @@
 </style>
 </head>
 <body>
-<div class="canvas bottom-note type-c" id="slide" data-composition="C">
+<div class="canvas type-c" id="slide" data-composition="C">
   <div class="light"></div>
   <div class="surface"></div>
   
@@ -403,11 +427,11 @@
   
   <div class="header"><div class="header-count headline"><span class="header-num">06</span><span class="header-total">/ 09</span></div><div class="header-line"></div><div class="header-label">Признак 5</div></div>
   <div class="hero headline tight"><div class="hero-line">5. На контент</div><div class="hero-line">всё равно уходит</div><div class="hero-line"><span class="accent">слишком много</span></div><div class="hero-line">времени</div></div>
-  <p class="lead">Нейросети уже есть.<br>Но процесс по-прежнему требует кучу ручных действий.</p>
+  <p class="lead">Нейросети уже есть.<br>Но сценарий → текст →<br>оформление → монтаж → публикация<br>по-прежнему требуют кучу ручных действий.</p>
   <div class="rule-accent"></div>
-  <div class="stage"><div class="flow"><div class="flow-card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 7v13l6-3 6 3 6-3V4l-6 3z"/><path d="M9 4v13M15 7v13"/></svg><div class="flow-title headline">сценарий</div></div><div class="flow-arrow"><svg class="flow-arrow-svg" viewBox="0 0 48 34" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 28C13 8 31 5 43 19"/><path d="M31 15L43 19L41 6"/></svg></div><div class="flow-card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M9 12h6M9 16h6"/></svg><div class="flow-title headline">текст</div></div><div class="flow-arrow"><svg class="flow-arrow-svg" viewBox="0 0 48 34" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 28C13 8 31 5 43 19"/><path d="M31 15L43 19L41 6"/></svg></div><div class="flow-card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg><div class="flow-title headline">оформление</div></div><div class="flow-arrow"><svg class="flow-arrow-svg" viewBox="0 0 48 34" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 28C13 8 31 5 43 19"/><path d="M31 15L43 19L41 6"/></svg></div><div class="flow-card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4z"/></svg><div class="flow-title headline">монтаж</div></div><div class="flow-arrow"><svg class="flow-arrow-svg" viewBox="0 0 48 34" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 28C13 8 31 5 43 19"/><path d="M31 15L43 19L41 6"/></svg></div><div class="flow-card accent"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#F5F3F0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><div class="flow-title headline">публикация</div></div></div></div>
-  <div class="hand-note at-bottom-left"><span class="hand-text">сначала разложи</span><svg class="hand-arrow" viewBox="0 0 64 86" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M54 6C28 16 10 36 14 68"/><path d="M5 55l9 15 15-8"/></svg></div>
-  
+  <div class="stage"><div class="flow flow-wrap"><div class="flow-row"><div class="flow-card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 7v13l6-3 6 3 6-3V4l-6 3z"/><path d="M9 4v13M15 7v13"/></svg><div class="flow-title headline">сценарий</div></div><div class="flow-arrow"><svg class="flow-arrow-svg" viewBox="0 0 48 34" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 28C13 8 31 5 43 19"/><path d="M31 15L43 19L41 6"/></svg></div><div class="flow-card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M9 12h6M9 16h6"/></svg><div class="flow-title headline">текст</div></div><div class="flow-arrow"><svg class="flow-arrow-svg" viewBox="0 0 48 34" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 28C13 8 31 5 43 19"/><path d="M31 15L43 19L41 6"/></svg></div><div class="flow-card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg><div class="flow-title headline">оформление</div></div></div><div class="flow-turn"><svg class="chain-arrow-svg" viewBox="0 0 34 48" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4C28 14 30 30 16 44"/><path d="M20 31L16 44L29 41"/></svg></div><div class="flow-row"><div class="flow-card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4z"/></svg><div class="flow-title headline">монтаж</div></div><div class="flow-arrow"><svg class="flow-arrow-svg" viewBox="0 0 48 34" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 28C13 8 31 5 43 19"/><path d="M31 15L43 19L41 6"/></svg></div><div class="flow-card accent"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#F5F3F0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><div class="flow-title headline">публикация</div></div></div></div></div>
+  <div class="hand-note at-top-right"><span class="hand-text">сначала разложи</span><svg class="hand-arrow" viewBox="0 0 64 86" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M54 6C28 16 10 36 14 68"/><path d="M5 55l9 15 15-8"/></svg></div>
+  <div class="summary"><div class="summary-mark">!</div><div class="summary-divider"></div><div class="summary-body"><div class="summary-line">Это хороший сигнал посмотреть не на сервис,</div><div class="summary-line accent">а на весь процесс целиком.</div></div></div>
   <div class="footer">
     <div class="footer-thesis"></div>
   </div>

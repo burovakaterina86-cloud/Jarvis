@@ -372,6 +372,53 @@ def test_flow_cards_have_arrows_and_violet_accent_on_the_last():
     assert f'background: {templates.STYLE_SURFACES["STYLE_01"]["fill"]}' in html
 
 
+def test_flow_card_icon_and_caption_are_centered():
+    # G24: иконка и подпись в каждом блоке схемы — по центру блока, и по
+    # горизонтали, и по вертикали.
+    html = templates.build_carousel_slide(
+        hook="Процесс",
+        flow=[{"title": t} for t in ("сценарий", "текст", "оформление")],
+    )
+    card = _rule(html, ".flow-card")
+    assert "justify-content: center" in card  # вертикаль
+    assert "align-items: center" in card      # горизонталь
+    assert "text-align: center" in _rule(html, ".flow-title")
+    # ".flow-note" сам по себе — часть составного селектора выше
+    # (".flow-card.accent .flow-title, .flow-card.accent .flow-note"),
+    # поэтому ищем именно самостоятельное правило, с началом строки.
+    own_note_rule = re.search(r"\n\s*\.flow-note \{(.*?)\}", _css(html), re.S)
+    assert own_note_rule and "text-align: center" in own_note_rule.group(1)
+
+
+def test_flow_longer_than_four_wraps_into_two_rows_three_and_two():
+    # G25, её слова 2026-09-23: «три сверху и две снизу между ними стрелки».
+    html = templates.build_carousel_slide(
+        hook="Процесс",
+        flow=[{"title": t} for t in
+              ("сценарий", "текст", "оформление", "монтаж", "публикация")],
+    )
+    assert html.count('class="flow-card') == 5
+    assert html.count('class="flow-row"') == 2
+    # верхний ряд (три блока) идёт раньше стрелки-перехода, нижний (два) — после
+    before_turn, _, after_turn = html.partition('class="flow-turn"')
+    assert before_turn.count('class="flow-card') == 3
+    assert after_turn.count('class="flow-card') == 2
+    # стрелки внутри рядов (2 + 1) плюс стрелка-переход между рядами
+    assert html.count('class="flow-arrow"') == 3
+    assert 'class="flow-turn"' in html
+    assert 'class="flow flow-wrap"' in html
+
+
+def test_flow_of_four_or_fewer_stays_in_one_row():
+    html = templates.build_carousel_slide(
+        hook="Процесс",
+        flow=[{"title": t} for t in ("сценарий", "текст", "оформление", "монтаж")],
+    )
+    assert 'class="flow-wrap"' not in html
+    assert 'class="flow-turn"' not in html
+    assert html.count('class="flow-row"') == 1
+
+
 def test_cards_grid_is_rounded_within_her_radius_range():
     html = templates.build_carousel_slide(
         hook="Одно сообщество",
@@ -1173,14 +1220,45 @@ def test_every_screen_of_the_scene_is_blurred_by_default(tmp_path):
     ).group(0)
 
 
-def test_slide_data_cannot_turn_the_blur_off():
-    off = templates.build_carousel_slide(
+def test_blur_turns_off_only_for_the_screen_marked_explicitly():
+    # G23, её слова 2026-09-23: «если скины реальные, можно не делать
+    # размытие» — но по умолчанию всё ещё размыто, снимается только явным
+    # "blur": false, и только для того скрина, на котором оно стоит.
+    mixed = templates.build_carousel_slide(
         hook="Скрины",
-        screens=[{"src": s, "blur": False, "filter": "none"} for s in HER_SCREENS],
+        screens=[
+            {"src": HER_SCREENS[0], "blur": False},
+            {"src": HER_SCREENS[1]},
+            {"src": HER_SCREENS[2], "blur": False, "filter": "none"},
+        ],
         notes=[],
     )
-    assert off.count(f"blur({tokens.SCREEN_BLUR}px)") == 3
-    assert "filter: none" not in off
+    imgs = re.findall(r"<img class=\"screen-img\"[^>]*>", mixed)
+    assert len(imgs) == 3
+    assert f"blur({tokens.SCREEN_BLUR}px)" not in imgs[0]
+    assert f"blur({tokens.SCREEN_BLUR}px)" in imgs[1]
+    assert f"blur({tokens.SCREEN_BLUR}px)" not in imgs[2]
+    assert "filter: none" not in mixed  # произвольный CSS из данных не проходит
+
+
+def test_single_screenshot_can_also_turn_blur_off_explicitly(tmp_path):
+    shot = tmp_path / "скрин.png"
+    shot.write_bytes(b"")
+    off = templates.build_carousel_slide(
+        hook="Скрин", screenshot={"src": shot, "blur": False}, notes=[],
+    )
+    img = re.search(r"<img class=\"shot-img\"[^>]*>", off).group(0)
+    assert f"blur({tokens.SCREEN_BLUR}px)" not in img
+
+
+def test_portrait_is_never_blurred(tmp_path):
+    # Портрет — не скрин интерфейса: он должен читаться всегда, размытие на
+    # него в принципе не ставится (BLURRED_KINDS не включает "portrait").
+    photo = tmp_path / "портрет.png"
+    photo.write_bytes(b"")
+    html = templates.build_carousel_slide(hook="Портрет", photo=photo, notes=[])
+    img = re.search(r"<img class=\"portrait-img\"[^>]*>", html).group(0)
+    assert "blur(" not in img
 
 
 # --- G20: пометки пишутся отдельно -------------------------------------------

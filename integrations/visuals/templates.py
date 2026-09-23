@@ -414,13 +414,15 @@ def _icon(name: str, size: int, stroke: str) -> str:
 BLURRED_KINDS = ("screen", "shot")
 
 
-def _image_block(kind: str, path, caption: str, notes: list) -> str:
+def _image_block(kind: str, path, caption: str, notes: list, blur: bool = True) -> str:
     """Картинка владелицы: её файл или честная строка о том, что файла нет.
 
     Заглушку не рисуем и чужого не подставляем (таск 05, пп. 5 и 7).
 
-    Скрины правой сцены размываются здесь и всегда: размытие стоит прямо
-    на элементе, данными слайда не выключается (G19, её слова 2026-09-22).
+    Скрины правой сцены размыты по умолчанию (G19, её слова 2026-09-22).
+    Теперь она смягчила правило (G23, её слова 2026-09-23): на настоящих
+    скринах размытие можно снять — но только явным `"blur": false` в данных
+    слайда, каждый скрин отдельно. Не задано — размыто, как раньше.
     """
     if not path:
         return ""
@@ -430,12 +432,12 @@ def _image_block(kind: str, path, caption: str, notes: list) -> str:
         return f"<!-- {kind}: файла нет — {_t(p)} -->"
     notes.append(f"{kind}: {p.name}")
     alt = _t(caption or p.name)
-    blur = (
+    blur_style = (
         f' style="filter: blur({tokens.SCREEN_BLUR}px);"'
-        if kind in BLURRED_KINDS
+        if kind in BLURRED_KINDS and blur
         else ""
     )
-    return f'<img class="{kind}-img" src="{_t(p.name)}" alt="{alt}"{blur}>'
+    return f'<img class="{kind}-img" src="{_t(p.name)}" alt="{alt}"{blur_style}>'
 
 
 #: Корпуса, в которые встраивается её скрин (§8 TYPE B). Ничего третьего:
@@ -598,30 +600,56 @@ def _steps_html(steps: list, icon_size: int, stroke: str) -> str:
     return '<div class="steps"><div class="steps-row">' + "".join(cells) + "</div></div>"
 
 
-def _flow_html(flow: list, icon_size: int, stroke: str, accent_stroke: str) -> str:
-    """Поток карточек со стрелками; последняя залита акцентом."""
+def _flow_html(
+    flow: list, icon_size: int, stroke: str, accent_stroke: str, wrap: bool = False
+) -> str:
+    """Поток карточек со стрелками; последняя залита акцентом.
+
+    G25: длиннее четырёх блоков — перенос в два ряда (три сверху, два снизу
+    на пяти блоках), со стрелкой-переходом с конца верхнего ряда в начало
+    нижнего, чтобы порядок читался однозначно (её слова 2026-09-23).
+    """
+    last = len(flow) - 1
     auto = pick_icons(
         [c.get("title", "") for c in flow],
         taken=[c.get("icon") for c in flow],
     )
-    parts = []
-    last = len(flow) - 1
-    for i, card in enumerate(flow):
-        if i:
-            parts.append(f'<div class="flow-arrow">{FLOW_ARROW}</div>')
+
+    def _card(i: int, card: dict) -> str:
         accent = " accent" if i == last and card.get("accent", True) else ""
         pen = accent_stroke if accent else stroke
         icon = _icon(card.get("icon", ""), icon_size, pen) or _icon(
             auto[i], icon_size, pen
         )
         note = card.get("note", "")
-        parts.append(
+        return (
             f'<div class="flow-card{accent}">{icon}'
             f'<div class="flow-title headline">{_t(card.get("title", ""))}</div>'
             + (f'<div class="flow-note">{_t(note)}</div>' if note else "")
             + "</div>"
         )
-    return '<div class="flow">' + "".join(parts) + "</div>"
+
+    def _row(items: list, offset: int) -> str:
+        parts = []
+        for j, card in enumerate(items):
+            i = offset + j
+            if j:
+                parts.append(f'<div class="flow-arrow">{FLOW_ARROW}</div>')
+            parts.append(_card(i, card))
+        return '<div class="flow-row">' + "".join(parts) + "</div>"
+
+    if not wrap:
+        return '<div class="flow">' + _row(flow, 0) + "</div>"
+
+    top_n = -(-len(flow) // 2)
+    top, bottom = flow[:top_n], flow[top_n:]
+    return (
+        '<div class="flow flow-wrap">'
+        + _row(top, 0)
+        + f'<div class="flow-turn">{CHAIN_ARROW}</div>'
+        + _row(bottom, top_n)
+        + "</div>"
+    )
 
 
 def _cards_html(cards: list, icon_size: int, stroke: str, accent_stroke: str) -> str:
@@ -770,7 +798,10 @@ def _screens_html(screens, notes: list) -> str:
     cards = []
     for item in items[: len(SCREEN_SLOTS)]:
         data = item if isinstance(item, dict) else {"src": item}
-        img = _image_block("screen", data.get("src"), "скрин владелицы", notes)
+        img = _image_block(
+            "screen", data.get("src"), "скрин владелицы", notes,
+            blur=data.get("blur", True),
+        )
         if not img or img.startswith("<!--"):
             continue
         slot = SCREEN_SLOTS[len(cards)]
@@ -949,11 +980,20 @@ def build_carousel_slide(
     #: пополам (её рендер carousel-06). Дуга читается и в этой ширине.
     flow_arrow_w = round(label_size * 1.2)
     flow_title_size = label_size
+    #: G25: цепочка длиннее четырёх блоков переносится в два ряда — три сверху,
+    #: два снизу (её слова 2026-09-23). Ширина блока считается от самого
+    #: широкого ряда (верхнего), нижний ряд получает те же блоки и центрируется.
+    flow_wrap = bool(flow) and len(flow) > 4
+    flow_top_n = -(-len(flow) // 2) if flow_wrap else (len(flow) if flow else 0)
+    flow_card_w = 0
     if flow:
-        n = len(flow)
-        card_w = (inner - (flow_arrow_w + 2 * flow_gap) * (n - 1)) / n
+        n = flow_top_n
+        #: Имя без префикса заведено под карточки UI-хаоса (§8 TYPE D) ниже —
+        #: те же три буквы там переопределяются для другой сцены, поэтому
+        #: ширина карточки потока держится в своей переменной (не `card_w`).
+        flow_card_w = (inner - (flow_arrow_w + 2 * flow_gap) * (n - 1)) / n
         # box-sizing: border-box — рамка съедает ширину наравне с полями
-        content_w = card_w - 2 * flow_pad - 2 * tokens.BORDER_WIDTH
+        content_w = flow_card_w - 2 * flow_pad - 2 * tokens.BORDER_WIDTH
         longest = max(
             (len(word) for c in flow for word in str(c.get("title", "")).split()),
             default=1,
@@ -974,7 +1014,7 @@ def build_carousel_slide(
     if steps:
         stage.append(_steps_html(steps, icon_size, stroke))
     if flow:
-        stage.append(_flow_html(flow, icon_size, stroke, accent_stroke))
+        stage.append(_flow_html(flow, icon_size, stroke, accent_stroke, flow_wrap))
     if cards:
         stage.append(_cards_html(cards, icon_size, stroke, accent_stroke))
     if chain:
@@ -990,7 +1030,12 @@ def build_carousel_slide(
     portrait = _image_block("portrait", photo, "фото владелицы", notes)
     # сцена — это её правая половина: портрет, скриншот или корпус устройства
     portrait_html = f'<div class="portrait">{portrait}</div>' if portrait else ""
-    shot = _image_block("shot", screenshot, "скриншот владелицы", notes)
+    # G23: одиночный скриншот тоже может прийти словарём {"src": …, "blur": false}
+    screenshot_src = screenshot.get("src") if isinstance(screenshot, dict) else screenshot
+    screenshot_blur = screenshot.get("blur", True) if isinstance(screenshot, dict) else True
+    shot = _image_block(
+        "shot", screenshot_src, "скриншот владелицы", notes, blur=screenshot_blur
+    )
     shot_kind = device or DEFAULT_DEVICE
     shot_html = (
         f'<div class="shot {shot_kind}-shot">'
@@ -1223,6 +1268,11 @@ def build_carousel_slide(
      не выше трети холста. Дальше лишнее уходит в отступы вокруг ряда. */
   .flow {{ flex: 1; max-height: {flow_cap}px;
            display: flex; align-items: stretch; gap: {flow_gap}px; }}
+  /* Ряд карточек живёт внутри `.flow`: на одном ряду он просто растягивается
+     на всю его высоту и ширину (как раньше стоял сам `.flow`); на переносе
+     (G25) `.flow` становится колонкой из двух таких рядов — см. .flow-wrap. */
+  .flow-row {{ flex: 1; min-width: 0; display: flex; align-items: stretch;
+               justify-content: center; gap: {flow_gap}px; }}
   /* Карточка потока — в пропорции её reference/3.webp: около четверти холста
      по высоте. Это нижняя граница, а не растяжка: текст длиннее — карточка выше. */
   /* min-width: 0 — иначе длинное слово («ВОЗВРАЩЁННОЕ») не даёт карточке
@@ -1230,8 +1280,11 @@ def build_carousel_slide(
   /* §13 ИНФОРМАЦИОННЫЕ ПЛАШКИ: её фон, скругление 20–28 и тонкая violet-обводка.
      Плашка не должна читаться как стандартный UI card — отсюда мягкая тень
      и слои по краю, а не ровный прямоугольник. */
+  /* G24: иконка и подпись — по центру блока, по горизонтали и вертикали
+     (justify-content — вертикаль, align-items — горизонталь). */
   .flow-card {{ flex: 1 1 0; min-width: 0; overflow-wrap: break-word;
                 display: flex; flex-direction: column; justify-content: center;
+                align-items: center; text-align: center;
                 border-radius: {tokens.PLATE_RADIUS}px;
                 background: {s["plate"]}; border: 1px solid
                 {s["plate_border"]}; padding: {gap}px {flow_pad}px;
@@ -1242,14 +1295,30 @@ def build_carousel_slide(
   /* Кегль подписи потока — базовый label: на четырёх карточках длинное слово
      («ВОЗВРАЩЁННОЕ») должно вставать в строку, а не ломаться переносом. */
   .flow-title {{ font-size: {flow_title_size}px; line-height: 1.15; margin-top: 18px;
-                 text-transform: uppercase; color: {s["text"]}; }}
+                 text-transform: uppercase; color: {s["text"]}; text-align: center; }}
   .flow-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 14px;
-                color: {s["muted"]}; }}
+                color: {s["muted"]}; text-align: center; }}
   /* G17: между карточками — рисованная дуга, а не типографская стрелка. */
   .flow-arrow {{ align-self: center; flex: 0 0 auto; color: {O};
                  width: {flow_arrow_w}px; height: {round(label_size * 1.4)}px; }}
   .flow-arrow-svg {{ width: 100%; height: 100%;
                      filter: drop-shadow(0 0 12px {_rgba(O, 0.45)}); }}
+  /* G25: цепочка длиннее четырёх блоков — перенос в два ряда, три сверху и два
+     снизу, нижний ряд центрируется под верхним; блоки остаются одинаковыми и
+     компактными (её §8 TYPE C), а не растянутыми на всю высоту `.flow`. */
+  .flow.flow-wrap {{ flex-direction: column; align-items: stretch;
+                      justify-content: center; max-height: none;
+                      gap: {round(flow_gap * 2)}px; }}
+  .flow-wrap .flow-row {{ flex: 0 0 auto; }}
+  .flow-wrap .flow-card {{ flex: 0 0 {round(flow_card_w)}px;
+                            width: {round(flow_card_w)}px; }}
+  /* Стрелка-переход с конца верхнего ряда в начало нижнего — та же дуга, что
+     ведёт финальную цепочку сверху вниз (`CHAIN_ARROW`), развёрнутая на конец
+     верхнего ряда, чтобы порядок читался однозначно. */
+  .flow-turn {{ align-self: flex-end;
+                margin-right: {round(flow_card_w / 2)}px;
+                width: {round(label_size * 1.0)}px; height: {round(label_size * 1.6)}px;
+                color: {O}; }}
   .icon {{ filter: {icon_glow}; }}
   .cards {{ flex: 1; display: grid; gap: 16px; grid-auto-rows: 1fr; }}
   .card {{ border-radius: {tokens.PLATE_RADIUS}px; background: {s["plate"]};
