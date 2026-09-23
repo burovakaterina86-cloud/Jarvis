@@ -1,16 +1,32 @@
 {
   "own_username": "katerina_agents_ai",
-  "competitors": ["zuhra.marketing", "oireels", "mama_mozg", "mcdenil"],
+  "competitors": [
+    "zuhra.marketing",
+    "oireels",
+    "mama_mozg",
+    "mcdenil"
+  ],
   "keywords": [
-    "ai", "ии", "нейросети", "нейросеть", "промпт", "автоматизация",
-    "рутина", "chatgpt", "чатgpt", "личный бренд", "эксперт", "соцсети"
+    "ai",
+    "ии",
+    "нейросети",
+    "нейросеть",
+    "промпт",
+    "автоматизация",
+    "рутина",
+    "chatgpt",
+    "чатgpt",
+    "личный бренд",
+    "эксперт",
+    "соцсети"
   ],
   "keywords_note": "предложено из essa-ai/02_AUDIENCE.md и essa-ai/03_BRAND_MEANINGS.md — это гипотеза, не факт; проверь и поправь список под свою нишу",
-  "window_days": 7,
+  "window_days": 30,
   "own_window_days": 30,
   "own_fetch_limit": 30,
   "top_k": 25,
   "top_final": 15,
-  "reels_per_account": 3,
-  "max_requests_per_run": 200
+  "reels_per_account": 25,
+  "max_requests_per_run": 200,
+  "window_note": "30 дней и 25 роликов с аккаунта: у четырёх эталонов за неделю выходит 1–3 ролика, «залетевшим» не из чего выделиться (первый живой прогон 2026-09-23). Нужен только свежак — верни window_days: 7."
 }

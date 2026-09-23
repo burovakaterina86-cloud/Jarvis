@@ -1,7 +1,9 @@
 """Шаги 5-6 метода: видео → звук (ffmpeg) → расшифровка Groq Whisper.
 
-Apify уже отдаёт `videoUrl` в самом рилсе — отдельного шага «медиа по коду»
-(как в HikerAPI-варианте upstream) не нужно. Скачивание и извлечение звука
+Apify отдаёт в рилсе и `videoUrl`, и отдельный `audioUrl`. Берём звук: Instagram
+часто отдаёт по `videoUrl` DASH-дорожку без звука (VP9, одна видеодорожка), и тогда
+ffmpeg вытаскивать нечего — это вскрыл первый живой прогон 2026-09-23. `videoUrl` —
+только запасной путь, если `audioUrl` нет. Скачивание и извлечение звука
 вынесены в подменяемые функции: тесты проверяют оркестрацию на фейковых
 клиентах и фейковых download/extract, не гоняют настоящий ffmpeg и сеть.
 """
@@ -53,13 +55,28 @@ def transcribe_top(groq_client: GroqClient, reels: list[dict[str, Any]], out_dir
     extract_audio = extract_audio or default_extract_audio
     out_dir.mkdir(parents=True, exist_ok=True)
     transcripts: dict[str, str] = {}
+    failed: dict[str, str] = {}
     for reel in reels:
         code = reel["shortCode"]
-        video_path = download(reel["videoUrl"], out_dir / f"{code}.mp4")
-        audio_path = extract_audio(video_path, out_dir / f"{code}.opus")
+        src = reel.get("audioUrl") or reel["videoUrl"]
+        media_path = download(src, out_dir / f"{code}.media")
+        audio_path = out_dir / f"{code}.opus"
+        try:
+            extract_audio(media_path, audio_path)
+        except subprocess.CalledProcessError as exc:
+            # Один битый ролик не должен стоить всего прогона: помечаем и идём дальше.
+            failed[code] = f"ffmpeg: код {exc.returncode}"
+            media_path.unlink(missing_ok=True)
+            continue
         text = groq_client.transcribe(audio_path)
         transcripts[code] = text
         (out_dir / f"{code}.txt").write_text(text, encoding="utf-8")
-        video_path.unlink(missing_ok=True)
+        media_path.unlink(missing_ok=True)
         audio_path.unlink(missing_ok=True)
+    if failed:
+        lines = ["# Не расшифрованы", ""] + [f"- {c} — {why}" for c, why in failed.items()]
+        (out_dir / "failed.md").write_text(chr(10).join(lines) + chr(10), encoding="utf-8")
+        if not transcripts:
+            # Не вышло ни одного — это уже не случайный ролик, а системная поломка.
+            raise RuntimeError(f"ни один ролик не расшифрован ({len(failed)} из {len(reels)})")
     return transcripts

@@ -28,6 +28,9 @@ class GroqApiClient:
             headers={
                 "Authorization": f"Bearer {self._key}",
                 "Content-Type": f"multipart/form-data; boundary={boundary}",
+                # Cloudflare перед Groq режет подпись Python-urllib (ошибка 1010 → 403),
+                # найдено первым живым прогоном 2026-09-23.
+                "User-Agent": "JARVIS-radar/1.0",
             },
         )
         # Успех — по HTTP 200, не по grep текста ответа (урок upstream).

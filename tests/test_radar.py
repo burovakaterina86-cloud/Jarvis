@@ -238,6 +238,9 @@ def test_main_exits_2_when_keys_missing(tmp_path, monkeypatch):
     monkeypatch.delenv("APIFY_TOKEN", raising=False)
     monkeypatch.delenv("GROQ_KEY", raising=False)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    # Настоящий .env владелицы тесту не виден: иначе он найдёт её ключи и пойдёт в сеть.
+    from integrations.radar import keys
+    monkeypatch.setattr(keys, "ROOT", tmp_path)
     assert main([str(cfg_path)]) == EXIT_CONFIG
 
 
@@ -343,3 +346,57 @@ def test_content_plan_mentions_reel_radar_connection():
     text = (ROOT / ".claude" / "skills" / "content-plan" / "SKILL.md").read_text(encoding="utf-8")
     assert "radar-*" in text
     assert "reel-radar" in text
+
+
+def test_transcription_prefers_audio_url_and_survives_one_bad_reel(tmp_path):
+    """Первый живой прогон: по videoUrl Instagram отдал видео без звука, ffmpeg упал на всём прогоне."""
+    import subprocess
+    from integrations.radar import transcribe
+
+    fetched = []
+
+    def download(url, dest):
+        fetched.append(url)
+        dest.write_bytes(b"x")
+        return dest
+
+    def extract(src, dest):
+        if "bad" in src.name:
+            raise subprocess.CalledProcessError(4294967274, "ffmpeg")
+        dest.write_bytes(b"a")
+        return dest
+
+    class Groq:
+        def transcribe(self, path):
+            return "текст " + path.stem
+
+    reels = [
+        {"shortCode": "good", "videoUrl": "http://v/good", "audioUrl": "http://a/good"},
+        {"shortCode": "bad", "videoUrl": "http://v/bad", "audioUrl": "http://a/bad"},
+        {"shortCode": "old", "videoUrl": "http://v/old"},
+    ]
+    out = transcribe.transcribe_top(Groq(), reels, tmp_path, download=download, extract_audio=extract)
+    assert fetched == ["http://a/good", "http://a/bad", "http://v/old"]
+    assert set(out) == {"good", "old"}
+    assert "bad" in (tmp_path / "failed.md").read_text(encoding="utf-8")
+
+
+def test_transcription_fails_loudly_when_nothing_decodes(tmp_path):
+    import subprocess
+    import pytest
+    from integrations.radar import transcribe
+
+    def download(url, dest):
+        dest.write_bytes(b"x")
+        return dest
+
+    def extract(src, dest):
+        raise subprocess.CalledProcessError(1, "ffmpeg")
+
+    class Groq:
+        def transcribe(self, path):
+            return ""
+
+    with pytest.raises(RuntimeError):
+        transcribe.transcribe_top(Groq(), [{"shortCode": "a", "videoUrl": "v"}], tmp_path,
+                                  download=download, extract_audio=extract)

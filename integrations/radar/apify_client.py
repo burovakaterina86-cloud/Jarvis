@@ -28,10 +28,12 @@ class ApifyApiClient:
             "resultsLimit": results_limit,
             "onlyPostsNewerThan": newer_than,
         }
-        url = f"{self._base}?token={self._token}"
+        # Токен — в заголовке, не в адресе: адреса оседают в журналах прокси и ошибок.
         req = urllib.request.Request(
-            url, data=json.dumps(payload).encode("utf-8"), method="POST",
-            headers={"Content-Type": "application/json"},
+            self._base, data=json.dumps(payload).encode("utf-8"), method="POST",
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {self._token}",
+                     "User-Agent": "JARVIS-radar/1.0"},
         )
         with urllib.request.urlopen(req, timeout=120) as resp:
             return json.loads(resp.read().decode("utf-8"))
