@@ -23,9 +23,9 @@
      пространство: фон — мягкий градиент её §3 («чёрный → тёмный фиолетовый»),
      а не плоская заливка; угол даёт ощущение стены и угла помещения.
      §14 ДЕКОР: абстрактных кружков и случайных blobs здесь нет — они убраны. */
-  .canvas#slide { color: #F5F3F0;
-    background: linear-gradient(152deg, #111115 0%, #0D0D10 46%,
-      rgba(139,99,218,0.16) 100%), #0D0D10; }
+  .canvas#slide { color: #14151A;
+    background: linear-gradient(152deg, #F1F0FA 0%, #ECE9FA 46%,
+      rgba(139,99,218,0.16) 100%), #ECE9FA; }
   /* Направленный тёплый свет и мягкое фиолетовое отражение: два наклонных
      луча, а не пятна. Форма — полоса под углом, как свет из окна. */
   .light { position: absolute; inset: 0; z-index: 0; pointer-events: none;
@@ -39,7 +39,7 @@
               height: 351px; pointer-events: none;
               filter: blur(70px);
               background: linear-gradient(180deg, transparent 0%,
-                rgba(13,13,16,0.0) 30%, rgba(139,99,218,0.09) 100%); }
+                rgba(236,233,250,0.0) 30%, rgba(139,99,218,0.09) 100%); }
   /* Шапка её второго эталона: `02 / 09`, тонкая линия через слайд, короткая
      метка справа. Двухстрочного тезиса тут больше нет — он был «хаотично». */
   .header { position: relative; z-index: 2; display: flex; align-items: center;
@@ -47,24 +47,24 @@
   .header-count { font-size: 27px; line-height: 1.2;
                    letter-spacing: 0.04em; white-space: nowrap; }
   .header-num { color: #FF955E; }
-  .header-total { color: #C9C6C3; margin-left: 10px; }
-  .header-line { flex: 1; height: 1px; background: rgba(245,243,240,0.45); }
+  .header-total { color: #686775; margin-left: 10px; }
+  .header-line { flex: 1; height: 1px; background: rgba(20,21,26,0.45); }
   .header-label { font-weight: 600; font-size: 24px;
                    line-height: 1.3; letter-spacing: 0.18em; white-space: nowrap;
-                   text-transform: uppercase; color: #C9C6C3; }
+                   text-transform: uppercase; color: #686775; }
   /* §4: заголовок — важнейший элемент, занимает 30–50% площади слайда. */
   /* Короткий заголовок не висит вверху зарезервированной полосы, а стоит
      в её середине: иначе под одной строкой остаётся дыра на треть холста. */
-  .hero { position: relative; z-index: 2; margin-top: 28px; max-width: 78%;
+  .hero { position: relative; z-index: 2; margin-top: 28px; max-width: 434px;
            min-height: 405px; max-height: 675px;
            display: flex; flex-direction: column; justify-content: center;
-           font-size: 88px; line-height: 1.08;
-           letter-spacing: -0.01em; text-transform: uppercase; color: #F5F3F0;
+           font-size: 56px; line-height: 1.08;
+           letter-spacing: -0.01em; text-transform: uppercase; color: #14151A;
            margin-bottom: 14px; }
   .hero-line { display: block; }
   .hero .accent, .hero em { font-style: normal; color: #FF955E; }
   .lead { position: relative; z-index: 2; font-weight: 400;
-           font-size: 35px; line-height: 1.42; color: #F5F3F0;
+           font-size: 34px; line-height: 1.42; color: #14151A;
            margin-top: 14px; max-width: 944px; }
   /* Оранжевая отбивка под текстовой колонкой — держит низ колонки (её 5..9). */
   .rule-accent { position: relative; z-index: 2; width: 150px; height: 8px;
@@ -90,8 +90,8 @@
   /* §8 TYPE C: «одинаковые компактные блоки — тёмный фон, тонкая violet border,
      минималистичная line icon»; стрелки между ними оранжевые. */
   .step { flex: 1; text-align: center; padding: 14px 9px;
-           border-radius: 24px; background: #18171E;
-           border: 1px solid #8B63DA; box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45);
+           border-radius: 24px; background: #ECE9FA;
+           border: 1px solid #8B63DA; box-shadow: inset 0 2px 0 rgba(20,21,26,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(20,21,26,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45);
            display: flex; flex-direction: column; align-items: center; }
   .step-dot { width: 108px; height: 108px; border-radius: 50%;
                margin: 0 auto; background: #8B63DA; color: #F5F3F0;
@@ -101,10 +101,10 @@
   .step-icon { margin: 14px auto 9px; height: 81px; }
   .step-caption { font-family: 'Roboto Condensed', sans-serif;
                    font-weight: 700;
-                   font-size: 35px; line-height: 1.15; color: #F5F3F0;
+                   font-size: 35px; line-height: 1.15; color: #14151A;
                    min-height: 80px; }
   .step-note { font-size: 24px; line-height: 1.3; margin-top: 20px;
-                color: #C9C6C3; }
+                color: #686775; }
   /* Тело слайда занимает вертикаль от подзаголовка до нижней плашки: ряд
      растёт, пока не упрётся в её пропорцию из reference/3.webp — карточка
      не выше трети холста. Дальше лишнее уходит в отступы вокруг ряда. */
@@ -120,36 +120,36 @@
   .flow-card { flex: 1 1 0; min-width: 0; overflow-wrap: break-word;
                 display: flex; flex-direction: column; justify-content: center;
                 border-radius: 24px;
-                background: #18171E; border: 1px solid
+                background: #ECE9FA; border: 1px solid
                 #8B63DA; padding: 28px 14px;
-                box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45); }
+                box-shadow: inset 0 2px 0 rgba(20,21,26,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(20,21,26,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45); }
   .flow-card.accent { background: #8B63DA; border-color: #FF955E;
                        box-shadow: 0 0 64px rgba(139,99,218,0.55); }
   .flow-card.accent .flow-title, .flow-card.accent .flow-note { color: #F5F3F0; }
   /* Кегль подписи потока — базовый label: на четырёх карточках длинное слово
      («ВОЗВРАЩЁННОЕ») должно вставать в строку, а не ломаться переносом. */
   .flow-title { font-size: 27px; line-height: 1.15; margin-top: 18px;
-                 text-transform: uppercase; color: #F5F3F0; }
+                 text-transform: uppercase; color: #14151A; }
   .flow-note { font-size: 24px; line-height: 1.3; margin-top: 14px;
-                color: #C9C6C3; }
+                color: #686775; }
   /* G17: между карточками — рисованная дуга, а не типографская стрелка. */
   .flow-arrow { align-self: center; flex: 0 0 auto; color: #FF955E;
-                 width: 54px; height: 38px; }
+                 width: 32px; height: 38px; }
   .flow-arrow-svg { width: 100%; height: 100%;
                      filter: drop-shadow(0 0 12px rgba(255,149,94,0.45)); }
   .icon { filter: drop-shadow(0 0 14px rgba(139,99,218,0.55)); }
   .cards { flex: 1; display: grid; gap: 16px; grid-auto-rows: 1fr; }
-  .card { border-radius: 24px; background: #18171E;
+  .card { border-radius: 24px; background: #ECE9FA;
            border: 1px solid #8B63DA;
-           padding: 14px; box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45);
+           padding: 14px; box-shadow: inset 0 2px 0 rgba(20,21,26,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(20,21,26,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45);
            display: flex; flex-direction: column; justify-content: center; }
   .card.accent { background: #8B63DA; border-color: #FF955E;
                   box-shadow: 0 0 64px rgba(139,99,218,0.55); }
   .card.accent .card-title, .card.accent .card-note { color: #F5F3F0; }
   .card-title { font-size: 30px; line-height: 1.15; margin-top: 16px;
-                 text-transform: uppercase; color: #F5F3F0; }
+                 text-transform: uppercase; color: #14151A; }
   .card-note { font-size: 24px; line-height: 1.3; margin-top: 10px;
-                color: #C9C6C3; }
+                color: #686775; }
   /* G16: под карточками нет пояснений — ряд компактный, а не коробка на треть
      холста (её carousel-03: пять пустых плашек во весь экран). */
   .cards.compact { flex: 0 0 auto; grid-auto-rows: auto; }
@@ -157,6 +157,39 @@
                           padding: 9px 14px; }
   .cards.compact .card .icon { flex: 0 0 auto; }
   .cards.compact .card-title { margin-top: 0; }
+  /* §19 ФИНАЛЬНЫЙ СЛАЙД: «3–4 коротких пункта». Пункты идут цепочкой сверху
+     вниз, между ними — та же рисованная оранжевая стрелка, что и в её
+     горизонтальной цепочке. Сквозной линии нет: она читалась бы как
+     перечёркивание (её замечание 2026-09-22). */
+  .chain { flex: 0 0 auto; display: flex; flex-direction: column;
+            align-items: stretch; }
+  .chain-item { display: flex; align-items: center; gap: 14px;
+                 border-radius: 24px; background: #ECE9FA;
+                 border: 1px solid #8B63DA;
+                 padding: 9px 14px; box-shadow: inset 0 2px 0 rgba(20,21,26,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(20,21,26,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45); }
+  .chain-item .icon { flex: 0 0 auto; }
+  .chain-title { font-family: 'Roboto Condensed', sans-serif;
+                  font-weight: 700;
+                  font-size: 29px; line-height: 1.15;
+                  text-transform: uppercase; color: #14151A;
+                  overflow-wrap: break-word; }
+  .chain-arrow { flex: 0 0 auto; align-self: flex-start; color: #FF955E;
+                  margin-left: 54px;
+                  width: 32px;
+                  height: 40px; }
+  .chain-arrow-svg { width: 100%; height: 100%;
+                      filter: drop-shadow(0 0 12px rgba(255,149,94,0.45)); }
+  /* §20: «слишком много приложений → смартфон с набором приложений».
+     Плитки — её же line-иконки в её же плашке; ни одного чужого логотипа. */
+  /* Ширина задана числом: корпус телефона меряется по содержимому
+     (`width: max-content`), а сетка из долей внутри max-content схлопнулась бы
+     в ноль — как и любой `1fr` без опоры. */
+  .app-grid { width: 324px; display: grid; grid-template-columns:
+                 repeat(4, 1fr); gap: 14px; padding: 22px 20px; }
+  .app-tile { aspect-ratio: 1; display: flex; align-items: center;
+               justify-content: center; border-radius: 18px;
+               background: #ECE9FA;
+               border: 1px solid rgba(167,123,255,0.22); }
   /* §8 TYPE B: «Не использовать плоский screenshot, лежащий прямоугольником
      поверх фона. Screenshot должен быть встроен в физический объект». Поэтому
      её снимок всегда лежит внутри корпуса — телефона или экрана ноутбука,
@@ -171,13 +204,14 @@
                   background: linear-gradient(145deg, #17151A 0%,
                     #0D0D10 100%);
                   border: 1px solid rgba(245,243,240,0.12);
-                  box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45), 0 0 90px rgba(139,99,218,0.3); }
+                  box-shadow: inset 0 2px 0 rgba(20,21,26,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(20,21,26,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45), 0 0 90px rgba(139,99,218,0.3); }
   .device-screen { position: relative; overflow: hidden;
                     background: #0D0D10;
                     box-shadow: inset 0 0 0 1px rgba(245,243,240,0.1); }
   /* Снимок не растягивается под корпус — корпус обнимает снимок. Её решение
      «скрин это фактура, не раздувай мелкий текст» корпусом не отменяется. */
   .device-screen img { display: block; width: auto; height: auto;
+                        object-fit: contain;
                         max-width: 454px;
                         max-height: 459px; }
   /* Блик стекла — тонкая наклонная полоса, а не фигура (§14). */
@@ -199,7 +233,12 @@
   .device.phone .device-body { border-radius: 54px; padding: 14px;
                                 width: max-content; margin-left: auto; }
   .device.phone .device-screen { border-radius: 42px; }
-  .device.phone .device-screen img { max-width: 324px; }
+  /* Телефон вертикальный: под него потолок ноутбука не годится. Корпус встаёт
+     во всю правую половину и уходит за нижний край — её §8 TYPE B прямо
+     просит объект в перспективе, а не марку посреди пустого поля. */
+  .shot .device.phone .device-screen img { max-width: 432px;
+                                            max-height: 675px; }
+  .canvas.scene .shot.phone-shot { top: 378px; }
   .device-notch { position: absolute; top: 24px; left: 50%; width: 104px;
                    height: 20px; margin-left: -52px; border-radius: 999px;
                    background: #0D0D10; z-index: 2; }
@@ -220,54 +259,74 @@
                      scale(0.78); filter: brightness(1); }
   /* Одна карточка активна — оранжевая обводка (её §8 TYPE D). */
   .screen-card.live .device-body { border-color: #FF955E;
-                                    box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45), 0 0 70px rgba(255,149,94,0.45); }
+                                    box-shadow: inset 0 2px 0 rgba(20,21,26,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(20,21,26,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45), 0 0 70px rgba(255,149,94,0.45); }
   /* Стопка раскладывается по числу снимков: один — по центру сцены. */
   .screens.n1 .s1 { top: 20%; right: 6%; filter: brightness(1); }
   .screens.n2 .s1 { top: 0%; }
   .screens.n2 .s2 { top: 40%; }
   .canvas.screens-scene .hero, .canvas.screens-scene .lead { max-width: 46%; }
+  /* §8 TYPE A: человек занимает правые 40–55% кадра. Колонка портрета стоит
+     у правого края и её ширина задана числом, а не «половиной с полем»:
+     от неё же считается, сколько остаётся тексту. «Фото может уходить за
+     границу кадра» — поэтому по высоте портрет не ужимается. */
   .portrait { position: absolute; z-index: 1; right: 0; bottom: 0;
-               width: 540px; height: 1222px;
+               width: 562px; height: 1161px;
                display: flex; align-items: flex-end; justify-content: flex-end; }
-  .portrait-img { max-width: 100%; max-height: 100%; object-fit: contain;
-                   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%,
-                     #000 100%), linear-gradient(270deg, #000 0%, #000 62%, transparent 100%);
+  /* Кромка выреза узкая: она растворяет край в фоне, а не съедает треть
+     портрета (до таска 11 маска гасила всё левее 62% — фото читалось мелким). */
+  /* Кадр заполняет колонку целиком и уходит за нижний край — её §8 TYPE A
+     это прямо разрешает. `contain` оставлял сверху пустую треть, и портрет
+     читался мелким: именно это она и назвала («сделай фото масштабнее»). */
+  .portrait-img { width: 100%; height: 100%; object-fit: cover;
+                   object-position: 50% 6%;
+                   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%,
+                     #000 100%), linear-gradient(270deg, #000 0%, #000 82%,
+                     transparent 100%);
                    -webkit-mask-composite: source-in;
-                   mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 100%),
-                     linear-gradient(270deg, #000 0%, #000 62%, transparent 100%);
+                   mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 100%),
+                     linear-gradient(270deg, #000 0%, #000 82%, transparent 100%);
                    mask-composite: intersect; }
+  /* Текст и плашка живут в своей колонке: портрет им не сосед, а стена.
+     Не хватает места — ужимается колонка текста, а не человек (таск 11 п.1). */
+  .canvas.portrait-scene .lead, .canvas.portrait-scene .summary,
+  .canvas.portrait-scene .stage, .canvas.portrait-scene .footer,
+  .canvas.portrait-scene .rule-accent { max-width: 450px; }
   /* Плашка-сноска её слайда 04: оранжевый кружок `!`, вертикальная черта,
      первая строка белая, вторая сиреневая. */
   .summary { position: relative; z-index: 2; display: flex; align-items: center;
               gap: 14px; border-radius: 24px;
-              background: #18171E;
+              background: #ECE9FA;
               border: 1px solid #8B63DA;
               padding: 14px 28px; margin: 28px 0 14px;
-              box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45); }
+              box-shadow: inset 0 2px 0 rgba(20,21,26,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(20,21,26,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45); }
+  /* §13 допускает тонкую обводку, §8 TYPE D — оранжевый outline на активном
+     блоке: плашка-вывод может звучать громче остальных (таск 11 п.8). */
+  .summary.accent { border-color: #FF955E;
+                     box-shadow: inset 0 2px 0 rgba(20,21,26,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(20,21,26,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45), 0 0 60px rgba(255,149,94,0.3); }
   .summary-mark { flex: 0 0 auto; width: 99px; height: 99px;
                    border-radius: 50%; border: 2px solid #FF955E;
                    color: #FF955E; font-size: 33px;
                    line-height: 95px; text-align: center; }
   .summary-divider { flex: 0 0 auto; width: 2px;
-                      height: 99px; background: rgba(245,243,240,0.22); }
+                      height: 99px; background: rgba(20,21,26,0.22); }
   .summary-line { font-weight: 400; font-size: 31px;
-                   line-height: 1.45; color: #F5F3F0; }
+                   line-height: 1.45; color: #14151A; }
   .summary-line.accent { font-weight: 600;
-                          color: #C2A5FF; }
+                          color: #8B63DA; }
   .footer { position: relative; z-index: 2; display: flex; align-items: flex-end;
              justify-content: space-between; gap: 28px; min-height: 24px; }
   .footer-thesis { font-weight: 600; font-size: 24px;
                     line-height: 1.5; letter-spacing: 0.16em; text-transform: uppercase;
-                    color: #C9C6C3; }
+                    color: #686775; }
   /* Рукописные пометки: оранжевые, под наклоном, с рисованной стрелкой
      к тому, что комментируют. Их две-три на слайд (её слайды 5..9). */
   .hand-note { position: absolute; z-index: 4; display: flex; align-items: flex-start;
                 width: 340px;
                 font-family: 'Marck Script', cursive;
-                font-size: 44px; line-height: 1.15; color: #FF955E; }
+                font-size: 28px; line-height: 1.15; color: #FF955E; }
   .hand-text { display: block; }
-  .hand-arrow { flex: 0 0 auto; width: 53px;
-                 height: 70px; }
+  .hand-arrow { flex: 0 0 auto; width: 34px;
+                 height: 45px; }
   .at-top-right { top: 162px; right: 28px; justify-content: flex-end; }
   .at-top-right .hand-text { transform: rotate(-7deg); }
   .at-top-right .hand-arrow { order: 2; margin-top: -8px; transform: scaleX(-1); }
@@ -277,6 +336,13 @@
   .at-mid-right { top: 634px; right: 28px; justify-content: flex-end; }
   .at-mid-right .hand-text { transform: rotate(-8deg); }
   .at-mid-right .hand-arrow { order: 2; margin-top: -6px; transform: scaleX(-1); }
+  /* На обложке справа стоит человек: пометка над его лицом нечитаема. Уводим
+     её в свободную левую колонку под заголовком — там §18 и просит «минимум
+     мелкого текста», а места ровно столько, сколько нужно одной строке. */
+  .canvas.cover-scene .at-top-right { top: 675px; right: auto;
+                                       left: 68px;
+                                       justify-content: flex-start; }
+  .canvas.cover-scene .at-top-right .hand-arrow { transform: none; }
   .at-top-left { top: 162px; left: 28px; }
   .at-top-left .hand-text { transform: rotate(-5deg); }
   .at-top-left .hand-arrow { order: 2; margin-top: 4px; }
@@ -284,18 +350,18 @@
 </style>
 </head>
 <body>
-<div class="canvas screens-scene bottom-note type-d" id="slide" data-composition="D">
+<div class="canvas screens-scene type-d" id="slide" data-composition="D">
   <div class="light"></div>
   <div class="surface"></div>
   
   
-  <div class="screens n2"><div class="screen-card s1"><div class="device laptop"><div class="device-body"><div class="device-screen"><img class="screen-img" src="files-list.png" alt="скрин владелицы" style="filter: blur(10px);"><div class="device-glare"></div></div><div class="device-hinge"></div></div><div class="device-base"></div></div></div><div class="screen-card s2"><div class="device laptop"><div class="device-body"><div class="device-screen"><img class="screen-img" src="files-list.png" alt="скрин владелицы" style="filter: blur(10px);"><div class="device-glare"></div></div><div class="device-hinge"></div></div><div class="device-base"></div></div></div></div>
-  <div class="header"><div class="header-count headline"><span class="header-num">02</span><span class="header-total">/ 09</span></div><div class="header-line"></div><div class="header-label">ПРИЗНАК 1</div></div>
+  <div class="screens n2"><div class="screen-card s1"><div class="device laptop"><div class="device-body"><div class="device-screen"><img class="screen-img" src="files-list.png" alt="скрин владелицы" style="filter: blur(10px);"><div class="device-glare"></div></div><div class="device-hinge"></div></div><div class="device-base"></div></div></div><div class="screen-card s2"><div class="device phone"><div class="device-body"><div class="device-screen"><img class="screen-img" src="files-list.png" alt="скрин владелицы" style="filter: blur(10px);"><div class="device-glare"></div></div><div class="device-notch"></div></div></div></div></div>
+  <div class="header"><div class="header-count headline"><span class="header-num">02</span><span class="header-total">/ 09</span></div><div class="header-line"></div><div class="header-label">Признак 1</div></div>
   <div class="hero headline fill"><div class="hero-line">1. У тебя куча</div><div class="hero-line"><span class="accent">сохранённого</span></div></div>
-  <p class="lead">Промты.<br>Гайды.<br>Подборки сервисов.<br>Полезные Reels.<br>Но когда нужно сделать<br>конкретную задачу —<br>ты снова начинаешь<br>искать,<br>что использовать<br>и с чего начать.</p>
+  <p class="lead">Промты. Гайды. Подборки сервисов. Полезные Reels.<br>Но когда нужно сделать конкретную задачу<br>— ты снова начинаешь искать, что<br>использовать и с чего начать.</p>
   <div class="rule-accent"></div>
   
-  <div class="hand-note at-bottom-left"><span class="hand-text">ясности мало</span><svg class="hand-arrow" viewBox="0 0 64 86" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M54 6C28 16 10 36 14 68"/><path d="M5 55l9 15 15-8"/></svg></div>
+  <div class="hand-note at-top-right"><span class="hand-text">ясности мало</span><svg class="hand-arrow" viewBox="0 0 64 86" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M54 6C28 16 10 36 14 68"/><path d="M5 55l9 15 15-8"/></svg></div>
   
   <div class="footer">
     <div class="footer-thesis"></div>

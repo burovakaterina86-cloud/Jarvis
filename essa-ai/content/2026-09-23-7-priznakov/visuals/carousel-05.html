@@ -55,16 +55,16 @@
   /* §4: заголовок — важнейший элемент, занимает 30–50% площади слайда. */
   /* Короткий заголовок не висит вверху зарезервированной полосы, а стоит
      в её середине: иначе под одной строкой остаётся дыра на треть холста. */
-  .hero { position: relative; z-index: 2; margin-top: 28px; max-width: 78%;
+  .hero { position: relative; z-index: 2; margin-top: 28px; max-width: 434px;
            min-height: 405px; max-height: 675px;
            display: flex; flex-direction: column; justify-content: center;
-           font-size: 88px; line-height: 1.08;
+           font-size: 56px; line-height: 1.08;
            letter-spacing: -0.01em; text-transform: uppercase; color: #F5F3F0;
            margin-bottom: 14px; }
   .hero-line { display: block; }
   .hero .accent, .hero em { font-style: normal; color: #FF955E; }
   .lead { position: relative; z-index: 2; font-weight: 400;
-           font-size: 35px; line-height: 1.42; color: #F5F3F0;
+           font-size: 34px; line-height: 1.42; color: #F5F3F0;
            margin-top: 14px; max-width: 944px; }
   /* Оранжевая отбивка под текстовой колонкой — держит низ колонки (её 5..9). */
   .rule-accent { position: relative; z-index: 2; width: 150px; height: 8px;
@@ -134,7 +134,7 @@
                 color: #C9C6C3; }
   /* G17: между карточками — рисованная дуга, а не типографская стрелка. */
   .flow-arrow { align-self: center; flex: 0 0 auto; color: #FF955E;
-                 width: 54px; height: 38px; }
+                 width: 32px; height: 38px; }
   .flow-arrow-svg { width: 100%; height: 100%;
                      filter: drop-shadow(0 0 12px rgba(255,149,94,0.45)); }
   .icon { filter: drop-shadow(0 0 14px rgba(139,99,218,0.55)); }
@@ -157,6 +157,39 @@
                           padding: 9px 14px; }
   .cards.compact .card .icon { flex: 0 0 auto; }
   .cards.compact .card-title { margin-top: 0; }
+  /* §19 ФИНАЛЬНЫЙ СЛАЙД: «3–4 коротких пункта». Пункты идут цепочкой сверху
+     вниз, между ними — та же рисованная оранжевая стрелка, что и в её
+     горизонтальной цепочке. Сквозной линии нет: она читалась бы как
+     перечёркивание (её замечание 2026-09-22). */
+  .chain { flex: 0 0 auto; display: flex; flex-direction: column;
+            align-items: stretch; }
+  .chain-item { display: flex; align-items: center; gap: 14px;
+                 border-radius: 24px; background: #18171E;
+                 border: 1px solid #8B63DA;
+                 padding: 9px 14px; box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45); }
+  .chain-item .icon { flex: 0 0 auto; }
+  .chain-title { font-family: 'Roboto Condensed', sans-serif;
+                  font-weight: 700;
+                  font-size: 29px; line-height: 1.15;
+                  text-transform: uppercase; color: #F5F3F0;
+                  overflow-wrap: break-word; }
+  .chain-arrow { flex: 0 0 auto; align-self: flex-start; color: #FF955E;
+                  margin-left: 54px;
+                  width: 32px;
+                  height: 40px; }
+  .chain-arrow-svg { width: 100%; height: 100%;
+                      filter: drop-shadow(0 0 12px rgba(255,149,94,0.45)); }
+  /* §20: «слишком много приложений → смартфон с набором приложений».
+     Плитки — её же line-иконки в её же плашке; ни одного чужого логотипа. */
+  /* Ширина задана числом: корпус телефона меряется по содержимому
+     (`width: max-content`), а сетка из долей внутри max-content схлопнулась бы
+     в ноль — как и любой `1fr` без опоры. */
+  .app-grid { width: 324px; display: grid; grid-template-columns:
+                 repeat(4, 1fr); gap: 14px; padding: 22px 20px; }
+  .app-tile { aspect-ratio: 1; display: flex; align-items: center;
+               justify-content: center; border-radius: 18px;
+               background: #18171E;
+               border: 1px solid rgba(167,123,255,0.22); }
   /* §8 TYPE B: «Не использовать плоский screenshot, лежащий прямоугольником
      поверх фона. Screenshot должен быть встроен в физический объект». Поэтому
      её снимок всегда лежит внутри корпуса — телефона или экрана ноутбука,
@@ -178,6 +211,7 @@
   /* Снимок не растягивается под корпус — корпус обнимает снимок. Её решение
      «скрин это фактура, не раздувай мелкий текст» корпусом не отменяется. */
   .device-screen img { display: block; width: auto; height: auto;
+                        object-fit: contain;
                         max-width: 454px;
                         max-height: 459px; }
   /* Блик стекла — тонкая наклонная полоса, а не фигура (§14). */
@@ -199,7 +233,12 @@
   .device.phone .device-body { border-radius: 54px; padding: 14px;
                                 width: max-content; margin-left: auto; }
   .device.phone .device-screen { border-radius: 42px; }
-  .device.phone .device-screen img { max-width: 324px; }
+  /* Телефон вертикальный: под него потолок ноутбука не годится. Корпус встаёт
+     во всю правую половину и уходит за нижний край — её §8 TYPE B прямо
+     просит объект в перспективе, а не марку посреди пустого поля. */
+  .shot .device.phone .device-screen img { max-width: 432px;
+                                            max-height: 675px; }
+  .canvas.scene .shot.phone-shot { top: 378px; }
   .device-notch { position: absolute; top: 24px; left: 50%; width: 104px;
                    height: 20px; margin-left: -52px; border-radius: 999px;
                    background: #0D0D10; z-index: 2; }
@@ -226,16 +265,32 @@
   .screens.n2 .s1 { top: 0%; }
   .screens.n2 .s2 { top: 40%; }
   .canvas.screens-scene .hero, .canvas.screens-scene .lead { max-width: 46%; }
+  /* §8 TYPE A: человек занимает правые 40–55% кадра. Колонка портрета стоит
+     у правого края и её ширина задана числом, а не «половиной с полем»:
+     от неё же считается, сколько остаётся тексту. «Фото может уходить за
+     границу кадра» — поэтому по высоте портрет не ужимается. */
   .portrait { position: absolute; z-index: 1; right: 0; bottom: 0;
-               width: 540px; height: 1222px;
+               width: 562px; height: 1161px;
                display: flex; align-items: flex-end; justify-content: flex-end; }
-  .portrait-img { max-width: 100%; max-height: 100%; object-fit: contain;
-                   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%,
-                     #000 100%), linear-gradient(270deg, #000 0%, #000 62%, transparent 100%);
+  /* Кромка выреза узкая: она растворяет край в фоне, а не съедает треть
+     портрета (до таска 11 маска гасила всё левее 62% — фото читалось мелким). */
+  /* Кадр заполняет колонку целиком и уходит за нижний край — её §8 TYPE A
+     это прямо разрешает. `contain` оставлял сверху пустую треть, и портрет
+     читался мелким: именно это она и назвала («сделай фото масштабнее»). */
+  .portrait-img { width: 100%; height: 100%; object-fit: cover;
+                   object-position: 50% 6%;
+                   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%,
+                     #000 100%), linear-gradient(270deg, #000 0%, #000 82%,
+                     transparent 100%);
                    -webkit-mask-composite: source-in;
-                   mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 100%),
-                     linear-gradient(270deg, #000 0%, #000 62%, transparent 100%);
+                   mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 100%),
+                     linear-gradient(270deg, #000 0%, #000 82%, transparent 100%);
                    mask-composite: intersect; }
+  /* Текст и плашка живут в своей колонке: портрет им не сосед, а стена.
+     Не хватает места — ужимается колонка текста, а не человек (таск 11 п.1). */
+  .canvas.portrait-scene .lead, .canvas.portrait-scene .summary,
+  .canvas.portrait-scene .stage, .canvas.portrait-scene .footer,
+  .canvas.portrait-scene .rule-accent { max-width: 450px; }
   /* Плашка-сноска её слайда 04: оранжевый кружок `!`, вертикальная черта,
      первая строка белая, вторая сиреневая. */
   .summary { position: relative; z-index: 2; display: flex; align-items: center;
@@ -244,6 +299,10 @@
               border: 1px solid #8B63DA;
               padding: 14px 28px; margin: 28px 0 14px;
               box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45); }
+  /* §13 допускает тонкую обводку, §8 TYPE D — оранжевый outline на активном
+     блоке: плашка-вывод может звучать громче остальных (таск 11 п.8). */
+  .summary.accent { border-color: #FF955E;
+                     box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45), 0 0 60px rgba(255,149,94,0.3); }
   .summary-mark { flex: 0 0 auto; width: 99px; height: 99px;
                    border-radius: 50%; border: 2px solid #FF955E;
                    color: #FF955E; font-size: 33px;
@@ -264,10 +323,10 @@
   .hand-note { position: absolute; z-index: 4; display: flex; align-items: flex-start;
                 width: 340px;
                 font-family: 'Marck Script', cursive;
-                font-size: 44px; line-height: 1.15; color: #FF955E; }
+                font-size: 28px; line-height: 1.15; color: #FF955E; }
   .hand-text { display: block; }
-  .hand-arrow { flex: 0 0 auto; width: 53px;
-                 height: 70px; }
+  .hand-arrow { flex: 0 0 auto; width: 34px;
+                 height: 45px; }
   .at-top-right { top: 162px; right: 28px; justify-content: flex-end; }
   .at-top-right .hand-text { transform: rotate(-7deg); }
   .at-top-right .hand-arrow { order: 2; margin-top: -8px; transform: scaleX(-1); }
@@ -277,6 +336,13 @@
   .at-mid-right { top: 634px; right: 28px; justify-content: flex-end; }
   .at-mid-right .hand-text { transform: rotate(-8deg); }
   .at-mid-right .hand-arrow { order: 2; margin-top: -6px; transform: scaleX(-1); }
+  /* На обложке справа стоит человек: пометка над его лицом нечитаема. Уводим
+     её в свободную левую колонку под заголовком — там §18 и просит «минимум
+     мелкого текста», а места ровно столько, сколько нужно одной строке. */
+  .canvas.cover-scene .at-top-right { top: 675px; right: auto;
+                                       left: 68px;
+                                       justify-content: flex-start; }
+  .canvas.cover-scene .at-top-right .hand-arrow { transform: none; }
   .at-top-left { top: 162px; left: 28px; }
   .at-top-left .hand-text { transform: rotate(-5deg); }
   .at-top-left .hand-arrow { order: 2; margin-top: 4px; }
@@ -284,17 +350,17 @@
 </style>
 </head>
 <body>
-<div class="canvas bottom-note type-d" id="slide" data-composition="D">
+<div class="canvas screens-scene bottom-note type-d" id="slide" data-composition="D">
   <div class="light"></div>
   <div class="surface"></div>
   
   
-  
-  <div class="header"><div class="header-count headline"><span class="header-num">05</span><span class="header-total">/ 09</span></div><div class="header-line"></div><div class="header-label">ПРИЗНАК 4</div></div>
-  <div class="hero headline"><div class="hero-line">4. Ты постоянно</div><div class="hero-line">ищешь “<span class="accent">что-нибудь</span></div><div class="hero-line"><span class="accent">получше</span>“</div></div>
-  <p class="lead">Может, нужна другая нейросеть?<br>И каждый новый инструмент<br>снова приходится изучать.</p>
+  <div class="screens n3"><div class="screen-card s1"><div class="device laptop"><div class="device-body"><div class="device-screen"><img class="screen-img" src="project-menu.png" alt="скрин владелицы" style="filter: blur(10px);"><div class="device-glare"></div></div><div class="device-hinge"></div></div><div class="device-base"></div></div></div><div class="screen-card s2"><div class="device phone"><div class="device-body"><div class="device-screen"><img class="screen-img" src="project-menu.png" alt="скрин владелицы" style="filter: blur(10px);"><div class="device-glare"></div></div><div class="device-notch"></div></div></div></div><div class="screen-card s3"><div class="device phone"><div class="device-body"><div class="device-screen"><img class="screen-img" src="project-menu.png" alt="скрин владелицы" style="filter: blur(10px);"><div class="device-glare"></div></div><div class="device-notch"></div></div></div></div></div>
+  <div class="header"><div class="header-count headline"><span class="header-num">05</span><span class="header-total">/ 09</span></div><div class="header-line"></div><div class="header-label">Признак 4</div></div>
+  <div class="hero headline fill"><div class="hero-line">4. Ты постоянно</div><div class="hero-line">ищешь</div><div class="hero-line">«что-нибудь</div><div class="hero-line">получше»</div></div>
+  <p class="lead">Может, нужна другая нейросеть?<br>Другой сервис? Другой промт? Другой агент?<br>И каждый новый инструмент снова приходится изучать.</p>
   <div class="rule-accent"></div>
-  <div class="stage"><div class="cards compact" style="grid-template-columns: repeat(2, 1fr);"><div class="card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/></svg><div class="card-title headline">Другой сервис?</div></div><div class="card accent"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#F5F3F0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M9 12h6M9 16h6"/></svg><div class="card-title headline">Другой промт?</div></div><div class="card"><svg class="icon" viewBox="0 0 24 24" width="81" height="81" fill="none" stroke="#C2A5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/></svg><div class="card-title headline">Другой агент?</div></div></div></div>
+  
   <div class="hand-note at-top-right"><span class="hand-text">поиск не решает</span><svg class="hand-arrow" viewBox="0 0 64 86" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M54 6C28 16 10 36 14 68"/><path d="M5 55l9 15 15-8"/></svg></div><div class="hand-note at-bottom-left"><span class="hand-text">ещё один сервис?</span><svg class="hand-arrow" viewBox="0 0 64 86" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M54 6C28 16 10 36 14 68"/><path d="M5 55l9 15 15-8"/></svg></div>
   
   <div class="footer">

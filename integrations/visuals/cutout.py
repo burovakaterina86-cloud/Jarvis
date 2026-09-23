@@ -189,6 +189,91 @@ def make_cutout(src, dst) -> Path | None:
     return dst
 
 
+#: Второй её портрет (`katerina-portrait-2.jpg`, прислан 2026-09-23) снят на
+#: тёмной стене, а не на светлой. Заливка от краёв по светлым пикселям на нём
+#: не работает: фон ниже порога, и вырез не начинается. Зато тёмное здесь и не
+#: нужно вырезать — слайд сам тёмный. Поэтому альфа берётся из светлоты:
+#: освещённые лицо, руки и пиджак остаются, тёмная стена растворяется в фоне.
+#: Порог снят с самого кадра: стена 40–62, ткань пиджака в свету 95–140.
+DARK_KEEP_FROM = 52
+DARK_KEEP_FULL = 104
+
+_DARK_JS = r"""
+async ({dataUrl, from, full, passes, radius}) => {
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; });
+  const w = img.width, h = img.height, n = w * h;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const im = ctx.getImageData(0, 0, w, h);
+  const d = im.data;
+
+  // 1. альфа по светлоте: тёмное уходит в фон, освещённое остаётся
+  let alpha = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const l = (d[4*i] + d[4*i+1] + d[4*i+2]) / 3;
+    alpha[i] = 255 * Math.max(0, Math.min(1, (l - from) / (full - from)));
+  }
+
+  // 2. то же размытие, что и у светлого выреза: край растворяется
+  const blur = src => {
+    const tmp = new Float32Array(n), out = new Float32Array(n);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let s = 0, k = 0;
+      for (let dx = -radius; dx <= radius; dx++) {
+        const xx = x + dx; if (xx < 0 || xx >= w) continue;
+        s += src[y*w + xx]; k++;
+      }
+      tmp[y*w + x] = s / k;
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let s = 0, k = 0;
+      for (let dy = -radius; dy <= radius; dy++) {
+        const yy = y + dy; if (yy < 0 || yy >= h) continue;
+        s += tmp[yy*w + x]; k++;
+      }
+      out[y*w + x] = s / k;
+    }
+    return out;
+  };
+  for (let p = 0; p < passes; p++) alpha = blur(alpha);
+
+  for (let i = 0; i < n; i++) d[4*i+3] = Math.round(Math.max(0, Math.min(255, alpha[i])));
+  ctx.putImageData(im, 0, 0);
+  return c.toDataURL('image/png');
+}
+"""
+
+
+def make_dark_fade(src, dst) -> Path | None:
+    """Портрет с тёмного фона: стена растворяется, освещённый человек остаётся.
+
+    Прямоугольника за краем не остаётся — альфа плавная, без границы.
+    Браузера нет — честно `None`, а не чужеродный прямоугольник.
+    Исходник не трогается: результат ложится отдельным PNG рядом.
+    """
+    src, dst = Path(src), Path(dst)
+    if not src.is_file():
+        return None
+    data_url = _in_browser(
+        _DARK_JS,
+        {
+            "dataUrl": _data_url(src),
+            "from": DARK_KEEP_FROM,
+            "full": DARK_KEEP_FULL,
+            "passes": FEATHER_PASSES,
+            "radius": FEATHER_RADIUS,
+        },
+    )
+    if not data_url:
+        return None
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_bytes(base64.b64decode(data_url.split(",", 1)[1]))
+    return dst
+
+
 def alpha_probe(path) -> dict | None:
     """Прозрачность в углах и в центре уже сохранённого файла."""
     path = Path(path)

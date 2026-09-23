@@ -94,8 +94,9 @@ DEFAULT_STEP_ICON = "dot"
 #: раньше широких.
 ICON_HINTS = (
     ("play", ("монтаж", "видео", "рилс", "reels", "ролик", "съёмк", "съемк")),
-    ("image", ("дизайн", "обложк", "визуал", "фото", "картинк", "изображ", "баннер")),
-    ("doc", ("текст", "пост", "копирайт", "сценар", "промт", "гайд", "докумен",
+    ("image", ("дизайн", "обложк", "визуал", "фото", "картинк", "изображ", "баннер",
+               "оформл", "макет", "вёрстк", "верстк")),
+    ("doc", ("текст", "пост", "копирайт", "промт", "гайд", "докумен",
              "файл", "стать", "подпис", "письм", "конспект")),
     ("check", ("провер", "контрол", "результат", "готов", "качеств", "сама")),
     ("clock", ("врем", "час", "минут", "срок", "сколько", "долго", "быстре")),
@@ -104,10 +105,11 @@ ICON_HINTS = (
     ("gear", ("процесс", "систем", "настрой", "автоматиз", "инструмент",
               "механизм", "шаблон", "повторя")),
     ("chart", ("цифр", "статист", "аналит", "охват", "рост", "метрик", "smm",
-               "соцсет", "блог", "аккаунт", "отчёт", "отчет")),
+               "соцсет", "блог", "аккаунт", "отчёт", "отчет", "публик", "выклад")),
     ("flask", ("тест", "эксперимент", "пробу", "гипотез")),
     ("bolt", ("энерг", "сразу", "мгновен", "разгон", "ускор")),
-    ("map", ("задач", "план", "шаг", "маршрут", "воронк", "путь", "карт")),
+    ("map", ("задач", "план", "шаг", "маршрут", "воронк", "путь", "карт",
+             "сценар", "раскадров")),
     ("question", ("вопрос", "зачем", "почему", "что-нибудь", "непонят")),
     ("spark", ("нейросет", "нейронк", "ai", "идея", "идеи", "мастерск", "новое")),
 )
@@ -127,6 +129,42 @@ def pick_icon(caption: str) -> str:
     return DEFAULT_STEP_ICON
 
 
+def _next_icon(caption: str, taken: set) -> str:
+    """Следующая по смыслу иконка, которой в этом ряду ещё нет."""
+    text = str(caption or "").casefold().replace("ё", "е")
+    for name, keys in ICON_HINTS:
+        if name in taken:
+            continue
+        if any(key.replace("ё", "е") in text for key in keys):
+            return name
+    for name in ICONS:
+        if name not in taken and name != DEFAULT_STEP_ICON:
+            return name
+    return DEFAULT_STEP_ICON
+
+
+def pick_icons(captions, taken=()) -> list:
+    """Иконки для ряда блоков: по смыслу подписи и **без повторов** (таск 11 п.6).
+
+    Её §8 TYPE C — цепочка одинаковых блоков, различаются они иконкой. Две
+    одинаковые иконки из пяти (её рендер carousel-06) убивают весь смысл ряда,
+    поэтому совпадение разводится: сначала следующей подходящей по смыслу
+    подписи, потом просто другой иконкой из её же словаря `ICONS`.
+    Ничего нового не рисуется.
+
+    `taken` — имена, уже занятые данными слайда (`icon` задан явно).
+    """
+    used = {str(name) for name in taken if name}
+    out = []
+    for caption in captions:
+        name = pick_icon(caption)
+        if name in used:
+            name = _next_icon(caption, used)
+        used.add(name)
+        out.append(name)
+    return out
+
+
 #: Стрелка между карточками — её знак из эталонных слайдов. Служит и
 #: разделителем в тексте слайда (`auto_blocks`).
 ARROW = "→"
@@ -139,6 +177,15 @@ FLOW_ARROW = (
     'stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">'
     '<path d="M4 28C13 8 31 5 43 19"/>'
     '<path d="M31 15L43 19L41 6"/></svg>'
+)
+
+#: Та же дуга, но сверху вниз — для вертикальной цепочки финального слайда
+#: (таск 11 п.7: «четыре пункта цепочкой сверху вниз со стрелками»).
+CHAIN_ARROW = (
+    '<svg class="chain-arrow-svg" viewBox="0 0 34 48" fill="none" stroke="currentColor" '
+    'stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M8 4C28 14 30 30 16 44"/>'
+    '<path d="M20 31L16 44L29 41"/></svg>'
 )
 
 #: Рисованная стрелка от рукописной пометки к тому, что она комментирует
@@ -157,6 +204,17 @@ CONDENSED_CAPS_ADVANCE = 0.59
 
 #: Нижняя граница этого кегля: мельче подпись на карточке уже не читается.
 MIN_FLOW_TITLE = 18
+
+#: Нижняя граница кегля заголовка обложки. Ниже её §4 («заголовок — важнейший
+#: элемент», 30–50% площади) перестаёт выполняться: строка садится до размера
+#: второго уровня, и обложка теряет силу.
+MIN_HERO_SIZE = 56
+
+#: Запас на межбуквенный интервал и знаки шире средней ширины (цифры, «Ш»,
+#: запятые с пробелом). `CONDENSED_CAPS_ADVANCE` — средняя ширина знака, а
+#: строка почти никогда не средняя: без запаса самая длинная строка обложки
+#: перескакивает на следующую и её §18 ломается седьмой строкой.
+HERO_FIT_SAFETY = 1.06
 
 #: Ник в шапке слайда — из её вёрстки.
 NICKNAME = "@studio_essa_ai"
@@ -216,7 +274,8 @@ STYLE_SURFACES = {
 
 
 def pick_composition(
-    photo=None, screenshot=None, screens=None, steps=None, flow=None, cards=None
+    photo=None, screenshot=None, screens=None, steps=None, flow=None, cards=None,
+    apps=None, chain=None,
 ) -> str:
     """Тип композиции по тому, что несёт слайд (§8, §17).
 
@@ -230,9 +289,11 @@ def pick_composition(
     many = screens if isinstance(screens, (list, tuple)) else ([screens] if screens else [])
     if photo:
         return "A"
-    if screenshot or len(many) == 1:
+    # Корпус телефона с сеткой приложений — такой же объект её §8 TYPE B,
+    # как и встроенный скрин: на холсте стоит устройство, а не типографика.
+    if screenshot or apps or len(many) == 1:
         return "B"
-    if steps or flow:
+    if steps or flow or chain:
         return "C"
     if len(many) > 1 or cards:
         return "D"
@@ -512,12 +573,16 @@ def _steps_html(steps: list, icon_size: int, stroke: str) -> str:
     Соединение — короткие отрезки *между* кружками (G12). Сквозной линии нет:
     прежняя проходила сквозь цифры и читалась как перечёркивание.
     """
+    auto = pick_icons(
+        [s.get("caption", "") for s in steps],
+        taken=[s.get("icon") for s in steps],
+    )
     cells = []
     for i, step in enumerate(steps, start=1):
         if i > 1:
             cells.append('<div class="step-link"></div>')
         icon = _icon(step.get("icon", ""), icon_size, stroke) or _icon(
-            pick_icon(step.get("caption", "")), icon_size, stroke
+            auto[i - 1], icon_size, stroke
         )
         note = step.get("note", "")
         cells.append(
@@ -533,6 +598,10 @@ def _steps_html(steps: list, icon_size: int, stroke: str) -> str:
 
 def _flow_html(flow: list, icon_size: int, stroke: str, accent_stroke: str) -> str:
     """Поток карточек со стрелками; последняя залита акцентом."""
+    auto = pick_icons(
+        [c.get("title", "") for c in flow],
+        taken=[c.get("icon") for c in flow],
+    )
     parts = []
     last = len(flow) - 1
     for i, card in enumerate(flow):
@@ -541,7 +610,7 @@ def _flow_html(flow: list, icon_size: int, stroke: str, accent_stroke: str) -> s
         accent = " accent" if i == last and card.get("accent", True) else ""
         pen = accent_stroke if accent else stroke
         icon = _icon(card.get("icon", ""), icon_size, pen) or _icon(
-            pick_icon(card.get("title", "")), icon_size, pen
+            auto[i], icon_size, pen
         )
         note = card.get("note", "")
         parts.append(
@@ -582,6 +651,49 @@ def _cards_html(cards: list, icon_size: int, stroke: str, accent_stroke: str) ->
         + "".join(cells)
         + "</div>"
     )
+
+
+def _chain_html(chain: list, icon_size: int, stroke: str) -> str:
+    """Вертикальная цепочка со стрелками (таск 11 п.7).
+
+    Её §19: финальный слайд — «3–4 коротких пункта». Пункты в нём не строки
+    текста, а шаги, идущие сверху вниз: между блоками оранжевая стрелка
+    её же рисунка. Перечёркивания нет — стрелка стоит **между** блоками,
+    как отрезки горизонтальной цепочки (G12).
+    """
+    items = [c if isinstance(c, dict) else {"title": c} for c in chain]
+    auto = pick_icons(
+        [i.get("title", "") for i in items],
+        taken=[i.get("icon") for i in items],
+    )
+    parts = []
+    for i, item in enumerate(items):
+        if i:
+            parts.append(f'<div class="chain-arrow">{CHAIN_ARROW}</div>')
+        icon = _icon(item.get("icon", ""), icon_size, stroke) or _icon(
+            auto[i], icon_size, stroke
+        )
+        parts.append(
+            f'<div class="chain-item">{icon}'
+            f'<div class="chain-title">{_t(item.get("title", ""))}</div></div>'
+        )
+    return '<div class="chain">' + "".join(parts) + "</div>"
+
+
+def _apps_html(count: int, icon_size: int, stroke: str) -> str:
+    """Сетка плиток приложений внутри корпуса телефона (таск 11 п.9).
+
+    Её §20: «слишком много приложений → смартфон с набором приложений».
+    Плитка — блок её же плашки с одной line-иконкой из `ICONS`; ни одного
+    чужого логотипа, ни одного сгенерированного изображения, ни одной
+    подписи. Смысл кадра — «их много», а не «вот эти конкретные».
+    """
+    names = list(ICONS)
+    tiles = "".join(
+        f'<div class="app-tile">{_icon(names[i % len(names)], icon_size, stroke)}</div>'
+        for i in range(max(0, int(count)))
+    )
+    return f'<div class="app-grid">{tiles}</div>' if tiles else ""
 
 
 #: Правая сцена из её скринов (G18, `reference/5.webp`): один-три снимка лежат
@@ -662,13 +774,18 @@ def build_carousel_slide(
     steps: list = None,
     flow: list = None,
     cards: list = None,
+    chain: list = None,
     summary: str = "",
+    summary_accent: bool = False,
     handwritten: str = "",
     photo=None,
+    portrait_width: float = 0,
     screenshot=None,
     screens=None,
+    apps=0,
     device: str = "",
     composition: str = "",
+    header: bool = True,
     notes: list = None,
 ) -> str:
     """Слайд карусели 1080×1350 по её второму эталону (`reference/5–9.webp`).
@@ -685,7 +802,15 @@ def build_carousel_slide(
     `thesis` больше не рисуется: двухстрочный тезис в шапке она назвала
     хаотичным (2026-09-22), параметр остался только ради старых вызовов.
     `steps` / `flow` / `cards` — графические блоки; не переданы — собираются из
-    текста слайда (`auto_blocks`). `photo` и `screenshot` — файлы владелицы:
+    текста слайда (`auto_blocks`). `chain` — те же блоки, но вертикальной
+    цепочкой со стрелками сверху вниз (её §19, финальный слайд).
+    `summary_accent` — акцентная оранжевая обводка плашки-вывода (§13 + §8 TYPE D).
+    `header` — верхняя панель §7; на обложке её можно снять (§18 «минимум
+    мелкого текста»), на внутренних слайдах она остаётся.
+    `portrait_width` — доля ширины кадра под портрет, только внутри её §8
+    TYPE A (40–55%); не задана — рабочее значение `tokens.PORTRAIT_WIDTH`.
+    `apps` — число плиток приложений в корпусе телефона (§20; вместо скрина,
+    которого нет). `photo` и `screenshot` — файлы владелицы:
     файла нет → слайд собирается без него, а в `notes` ложится строка об этом.
     `screens` — список её скринов (один-три) для правой сцены: они ложатся
     стопкой под наклоном, текст уходит в левую колонку. Пути приходят данными
@@ -708,18 +833,17 @@ def build_carousel_slide(
         notes = []
     m = tokens.CAROUSEL_MARGIN
     pad = f'{m["top"]}px {m["right"]}px {m["bottom"]}px {m["left"]}px'
+    lo_portrait, hi_portrait = tokens.PORTRAIT_WIDTH_RANGE
+    portrait_frac = float(portrait_width or tokens.PORTRAIT_WIDTH)
+    if not lo_portrait <= portrait_frac <= hi_portrait:
+        raise ValueError(
+            f"портрет на {portrait_frac:.0%} кадра — её §8 TYPE A держит человека "
+            f"в правых {lo_portrait:.0%}–{hi_portrait:.0%}"
+        )
     hook_size, hook_lh = _scale("hook" if role == "cover" else "slide_title")
     body_size, body_lh = _scale("body")
     label_size, label_lh = _scale("label")
     micro_size, micro_lh = _scale("micro")
-    #: §5: второй уровень меньше заголовка в 2,5–4 раза — считается от
-    #: заголовка, а не берётся из шкалы вслепую, и всё равно остаётся внутри
-    #: её рабочего диапазона body.
-    lo_body, hi_body = tokens.TYPE_SCALE["body"]["range"]
-    lead_size = min(
-        hi_body,
-        max(lo_body, math.floor(hook_size / tokens.BODY_RATIO_RANGE[0])),
-    )
     #: §4: заголовок занимает 30–50% площади слайда.
     hero_min = round(h * tokens.HEADLINE_AREA_RANGE[0])
     hero_max = round(h * tokens.HEADLINE_AREA_RANGE[1])
@@ -749,7 +873,7 @@ def build_carousel_slide(
     #: Собственная подсветка иконки (G17): она светится, а не лежит плашмя.
     icon_glow = f'drop-shadow(0 0 14px {_rgba(s["accent"], 0.55)})'
 
-    if not (steps or flow or cards):
+    if not (steps or flow or cards or chain):
         derived = auto_blocks(body)
         steps = derived.get("steps")
         flow = derived.get("flow")
@@ -759,15 +883,22 @@ def build_carousel_slide(
 
     # Кегль подписи потока: чем больше карточек в ряду, тем уже карточка.
     # Самое длинное слово обязано встать в строку — иначе браузер ломает его
-    # пополам («ВОЗВРАЩЁН/НОЕ» в её рендере carousel-04).
+    # пополам («ОФОРМЛЕН/ИЕ» в её рендере carousel-06).
     flow_gap = 8
     #: Потолок ряда карточек — треть холста (её reference/3.webp).
     flow_cap = round(h / 3)
     flow_pad = gap // 2
+    #: Ширина рисованной стрелки между карточками — ровно та, что стоит в CSS
+    #: `.flow-arrow`. Раньше в расчёт уходила половина этой ширины, ряд считался
+    #: шире, чем есть, и кегль выходил завышенным — оттуда и разрыв слова.
+    #: Стрелка вдвое уже прежней: на ряде из пяти блоков четыре широкие стрелки
+    #: съедали 216 px, карточка не добирала до «ОФОРМЛЕНИЕ», и слово ломалось
+    #: пополам (её рендер carousel-06). Дуга читается и в этой ширине.
+    flow_arrow_w = round(label_size * 1.2)
     flow_title_size = label_size
     if flow:
         n = len(flow)
-        card_w = (inner - 2 * flow_gap * (n - 1) - label_size * (n - 1)) / n
+        card_w = (inner - (flow_arrow_w + 2 * flow_gap) * (n - 1)) / n
         # box-sizing: border-box — рамка съедает ширину наравне с полями
         content_w = card_w - 2 * flow_pad - 2 * tokens.BORDER_WIDTH
         longest = max(
@@ -776,8 +907,135 @@ def build_carousel_slide(
         )
         flow_title_size = max(
             MIN_FLOW_TITLE,
-            min(label_size, int(content_w / (CONDENSED_CAPS_ADVANCE * longest))),
+            min(
+                label_size,
+                int(content_w / (CONDENSED_CAPS_ADVANCE * HERO_FIT_SAFETY * longest)),
+            ),
         )
+
+    # --- что стоит на слайде: графика слева, предметная сцена справа ---------
+    # Считается до CSS: от этого зависит ширина колонки заголовка и текста.
+    # §12 ИКОНКИ: только белые или светло-фиолетовые, штрих одной толщины
+    stroke, accent_stroke = s["accent_soft"], C["TEXT"]
+    stage = []
+    if steps:
+        stage.append(_steps_html(steps, icon_size, stroke))
+    if flow:
+        stage.append(_flow_html(flow, icon_size, stroke, accent_stroke))
+    if cards:
+        stage.append(_cards_html(cards, icon_size, stroke, accent_stroke))
+    if chain:
+        stage.append(_chain_html(chain, round(label_size * 1.6), stroke))
+    kind = composition or pick_composition(
+        photo=photo, screenshot=screenshot, screens=screens,
+        steps=steps, flow=flow, cards=cards, apps=apps, chain=chain,
+    )
+    portrait = _image_block("portrait", photo, "фото владелицы", notes)
+    # сцена — это её правая половина: портрет, скриншот или корпус устройства
+    portrait_html = f'<div class="portrait">{portrait}</div>' if portrait else ""
+    shot = _image_block("shot", screenshot, "скриншот владелицы", notes)
+    shot_kind = device or DEFAULT_DEVICE
+    shot_html = (
+        f'<div class="shot {shot_kind}-shot">'
+        f"{_device_html(shot_kind, shot)}</div>"
+        if shot and not shot.startswith("<!--")
+        else ""
+    )
+    if not shot_html and apps:
+        tiles = _apps_html(
+            tokens.APP_GRID_TILES if apps is True else apps,
+            round(label_size * 1.4),
+            stroke,
+        )
+        if tiles:
+            shot_html = f'<div class="shot">{_device_html("phone", tiles)}</div>'
+    screens_html = _screens_html(screens, notes)
+    scene = " scene" if shot_html else ""
+    if screens_html:
+        scene += " screens-scene"
+    if portrait_html:
+        scene += " portrait-scene"
+        if role == "cover":
+            scene += " cover-scene"
+
+    #: §8 TYPE A: портрет занимает правые 40–55% кадра, текст и плашка живут
+    #: в своей колонке слева. Не хватает места — уменьшается колонка текста,
+    #: а не портрет (таск 11 п.1–2).
+    portrait_w = round(w * portrait_frac)
+    portrait_fade = round((1 - tokens.PORTRAIT_FADE) * 100)
+    #: Колонка текста упирается в левый край портрета: пересечения нет по
+    #: разметке, а не на глаз.
+    text_col = w - portrait_w - m["left"]
+    #: Заголовку можно зайти в мягкую кромку выреза — там фон, а не человек;
+    #: дальше начинается непрозрачная часть кадра, и туда текст не идёт.
+    portrait_solid = w - portrait_w + round(portrait_w * tokens.PORTRAIT_FADE)
+
+    #: Ширина колонки заголовка — по тому, что стоит справа.
+    if portrait_html:
+        hero_w = portrait_solid - m["left"]
+    elif screens_html:
+        hero_w = round(inner * 0.46)
+    elif shot_html:
+        hero_w = round(inner * 0.56)
+    elif role == "cover":
+        # §18: слева крупный headline, мелкого текста нет — колонка шире.
+        hero_w = round(inner * 0.88)
+    else:
+        hero_w = round(inner * 0.78)
+
+    hero_lines = _lines(hook) or [str(hook)]
+    lo_cover, hi_cover = tokens.COVER_HEADLINE_LINES
+    if role == "cover" and len(hero_lines) > hi_cover:
+        raise ValueError(
+            f"заголовок обложки в {len(hero_lines)} строк; её §18 держит "
+            f"{lo_cover}–{hi_cover} — разбей строки иначе"
+        )
+    #: Кегль заголовка подбирается под колонку: каждая строка обязана встать
+    #: целиком, иначе браузер добавляет свою — и на обложке появляется седьмая
+    #: строка сверх её §18 (её рендер carousel-01). Подбор только уменьшает
+    #: и работает только там, где строки разбиты автором: одиночный заголовок
+    #: переносится браузером, и подгонять под него нечего.
+    #: `hero_room` — кегль, при котором строка ещё физически влезает в колонку;
+    #: `hero_fit` — он же с запасом на знаки шире средних. Подбор идёт по
+    #: запасу, а обратный подъём под §5 — по физическому пределу: иначе
+    #: округление запаса отнимает у заголовка последний пиксель.
+    hero_room = hook_size
+    if len(hero_lines) > 1:
+        longest_line = max(len(line) for line in hero_lines)
+        hero_room = int(hero_w / (CONDENSED_CAPS_ADVANCE * longest_line))
+        hero_fit = int(hero_room / HERO_FIT_SAFETY)
+        hook_size = max(MIN_HERO_SIZE, min(hook_size, hero_fit))
+    #: Заголовок не подходит вплотную к верхней линии: панели на обложке нет,
+    #: и без её отступа заголовок садится прямо на поле (§18).
+    hero_top = gap if header else round(h * 0.06)
+    #: §5: второй уровень меньше заголовка в 2,5–4 раза — считается от
+    #: заголовка (уже подобранного), а не берётся из шкалы вслепую, и всё
+    #: равно остаётся внутри её рабочего диапазона body.
+    lo_body, hi_body = tokens.TYPE_SCALE["body"]["range"]
+    #: §5: второй уровень меньше заголовка в 2,5–4 раза, а ниже своей шкалы он
+    #: не опускается — значит заголовку рядом с текстом нужно хотя бы 2,5 кегля
+    #: body. Поднимаем, но только в пределах колонки: её же пример из §4
+    #: («5. НА КОНТЕНТ ВСЁ РАВНО…» во всю ширину) сам идёт ниже этой границы,
+    #: а разорванная строка — дефект, который она уже называла.
+    if body:
+        hook_size = max(
+            hook_size,
+            min(hero_room, math.ceil(lo_body * tokens.BODY_RATIO_RANGE[0])),
+        )
+    lead_size = min(
+        hi_body,
+        max(lo_body, math.floor(hook_size / tokens.BODY_RATIO_RANGE[0])),
+    )
+    #: Плашка-вывод в колонке рядом с портретом уже, чем во всю ширину, и её
+    #: строка обязана в эту колонку встать: иначе плашка вырастает вниз и
+    #: уезжает за нижнее поле. Кегль считается по самой длинной строке вывода.
+    summary_size = label_size + 4
+    if portrait_html and summary:
+        #: Средняя ширина знака Open Sans Regular в долях кегля — замерено
+        #: в браузере на её же строке вывода.
+        plate_text = text_col - 2 * gap - (icon_size + 18) - 2 * gap
+        longest_row = max((len(r) for r in (_lines(summary, 2) or [summary])), default=1)
+        summary_size = max(micro_size, min(summary_size, int(plate_text / (0.50 * longest_row))))
 
     css = f"""
   /* §10 СВЕТ: «Фон не должен быть просто чёрным». Должно ощущаться
@@ -816,7 +1074,7 @@ def build_carousel_slide(
   /* §4: заголовок — важнейший элемент, занимает 30–50% площади слайда. */
   /* Короткий заголовок не висит вверху зарезервированной полосы, а стоит
      в её середине: иначе под одной строкой остаётся дыра на треть холста. */
-  .hero {{ position: relative; z-index: 2; margin-top: {gap}px; max-width: 78%;
+  .hero {{ position: relative; z-index: 2; margin-top: {hero_top}px; max-width: {hero_w}px;
            min-height: {hero_min}px; max-height: {hero_max}px;
            display: flex; flex-direction: column; justify-content: center;
            font-size: {hook_size}px; line-height: {hook_lh};
@@ -895,7 +1153,7 @@ def build_carousel_slide(
                 color: {s["muted"]}; }}
   /* G17: между карточками — рисованная дуга, а не типографская стрелка. */
   .flow-arrow {{ align-self: center; flex: 0 0 auto; color: {O};
-                 width: {label_size * 2}px; height: {round(label_size * 1.4)}px; }}
+                 width: {flow_arrow_w}px; height: {round(label_size * 1.4)}px; }}
   .flow-arrow-svg {{ width: 100%; height: 100%;
                      filter: drop-shadow(0 0 12px {_rgba(O, 0.45)}); }}
   .icon {{ filter: {icon_glow}; }}
@@ -918,6 +1176,39 @@ def build_carousel_slide(
                           padding: {gap // 3}px {gap // 2}px; }}
   .cards.compact .card .icon {{ flex: 0 0 auto; }}
   .cards.compact .card-title {{ margin-top: 0; }}
+  /* §19 ФИНАЛЬНЫЙ СЛАЙД: «3–4 коротких пункта». Пункты идут цепочкой сверху
+     вниз, между ними — та же рисованная оранжевая стрелка, что и в её
+     горизонтальной цепочке. Сквозной линии нет: она читалась бы как
+     перечёркивание (её замечание 2026-09-22). */
+  .chain {{ flex: 0 0 auto; display: flex; flex-direction: column;
+            align-items: stretch; }}
+  .chain-item {{ display: flex; align-items: center; gap: {gap // 2}px;
+                 border-radius: {tokens.PLATE_RADIUS}px; background: {s["plate"]};
+                 border: 1px solid {s["plate_border"]};
+                 padding: {gap // 3}px {gap // 2}px; box-shadow: {depth}; }}
+  .chain-item .icon {{ flex: 0 0 auto; }}
+  .chain-title {{ font-family: '{tokens.FONTS["HEADLINE"]}', {tokens.FALLBACK_STACK};
+                  font-weight: {tokens.FONT_WEIGHTS["HEADLINE"]};
+                  font-size: {label_size + 2}px; line-height: 1.15;
+                  text-transform: uppercase; color: {s["text"]};
+                  overflow-wrap: break-word; }}
+  .chain-arrow {{ flex: 0 0 auto; align-self: flex-start; color: {O};
+                  margin-left: {gap // 2 + icon_size // 2}px;
+                  width: {round(label_size * 1.2)}px;
+                  height: {round(label_size * 1.5)}px; }}
+  .chain-arrow-svg {{ width: 100%; height: 100%;
+                      filter: drop-shadow(0 0 12px {_rgba(O, 0.45)}); }}
+  /* §20: «слишком много приложений → смартфон с набором приложений».
+     Плитки — её же line-иконки в её же плашке; ни одного чужого логотипа. */
+  /* Ширина задана числом: корпус телефона меряется по содержимому
+     (`width: max-content`), а сетка из долей внутри max-content схлопнулась бы
+     в ноль — как и любой `1fr` без опоры. */
+  .app-grid {{ width: {round(w * 0.30)}px; display: grid; grid-template-columns:
+                 repeat({tokens.APP_GRID_COLUMNS}, 1fr); gap: 14px; padding: 22px 20px; }}
+  .app-tile {{ aspect-ratio: 1; display: flex; align-items: center;
+               justify-content: center; border-radius: 18px;
+               background: {s["plate"]};
+               border: 1px solid {_rgba(C["VIOLET"], 0.22)}; }}
   /* §8 TYPE B: «Не использовать плоский screenshot, лежащий прямоугольником
      поверх фона. Screenshot должен быть встроен в физический объект». Поэтому
      её снимок всегда лежит внутри корпуса — телефона или экрана ноутбука,
@@ -939,6 +1230,7 @@ def build_carousel_slide(
   /* Снимок не растягивается под корпус — корпус обнимает снимок. Её решение
      «скрин это фактура, не раздувай мелкий текст» корпусом не отменяется. */
   .device-screen img {{ display: block; width: auto; height: auto;
+                        object-fit: contain;
                         max-width: {round(w * 0.42)}px;
                         max-height: {round(h * 0.34)}px; }}
   /* Блик стекла — тонкая наклонная полоса, а не фигура (§14). */
@@ -960,7 +1252,12 @@ def build_carousel_slide(
   .device.phone .device-body {{ border-radius: 54px; padding: 14px;
                                 width: max-content; margin-left: auto; }}
   .device.phone .device-screen {{ border-radius: 42px; }}
-  .device.phone .device-screen img {{ max-width: {round(w * 0.30)}px; }}
+  /* Телефон вертикальный: под него потолок ноутбука не годится. Корпус встаёт
+     во всю правую половину и уходит за нижний край — её §8 TYPE B прямо
+     просит объект в перспективе, а не марку посреди пустого поля. */
+  .shot .device.phone .device-screen img {{ max-width: {round(w * 0.40)}px;
+                                            max-height: {round(h * 0.50)}px; }}
+  .canvas.scene .shot.phone-shot {{ top: {round(h * 0.28)}px; }}
   .device-notch {{ position: absolute; top: 24px; left: 50%; width: 104px;
                    height: 20px; margin-left: -52px; border-radius: 999px;
                    background: {C["BG_DEEP"]}; z-index: 2; }}
@@ -987,16 +1284,32 @@ def build_carousel_slide(
   .screens.n2 .s1 {{ top: 0%; }}
   .screens.n2 .s2 {{ top: 40%; }}
   .canvas.screens-scene .hero, .canvas.screens-scene .lead {{ max-width: 46%; }}
+  /* §8 TYPE A: человек занимает правые 40–55% кадра. Колонка портрета стоит
+     у правого края и её ширина задана числом, а не «половиной с полем»:
+     от неё же считается, сколько остаётся тексту. «Фото может уходить за
+     границу кадра» — поэтому по высоте портрет не ужимается. */
   .portrait {{ position: absolute; z-index: 1; right: 0; bottom: 0;
-               width: {inner // 2 + m["right"]}px; height: {h - m["top"] - m["bottom"]}px;
+               width: {portrait_w}px; height: {round(h * 0.86)}px;
                display: flex; align-items: flex-end; justify-content: flex-end; }}
-  .portrait-img {{ max-width: 100%; max-height: 100%; object-fit: contain;
-                   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%,
-                     #000 100%), linear-gradient(270deg, #000 0%, #000 62%, transparent 100%);
+  /* Кромка выреза узкая: она растворяет край в фоне, а не съедает треть
+     портрета (до таска 11 маска гасила всё левее 62% — фото читалось мелким). */
+  /* Кадр заполняет колонку целиком и уходит за нижний край — её §8 TYPE A
+     это прямо разрешает. `contain` оставлял сверху пустую треть, и портрет
+     читался мелким: именно это она и назвала («сделай фото масштабнее»). */
+  .portrait-img {{ width: 100%; height: 100%; object-fit: cover;
+                   object-position: 50% 6%;
+                   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%,
+                     #000 100%), linear-gradient(270deg, #000 0%, #000 {portrait_fade}%,
+                     transparent 100%);
                    -webkit-mask-composite: source-in;
-                   mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 100%),
-                     linear-gradient(270deg, #000 0%, #000 62%, transparent 100%);
+                   mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 100%),
+                     linear-gradient(270deg, #000 0%, #000 {portrait_fade}%, transparent 100%);
                    mask-composite: intersect; }}
+  /* Текст и плашка живут в своей колонке: портрет им не сосед, а стена.
+     Не хватает места — ужимается колонка текста, а не человек (таск 11 п.1). */
+  .canvas.portrait-scene .lead, .canvas.portrait-scene .summary,
+  .canvas.portrait-scene .stage, .canvas.portrait-scene .footer,
+  .canvas.portrait-scene .rule-accent {{ max-width: {text_col}px; }}
   /* Плашка-сноска её слайда 04: оранжевый кружок `!`, вертикальная черта,
      первая строка белая, вторая сиреневая. */
   .summary {{ position: relative; z-index: 2; display: flex; align-items: center;
@@ -1005,13 +1318,17 @@ def build_carousel_slide(
               border: 1px solid {s["plate_border"]};
               padding: {gap // 2}px {gap}px; margin: {gap}px 0 {gap // 2}px;
               box-shadow: {depth}; }}
+  /* §13 допускает тонкую обводку, §8 TYPE D — оранжевый outline на активном
+     блоке: плашка-вывод может звучать громче остальных (таск 11 п.8). */
+  .summary.accent {{ border-color: {tokens.ACCENT["ORANGE_ACCENT"]};
+                     box-shadow: {depth}, 0 0 60px {_rgba(O, 0.30)}; }}
   .summary-mark {{ flex: 0 0 auto; width: {icon_size + 18}px; height: {icon_size + 18}px;
                    border-radius: 50%; border: {tokens.BORDER_WIDTH}px solid {O};
                    color: {O}; font-size: {label_size + 6}px;
                    line-height: {icon_size + 14}px; text-align: center; }}
   .summary-divider {{ flex: 0 0 auto; width: {tokens.BORDER_WIDTH}px;
                       height: {icon_size + 18}px; background: {_rgba(s["text"], 0.22)}; }}
-  .summary-line {{ font-weight: {tokens.FONT_WEIGHTS["BODY"]}; font-size: {label_size + 4}px;
+  .summary-line {{ font-weight: {tokens.FONT_WEIGHTS["BODY"]}; font-size: {summary_size}px;
                    line-height: 1.45; color: {s["text"]}; }}
   .summary-line.accent {{ font-weight: {tokens.FONT_WEIGHTS["SUPPORT"]};
                           color: {s["accent_soft"]}; }}
@@ -1038,6 +1355,13 @@ def build_carousel_slide(
   .at-mid-right {{ top: {round(h * 0.47)}px; right: {gap}px; justify-content: flex-end; }}
   .at-mid-right .hand-text {{ transform: rotate(-8deg); }}
   .at-mid-right .hand-arrow {{ order: 2; margin-top: -6px; transform: scaleX(-1); }}
+  /* На обложке справа стоит человек: пометка над его лицом нечитаема. Уводим
+     её в свободную левую колонку под заголовком — там §18 и просит «минимум
+     мелкого текста», а места ровно столько, сколько нужно одной строке. */
+  .canvas.cover-scene .at-top-right {{ top: {round(h * 0.50)}px; right: auto;
+                                       left: {m["left"]}px;
+                                       justify-content: flex-start; }}
+  .canvas.cover-scene .at-top-right .hand-arrow {{ transform: none; }}
   .at-top-left {{ top: {round(h * 0.12)}px; left: {gap}px; }}
   .at-top-left .hand-text {{ transform: rotate(-5deg); }}
   .at-top-left .hand-arrow {{ order: 2; margin-top: 4px; }}
@@ -1052,6 +1376,9 @@ def build_carousel_slide(
     )
     if rubric:
         header_html += f'<div class="header-label">{_t(rubric)}</div>'
+    #: §18 «Минимум мелкого текста»: обложка может обойтись без верхней панели.
+    #: На внутренних слайдах §7 её оставляет — снимается она только по просьбе.
+    header_block = f'<div class="header">{header_html}</div>' if header else ""
     words = [accent_word] if isinstance(accent_word, str) else list(accent_word or [])
     hero_lines = _lines(hook) or [str(hook)]
     hero_html = "".join(
@@ -1065,37 +1392,14 @@ def build_carousel_slide(
         else ""
     )
 
-    # §12 ИКОНКИ: только белые или светло-фиолетовые, штрих одной толщины
-    stroke, accent_stroke = s["accent_soft"], C["TEXT"]
-    stage = []
-    if steps:
-        stage.append(_steps_html(steps, icon_size, stroke))
-    if flow:
-        stage.append(_flow_html(flow, icon_size, stroke, accent_stroke))
-    if cards:
-        stage.append(_cards_html(cards, icon_size, stroke, accent_stroke))
-    kind = composition or pick_composition(
-        photo=photo, screenshot=screenshot, screens=screens,
-        steps=steps, flow=flow, cards=cards,
-    )
-    portrait = _image_block("portrait", photo, "фото владелицы", notes)
-    # сцена — это её правая половина: портрет или скриншот
-    portrait_html = f'<div class="portrait">{portrait}</div>' if portrait else ""
-    shot = _image_block("shot", screenshot, "скриншот владелицы", notes)
-    shot_html = (
-        f'<div class="shot">{_device_html(device or DEFAULT_DEVICE, shot)}</div>'
-        if shot and not shot.startswith("<!--")
-        else ""
-    )
-    screens_html = _screens_html(screens, notes)
-    scene = " scene" if shot_html else ""
-    if screens_html:
-        scene += " screens-scene"
     # Пометка — комментарий сбоку, а не повтор того, что на слайде уже
     # написано: сверяем со всем текстом кадра, а не только с заголовком.
     said = [hook, body, summary]
     said += [str(s.get("caption", "")) for s in (steps or [])]
     said += [str(c.get("title", "")) for c in (flow or []) + (cards or [])]
+    said += [
+        str(c.get("title", "") if isinstance(c, dict) else c) for c in (chain or [])
+    ]
     hand_html = _hand_html(handwritten, said=said)
     # низ занят пометкой — оставляем ей место, а не кладём поверх текста
     if "at-bottom-left" in hand_html:
@@ -1111,8 +1415,9 @@ def build_carousel_slide(
             f'<div class="summary-line{" accent" if i else ""}">{_t(line)}</div>'
             for i, line in enumerate(lines)
         )
+        loud = " accent" if summary_accent else ""
         summary_html = (
-            '<div class="summary">'
+            f'<div class="summary{loud}">'
             '<div class="summary-mark">!</div>'
             '<div class="summary-divider"></div>'
             f'<div class="summary-body">{rows}</div></div>'
@@ -1124,7 +1429,7 @@ def build_carousel_slide(
   {portrait_html}
   {shot_html}
   {screens_html}
-  <div class="header">{header_html}</div>
+  {header_block}
   <div class="hero headline{hero_fill}">{hero_html}</div>
   {lead_html}
   <div class="rule-accent"></div>

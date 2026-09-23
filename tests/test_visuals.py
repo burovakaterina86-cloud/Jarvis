@@ -80,20 +80,28 @@ CAROUSEL = templates.build_carousel_slide(
 COVER = templates.build_post_cover(hook="Мой подход", subtitle="как я работаю")
 STORY = templates.build_story_background(key_phrase="Одно сообщение на сцену")
 
+#: Короткие имена трёх холстов — идентификаторы для parametrize.
+CANVAS_IDS = ("carousel", "cover", "story")
 
-@pytest.mark.parametrize("html", [CAROUSEL, COVER, STORY])
+
+# id задаётся явно: без него pytest берёт идентификатором саму вёрстку и кладёт
+# её в PYTEST_CURRENT_TEST — а переменная окружения Windows обрывается на 32767
+# знаках, и тест падает ещё до запуска.
+@pytest.mark.parametrize("html", [CAROUSEL, COVER, STORY], ids=CANVAS_IDS)
 def test_no_invented_colors(html):
     assert _hexes(html) <= ALLOWED_HEX, _hexes(html) - ALLOWED_HEX
 
 
-@pytest.mark.parametrize("html", [CAROUSEL, COVER, STORY])
+@pytest.mark.parametrize("html", [CAROUSEL, COVER, STORY], ids=CANVAS_IDS)
 def test_no_third_typeface(html):
     assert _families(html) <= set(tokens.FONT_FAMILIES), _families(html)
     assert tokens.GOOGLE_FONTS_URL in html
 
 
 @pytest.mark.parametrize(
-    "html,kind", [(CAROUSEL, "carousel"), (COVER, "cover"), (STORY, "story")]
+    "html,kind",
+    [(CAROUSEL, "carousel"), (COVER, "cover"), (STORY, "story")],
+    ids=CANVAS_IDS,
 )
 def test_canvas_size_matches_her_files(html, kind):
     w, h = tokens.CANVAS[kind]
@@ -898,6 +906,29 @@ def test_cutout_drops_the_white_wall_and_keeps_the_face(tmp_path):
     assert PORTRAIT.suffix == ".webp" and PORTRAIT.stat().st_size > 0
 
 
+#: Второй кадр владелицы (2026-09-23): ¾, взгляд в сторону, тёмный фон.
+PORTRAIT_2 = (
+    Path(__file__).resolve().parents[1] / "essa-ai" / "photo" / "katerina-portrait-2.jpg"
+)
+
+
+def test_the_dark_wall_dissolves_and_her_lit_face_stays(tmp_path):
+    # Её §9: «человек не должен постоянно смотреть в камеру». Второй кадр снят
+    # на тёмной стене, светлая заливка на нём не срабатывает — проверяем, что
+    # у второго способа стена уходит в прозрачность, а освещённое лицо нет.
+    if render._playwright_module() is None:
+        pytest.skip("вырезаем браузером: питоновского playwright нет")
+    assert PORTRAIT_2.is_file(), PORTRAIT_2
+    out = cutout.make_dark_fade(PORTRAIT_2, tmp_path / "fade.png")
+    assert out is not None and out.is_file()
+    probe = cutout.alpha_probe(out)
+    assert probe["top_left"] < 24, probe
+    assert probe["top_right"] < 24, probe
+    assert probe["center"] > 200, probe
+    # исходник владелицы не тронут
+    assert PORTRAIT_2.suffix == ".jpg" and PORTRAIT_2.stat().st_size > 0
+
+
 def test_cutout_says_plainly_when_the_browser_is_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(render, "_playwright_module", lambda: None)
     assert cutout.make_cutout(PORTRAIT, tmp_path / "cut.png") is None
@@ -1470,3 +1501,218 @@ def test_skill_teaches_her_carousel_visual_system():
         assert mark in text, mark
     assert "blobs" in text  # §14: пятен в фоне нет
     assert "корпуса" in text and "перспективе" in text  # §8 TYPE B
+
+
+# --- Таск 11: дефекты карусели «7 признаков» (её слова 2026-09-22) -----------
+# Ожидаемое — из её §8 TYPE A/B/C, §13, §18 и из девяти пунктов таска,
+# а не из кода под тестом.
+
+HER_PORTRAIT = (
+    Path(__file__).resolve().parents[1] / "essa-ai" / "photo"
+    / "katerina-portrait-cutout.png"
+)
+
+#: Подписи цепочки её слайда 06 — дословно из storyboard.md.
+HER_FLOW = ("сценарий", "текст", "оформление", "монтаж", "публикация")
+
+#: Четыре пункта её финального слайда — дословно из storyboard.md.
+HER_CHAIN = (
+    "что действительно нужно делать",
+    "что можно убрать",
+    "что отдать нейросети",
+    "что оставить человеку",
+)
+
+
+def _carry_portrait(tmp_path):
+    if not HER_PORTRAIT.is_file():
+        pytest.skip("портрета владелицы нет на диске")
+    dst = tmp_path / HER_PORTRAIT.name
+    dst.write_bytes(HER_PORTRAIT.read_bytes())
+    return dst
+
+
+def _with_portrait(tmp_path, **kw):
+    """Её финальный слайд: портрет, вертикальная цепочка и плашка-вывод."""
+    return templates.build_carousel_slide(
+        hook="Иногда проблема\nне в том, что\nу тебя не та\nнейросеть.",
+        accent_word="не та",
+        body="Проблема в том, что никто\nне разобрал сам процесс:",
+        chain=[{"title": t} for t in HER_CHAIN],
+        summary="Сохрани карусель и посмотри:\nкакой процесс сейчас самый хаотичный?",
+        summary_accent=True,
+        photo=_carry_portrait(tmp_path),
+        index=9, total=9, style="STYLE_01", role="slide", notes=[],
+        **kw,
+    )
+
+
+# п.1 — плашка и портрет не пересекаются, считается по разметке
+
+def test_the_plate_and_the_portrait_never_overlap_on_the_final_slide(tmp_path):
+    html = _with_portrait(tmp_path)
+    boxes = _measure(
+        html, tmp_path, "final-slide",
+        "() => ['.summary', '.portrait'].map(s => {"
+        "const r = document.querySelector(s).getBoundingClientRect();"
+        "return [r.left, r.top, r.right, r.bottom];})",
+    )
+    plate, portrait = boxes
+    overlap_x = min(plate[2], portrait[2]) - max(plate[0], portrait[0])
+    overlap_y = min(plate[3], portrait[3]) - max(plate[1], portrait[1])
+    assert overlap_x <= 0 or overlap_y <= 0, (
+        f"плашка {plate} налезла на портрет {portrait}"
+    )
+
+
+# п.2 — §8 TYPE A: человек занимает правые 40–55% кадра
+
+def test_her_portrait_takes_the_forty_to_fifty_five_percent_of_her_type_a(tmp_path):
+    w = tokens.CANVAS["carousel"][0]
+    lo, hi = tokens.PORTRAIT_WIDTH_RANGE
+    for frac in (lo, tokens.PORTRAIT_WIDTH, hi):
+        html = _with_portrait(tmp_path, portrait_width=frac)
+        width = _measure(
+            html, tmp_path, f"portrait-{frac}",
+            "() => document.querySelector('.portrait-img').getBoundingClientRect().width",
+        )
+        assert lo <= width / w <= hi, f"портрет занял {width / w:.0%} кадра"
+    with pytest.raises(ValueError):
+        _with_portrait(tmp_path, portrait_width=hi + 0.2)
+
+
+def test_the_soft_edge_of_the_cutout_does_not_eat_the_portrait(tmp_path):
+    # вырез растворяется в фоне узкой кромкой, а не третью кадра
+    html = _with_portrait(tmp_path)
+    rule = _rule(html, ".portrait-img")
+    starts = [int(x) for x in re.findall(r"#000 (\d+)%, transparent 100%", rule)]
+    assert starts and min(starts) >= 100 - round(tokens.PORTRAIT_FADE * 100) - 1, rule
+
+
+# п.3 и п.4 — §18: заголовок 4–6 строк, не вплотную к верху, панели нет
+
+HER_COVER_HOOK = (
+    "7 признаков,\nчто тебе нужна\nне новая\nнейросеть,\nа нормальный\nпроцесс"
+)
+
+
+def _cover(tmp_path, **kw):
+    return templates.build_carousel_slide(
+        hook=HER_COVER_HOOK,
+        accent_word=["нормальный", "процесс"],
+        photo=_carry_portrait(tmp_path),
+        handwritten="не про инструменты",
+        index=1, total=9, style="STYLE_01", role="cover", notes=[],
+        **kw,
+    )
+
+
+def test_the_cover_headline_stays_within_her_four_to_six_lines(tmp_path):
+    html = _cover(tmp_path, header=False)
+    lines = _measure(
+        html, tmp_path, "cover-lines",
+        "() => {const hero = document.querySelector('.hero');"
+        "const lh = parseFloat(getComputedStyle(hero).lineHeight);"
+        "return [...hero.querySelectorAll('.hero-line')]"
+        ".reduce((n, el) => n + Math.round(el.getBoundingClientRect().height / lh), 0);}",
+    )
+    lo, hi = tokens.COVER_HEADLINE_LINES
+    assert lo <= lines <= hi, f"обложка встала в {lines} строк"
+
+
+def test_the_cover_headline_does_not_touch_the_top_line(tmp_path):
+    html = _cover(tmp_path, header=False)
+    h = tokens.CANVAS["carousel"][1]
+    top = _measure(
+        html, tmp_path, "cover-top",
+        "() => document.querySelector('.hero').getBoundingClientRect().top",
+    )
+    assert top >= tokens.CAROUSEL_MARGIN["top"] + round(h * 0.05), f"заголовок в {top}px"
+
+
+def test_the_cover_may_go_without_the_top_panel():
+    # §18 «Минимум мелкого текста»; на внутренних слайдах панель остаётся
+    bare = templates.build_carousel_slide(hook="Обложка", header=False, index=1, total=9)
+    assert 'class="header"' not in bare
+    inner = templates.build_carousel_slide(
+        hook="Признак", label="Признак 1", index=2, total=9
+    )
+    assert 'class="header"' in inner and "признак 1" in inner.lower()
+
+
+# п.5 — блок цепочки не рвёт слово пополам
+
+def test_a_long_word_in_a_chain_block_is_never_broken_in_half(tmp_path):
+    html = templates.build_carousel_slide(
+        hook="5. На контент всё равно\nуходит слишком много\nвремени",
+        flow=[{"title": t} for t in HER_FLOW],
+        index=6, total=9, style="STYLE_01", role="slide",
+    )
+    rows = _measure(
+        html, tmp_path, "flow-titles",
+        "() => [...document.querySelectorAll('.flow-title')].map(el => {"
+        "const lh = parseFloat(getComputedStyle(el).lineHeight);"
+        "return [el.textContent, Math.round(el.getBoundingClientRect().height / lh),"
+        " el.scrollWidth <= el.clientWidth];})",
+    )
+    for text, count, fits in rows:
+        assert count == 1, f"«{text}» разорвано на {count} строки"
+        assert fits, f"«{text}» не поместилось в блок"
+
+
+# п.6 — в цепочке из пяти блоков пять разных иконок
+
+def test_five_blocks_of_her_chain_get_five_different_icons():
+    html = templates.build_carousel_slide(
+        hook="5. На контент",
+        flow=[{"title": t} for t in HER_FLOW],
+        style="STYLE_01",
+    )
+    drawn = [p for p in templates.ICONS.values() if p in html]
+    assert len(drawn) == len(HER_FLOW), f"разных иконок {len(drawn)} на {len(HER_FLOW)}"
+    picked = templates.pick_icons(HER_FLOW)
+    assert picked == list(dict.fromkeys(picked))
+
+
+# п.7 — вертикальная цепочка со стрелками
+
+def test_the_final_slide_is_built_as_a_vertical_chain_with_arrows(tmp_path):
+    html = _with_portrait(tmp_path)
+    assert 'class="chain"' in html
+    assert html.count('class="chain-arrow"') == len(HER_CHAIN) - 1
+    assert "flex-direction: column" in _rule(html, ".chain")
+    tops = _measure(
+        html, tmp_path, "chain",
+        "() => [...document.querySelectorAll('.chain-item')]"
+        ".map(el => el.getBoundingClientRect().top)",
+    )
+    assert tops == sorted(tops) and len(set(tops)) == len(HER_CHAIN), tops
+
+
+# п.8 — плашка-вывод умеет оранжевую обводку (§13 + §8 TYPE D)
+
+def test_the_conclusion_plate_can_take_her_orange_outline():
+    plain = templates.build_carousel_slide(hook="X", summary="Раз.\nДва.")
+    assert 'class="summary"' in plain
+    loud = templates.build_carousel_slide(
+        hook="X", summary="Раз.\nДва.", summary_accent=True
+    )
+    assert 'class="summary accent"' in loud
+    assert tokens.ACCENT["ORANGE_ACCENT"] in _rule(loud, ".summary.accent")
+
+
+# п.9 — слайд 03 получает объект: корпус телефона с сеткой плиток приложений
+
+def test_the_phone_carries_a_grid_of_app_tiles_and_not_a_screenshot():
+    html = templates.build_carousel_slide(
+        hook="2. Для одной задачи\nу тебя уже несколько\nприложений",
+        body="Одно пишет.\nВторое оформляет.",
+        apps=tokens.APP_GRID_TILES,
+        index=3, total=9, style="STYLE_01", role="slide",
+    )
+    assert 'data-composition="B"' in html          # §8 TYPE B, не типографика 04
+    assert 'class="device phone"' in html
+    assert html.count('class="app-tile"') == tokens.APP_GRID_TILES
+    assert "<img" not in html                      # ни скриншота, ни картинки
+    drawn = {p for p in templates.ICONS.values() if p in html}
+    assert len(drawn) >= 8, f"плитки собрались из {len(drawn)} иконок"
