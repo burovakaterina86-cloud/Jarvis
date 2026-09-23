@@ -275,7 +275,7 @@ STYLE_SURFACES = {
 
 def pick_composition(
     photo=None, screenshot=None, screens=None, steps=None, flow=None, cards=None,
-    apps=None, chain=None,
+    apps=None, chain=None, ui_cards=None,
 ) -> str:
     """Тип композиции по тому, что несёт слайд (§8, §17).
 
@@ -289,6 +289,8 @@ def pick_composition(
     many = screens if isinstance(screens, (list, tuple)) else ([screens] if screens else [])
     if photo:
         return "A"
+    if ui_cards:
+        return "D"
     # Корпус телефона с сеткой приложений — такой же объект её §8 TYPE B,
     # как и встроенный скрин: на холсте стоит устройство, а не типографика.
     if screenshot or apps or len(many) == 1:
@@ -709,6 +711,52 @@ SCREEN_SLOTS = (
 )
 
 
+#: §8 TYPE D: раскладка карточек UI-хаоса по горизонтали (доли свободной
+#: ширины сцены). Не одна колонка — «на разных уровнях», как в её reference/8.webp.
+UI_CARD_SHIFTS = (0.55, 0.0, 1.0, 0.25, 0.8, 0.1, 0.6)
+
+#: Сколько высоты карточки заходит под соседнюю — «частично перекрываются».
+UI_CARD_OVERLAP = 0.22
+
+
+def ui_cards_data(ui_cards) -> list:
+    """Карточки TYPE D из данных слайда: строка — подпись, словарь — `title`,
+    `icon`, `active`. Активной не задано — активна средняя (её reference/8.webp)."""
+    items = [ui_cards] if isinstance(ui_cards, (str, dict)) else list(ui_cards or [])
+    cards = []
+    for item in items:
+        data = dict(item) if isinstance(item, dict) else {"title": item}
+        title = str(data.get("title", "")).strip()
+        if title:
+            cards.append({**data, "title": title})
+    if cards and not any(c.get("active") for c in cards):
+        cards[(len(cards) - 1) // 2]["active"] = True
+    return cards
+
+
+def _ui_chaos_html(cards: list, icon_size: int, stroke: str, accent_stroke: str) -> str:
+    """§8 TYPE D: интерфейсные карточки, нарисованные вёрсткой — плашка, иконка,
+    строка текста. Ни одного снимка: подписи — слова её слайда."""
+    if not cards:
+        return ""
+    active = next(i for i, c in enumerate(cards) if c.get("active"))
+    parts = []
+    for i, card in enumerate(cards):
+        depth = abs(i - active)
+        icon = card.get("icon") or pick_icon(card["title"])
+        live = " active" if i == active else ""
+        parts.append(
+            f'<div class="ui-card d{min(depth, 3)}{live}" style="--i: {i}; '
+            f'--shift: {UI_CARD_SHIFTS[i % len(UI_CARD_SHIFTS)]};">'
+            f'{_icon(icon, icon_size, accent_stroke if live else stroke)}'
+            f'<span class="ui-card-title">{_t(card["title"])}</span></div>'
+        )
+    return (
+        f'<section class="ui-chaos n{len(cards)}">'
+        + "".join(parts) + "</section>"
+    )
+
+
 def _screens_html(screens, notes: list) -> str:
     """Карточки-скрины правой сцены: её файлы, ничего не подставляется.
 
@@ -782,6 +830,7 @@ def build_carousel_slide(
     portrait_width: float = 0,
     screenshot=None,
     screens=None,
+    ui_cards=None,
     apps=0,
     device: str = "",
     composition: str = "",
@@ -815,6 +864,10 @@ def build_carousel_slide(
     `screens` — список её скринов (один-три) для правой сцены: они ложатся
     стопкой под наклоном, текст уходит в левую колонку. Пути приходят данными
     слайда, сами не подбираются.
+    `ui_cards` — её §8 TYPE D: карточки интерфейса, нарисованные вёрсткой
+    (плашка, иконка, строка). Строка — подпись, словарь — `title`, `icon`,
+    `active`; подписи — слова её слайда. Активная (по умолчанию средняя) —
+    с оранжевой обводкой, дальние темнее и размыты.
     `style` — только из `tokens.STYLES` (§5).
     """
     if style not in tokens.STYLES:
@@ -929,6 +982,10 @@ def build_carousel_slide(
     kind = composition or pick_composition(
         photo=photo, screenshot=screenshot, screens=screens,
         steps=steps, flow=flow, cards=cards, apps=apps, chain=chain,
+        ui_cards=ui_cards,
+    )
+    chaos_html = _ui_chaos_html(
+        ui_cards_data(ui_cards), round(label_size * 2.2), stroke, O
     )
     portrait = _image_block("portrait", photo, "фото владелицы", notes)
     # сцена — это её правая половина: портрет, скриншот или корпус устройства
@@ -953,6 +1010,8 @@ def build_carousel_slide(
     scene = " scene" if shot_html else ""
     if screens_html:
         scene += " screens-scene"
+    if chaos_html:
+        scene += " chaos-scene"
     if portrait_html:
         scene += " portrait-scene"
         if role == "cover":
@@ -970,9 +1029,21 @@ def build_carousel_slide(
     #: дальше начинается непрозрачная часть кадра, и туда текст не идёт.
     portrait_solid = w - portrait_w + round(portrait_w * tokens.PORTRAIT_FADE)
 
+    #: §8 TYPE E: «огромный заголовок» — на типографском слайде заголовок берёт
+    #: шкалу обложки и всю ширину: справа ничего нет, и воздуха под ним тоже.
+    typographic = kind == "E" and role != "cover" and not (
+        shot_html or screens_html or chaos_html or portrait_html or stage
+    )
+    if typographic:
+        hook_size, hook_lh = _scale("hook")
     #: Ширина колонки заголовка — по тому, что стоит справа.
-    if portrait_html:
+    if typographic:
+        hero_w = inner
+    elif portrait_html:
         hero_w = portrait_solid - m["left"]
+    elif chaos_html:
+        # колонка текста упирается в сцену карточек (её ширина — ниже, `chaos_w`)
+        hero_w = w - round(w * 0.47) - m["right"] - m["left"] - gap
     elif screens_html:
         hero_w = round(inner * 0.46)
     elif shot_html:
@@ -1037,6 +1108,24 @@ def build_carousel_slide(
         longest_row = max((len(r) for r in (_lines(summary, 2) or [summary])), default=1)
         summary_size = max(micro_size, min(summary_size, int(plate_text / (0.50 * longest_row))))
 
+    #: Пометка и её стрелка — внутри её полей §1 (слева/справа 55–70, снизу
+    #: 60–80): наклон текста выносит угол строки на несколько пикселей, поэтому
+    #: слот стоит на поле с запасом, а не на самой его границе.
+    hand_x = m["left"] + 8
+    #: §8 TYPE D: сцена карточек — правая колонка от верха до нижнего поля.
+    chaos_top = round(h * 0.10)
+    chaos_w = round(w * 0.47)
+    card_w = round(chaos_w * 0.82)
+    chaos_h = h - chaos_top - m["bottom"] - 8
+    n_chaos = max(1, len(ui_cards_data(ui_cards)))
+    #: Карточки заходят друг на друга на `UI_CARD_OVERLAP` высоты и вместе
+    #: занимают всю высоту сцены — тело слайда до нижнего поля.
+    chaos_card_h = round(chaos_h / (1 + (n_chaos - 1) * (1 - UI_CARD_OVERLAP)))
+    chaos_card_h = min(chaos_card_h, round(h * 0.24))
+    chaos_step = (
+        round((chaos_h - chaos_card_h) / (n_chaos - 1)) if n_chaos > 1 else 0
+    )
+    hand_bottom = m["bottom"] + 8
     css = f"""
   /* §10 СВЕТ: «Фон не должен быть просто чёрным». Должно ощущаться
      пространство: фон — мягкий градиент её §3 («чёрный → тёмный фиолетовый»),
@@ -1081,6 +1170,7 @@ def build_carousel_slide(
            letter-spacing: -0.01em; text-transform: uppercase; color: {s["text"]};
            margin-bottom: {gap // 2}px; }}
   .hero-line {{ display: block; }}
+  .hero.tight {{ min-height: 0; justify-content: flex-start; }}
   .hero .accent, .hero em {{ font-style: normal; color: {O}; }}
   .lead {{ position: relative; z-index: 2; font-weight: {tokens.FONT_WEIGHTS["BODY"]};
            font-size: {lead_size}px; line-height: {body_lh}; color: {s["text"]};
@@ -1090,7 +1180,11 @@ def build_carousel_slide(
                   border-radius: 4px; background: {O}; margin-top: {gap // 2}px; }}
   /* Текст слева, предметная сцена справа — её раскладка со скриншотом. */
   .canvas.scene .hero, .canvas.scene .lead {{ max-width: 56%; }}
-  .canvas.bottom-note {{ padding-bottom: {round(h * 0.19)}px; }}
+  /* Низ под пометкой — ровно её след (две строки рукописи и поле §1), а не
+     пятая часть холста: лишнее становилось дырой под текстом (B01). */
+  .canvas.bottom-note {{ padding-bottom: {hand_bottom + round(hook_size * 1.2) + gap // 2}px; }}
+  /* колонка не сжимает заголовок и текст: строки не наезжают друг на друга */
+  #slide > * {{ flex-shrink: 0; }}
   .stage {{ position: relative; z-index: 2; flex: 1; display: flex;
             flex-direction: column; justify-content: center; gap: {gap}px;
             margin-top: {gap // 2}px; padding-bottom: {gap // 2}px; }}
@@ -1238,6 +1332,9 @@ def build_carousel_slide(
                    background: linear-gradient(118deg, {_rgba(C["TEXT"], 0.14)} 0%,
                      transparent 34%); }}
   .device.laptop .device-body {{ border-radius: 18px; padding: 16px 16px 22px; }}
+  .canvas.scene .shot.laptop-shot {{ top: auto; bottom: {m["bottom"] + 48}px; width: 62%; }}
+  .shot.laptop-shot .device-screen img {{ max-width: {round(w * 0.56)}px;
+                                          max-height: {round(h * 0.42)}px; }}
   .device.laptop .device-screen {{ border-radius: 8px; }}
   .device-hinge {{ position: absolute; left: 50%; bottom: 7px; width: 92px;
                    height: 5px; margin-left: -46px; border-radius: 3px;
@@ -1257,7 +1354,8 @@ def build_carousel_slide(
      просит объект в перспективе, а не марку посреди пустого поля. */
   .shot .device.phone .device-screen img {{ max-width: {round(w * 0.40)}px;
                                             max-height: {round(h * 0.50)}px; }}
-  .canvas.scene .shot.phone-shot {{ top: {round(h * 0.28)}px; }}
+  .canvas.scene .shot.phone-shot {{ top: {round(h * 0.18)}px; }}
+  .shot.phone-shot .device.phone .device-screen img {{ max-height: {round(h * 0.62)}px; }}
   .device-notch {{ position: absolute; top: 24px; left: 50%; width: 104px;
                    height: 20px; margin-left: -52px; border-radius: 999px;
                    background: {C["BG_DEEP"]}; z-index: 2; }}
@@ -1284,6 +1382,35 @@ def build_carousel_slide(
   .screens.n2 .s1 {{ top: 0%; }}
   .screens.n2 .s2 {{ top: 40%; }}
   .canvas.screens-scene .hero, .canvas.screens-scene .lead {{ max-width: 46%; }}
+  /* §8 TYPE D — UI-хаос по её reference/8.webp: карточки интерфейса в
+     перспективе, на разных уровнях, частично перекрываются, дальние темнее и
+     размыты; активная — ближе всех и с оранжевой обводкой. Карточки рисует
+     вёрстка: плашка, иконка, строка — снимков тут нет. */
+  .ui-chaos {{ position: absolute; z-index: 1; right: {m["right"]}px;
+               top: {chaos_top}px; height: {chaos_h}px; width: {chaos_w}px;
+               perspective: 1400px; }}
+  .ui-card {{ position: absolute; left: calc(var(--shift) * {chaos_w - card_w - 24}px);
+              top: calc(var(--i) * {chaos_step}px); width: {card_w}px;
+              height: {chaos_card_h}px;
+              display: flex; align-items: center; gap: {gap}px;
+              padding: 0 {gap + 8}px; border-radius: {tokens.PLATE_RADIUS + 4}px;
+              background: linear-gradient(160deg, {_rgba(C["TEXT"], 0.10)} 0%,
+                {s["plate"]} 38%, {_rgba(C["BG_DEEP"], 0.94)} 100%);
+              border: 1px solid {_rgba(C["TEXT"], 0.16)}; box-shadow: {depth};
+              transform: rotateY(-16deg) rotateX(9deg) rotateZ(3deg); }}
+  .ui-card .icon {{ flex: 0 0 auto; }}
+  .ui-card-title {{ font-size: {label_size + 12}px; line-height: 1.2; color: {C["TEXT"]};
+                    min-width: 0; overflow-wrap: break-word; }}
+  .ui-card.active {{ z-index: 10; border: {tokens.BORDER_WIDTH}px solid {O};
+                     background: linear-gradient(160deg, {_rgba(O, 0.26)} 0%,
+                       {s["plate"]} 55%, {_rgba(C["BG_DEEP"], 0.94)} 100%);
+                     box-shadow: {depth}, 0 0 80px {_rgba(O, 0.40)};
+                     transform: rotateY(-16deg) rotateX(9deg) rotateZ(3deg) scale(1.06); }}
+  .ui-card.d1 {{ z-index: 8; filter: brightness(0.78) blur(0.8px); }}
+  .ui-card.d2 {{ z-index: 6; filter: brightness(0.58) blur(1.8px); }}
+  .ui-card.d3 {{ z-index: 4; filter: brightness(0.42) blur(2.8px); }}
+  .canvas.chaos-scene .hero, .canvas.chaos-scene .lead,
+  .canvas.chaos-scene .rule-accent {{ max-width: {hero_w}px; }}
   /* §8 TYPE A: человек занимает правые 40–55% кадра. Колонка портрета стоит
      у правого края и её ширина задана числом, а не «половиной с полем»:
      от неё же считается, сколько остаётся тексту. «Фото может уходить за
@@ -1346,13 +1473,13 @@ def build_carousel_slide(
   .hand-text {{ display: block; }}
   .hand-arrow {{ flex: 0 0 auto; width: {round(hook_size * 0.6)}px;
                  height: {round(hook_size * 0.8)}px; }}
-  .at-top-right {{ top: {round(h * 0.12)}px; right: {gap}px; justify-content: flex-end; }}
+  .at-top-right {{ top: {round(h * 0.12)}px; right: {hand_x}px; justify-content: flex-end; }}
   .at-top-right .hand-text {{ transform: rotate(-7deg); }}
   .at-top-right .hand-arrow {{ order: 2; margin-top: -8px; transform: scaleX(-1); }}
-  .at-bottom-left {{ bottom: {round(h * 0.02)}px; left: {gap}px; }}
+  .at-bottom-left {{ bottom: {hand_bottom}px; left: {hand_x}px; }}
   .at-bottom-left .hand-text {{ transform: rotate(-6deg); }}
   .at-bottom-left .hand-arrow {{ order: 2; margin-top: 4px; }}
-  .at-mid-right {{ top: {round(h * 0.47)}px; right: {gap}px; justify-content: flex-end; }}
+  .at-mid-right {{ top: {round(h * 0.47)}px; right: {hand_x}px; justify-content: flex-end; }}
   .at-mid-right .hand-text {{ transform: rotate(-8deg); }}
   .at-mid-right .hand-arrow {{ order: 2; margin-top: -6px; transform: scaleX(-1); }}
   /* На обложке справа стоит человек: пометка над его лицом нечитаема. Уводим
@@ -1362,9 +1489,15 @@ def build_carousel_slide(
                                        left: {m["left"]}px;
                                        justify-content: flex-start; }}
   .canvas.cover-scene .at-top-right .hand-arrow {{ transform: none; }}
-  .at-top-left {{ top: {round(h * 0.12)}px; left: {gap}px; }}
+  .at-top-left {{ top: {round(h * 0.12)}px; left: {hand_x}px; }}
   .at-top-left .hand-text {{ transform: rotate(-5deg); }}
   .at-top-left .hand-arrow {{ order: 2; margin-top: 4px; }}
+  /* §8 TYPE E: плашка типографского слайда — крупнее, она несёт вывод. */
+  .canvas.type-e .summary {{ padding: {gap + 20}px {gap + 8}px; margin-top: {gap}px; }}
+  .canvas.type-e .summary-line {{ font-size: {lo_body}px; }}
+  /* §8 TYPE E: «короткий поясняющий текст» — крупно и узкой колонкой под
+     огромным заголовком, а не мелкой строкой во всю ширину. */
+  .canvas.type-e .lead {{ max-width: {round(inner * 0.58)}px; }}
 """
 
     rubric = _rubric(label)
@@ -1406,7 +1539,13 @@ def build_carousel_slide(
         scene += " bottom-note"
 
     stage_html = f'<div class="stage">{"".join(stage)}</div>' if stage else ""
-    hero_fill = "" if (stage or shot_html or portrait_html) else " fill"
+    hero_fill = "" if (stage or shot_html or portrait_html or screens_html
+                       or chaos_html or typographic) else " fill"
+    #: B01: под заголовком идёт текст — заголовок стоит по своим строкам, а не
+    #: в середине полосы на треть холста: иначе между ним и текстом дыра
+    #: (её «много воздуха», дважды).
+    if lead_html and role != "cover":
+        hero_fill += " tight"
 
     summary_html = ""
     if summary:
@@ -1429,6 +1568,7 @@ def build_carousel_slide(
   {portrait_html}
   {shot_html}
   {screens_html}
+  {chaos_html}
   {header_block}
   <div class="hero headline{hero_fill}">{hero_html}</div>
   {lead_html}

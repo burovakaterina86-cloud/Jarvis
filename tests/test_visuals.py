@@ -1802,3 +1802,266 @@ def test_build_entry_point_fails_loudly_when_png_was_not_taken(tmp_path, monkeyp
     out = capsys.readouterr().out
     assert "carousel-01.png" in out and "carousel-02.png" in out
     assert "не снят" in out
+
+def test_build_exits_zero_when_its_output_goes_to_a_pipe(tmp_path):
+    """JARVIS запускает сборку с перехваченным выводом: консоль Windows в cp1251
+    не должна ронять уже собранный комплект."""
+    import json
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    kit_dir = tmp_path / "kit"
+    kit_dir.mkdir()
+    (kit_dir / "slides.json").write_text(json.dumps({"slides": [
+        {"hook": "Первый", "header": False, "handwritten": "инструменты ≠ система"},
+    ]}, ensure_ascii=False), encoding="utf-8")
+    env = {**os.environ, "PYTHONIOENCODING": "cp1251", "PYTHONUTF8": "0"}
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "integrations.visuals.build", str(kit_dir)],
+        cwd=Path(__file__).resolve().parents[1], env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
+    )
+
+    assert proc.returncode in (0, 3), proc.stderr.decode("utf-8", "replace")[-500:]
+    assert b"carousel-01.png" in proc.stdout
+
+
+# --- таск 13: фон по её слову и все три вида одной командой -----------------
+
+
+def _fake_snap(monkeypatch):
+    def snapped(html_path, out_png, width, height):
+        return render.RenderResult(ok=True, html_path=html_path, png_path=out_png,
+                                   width=width, height=height, engine="fake")
+    monkeypatch.setattr(render, "render_image", snapped)
+
+
+def _backgrounds(kit_dir):
+    return [
+        re.search(r"\.canvas#slide \{[^}]*?linear-gradient\(152deg, (#[0-9A-Fa-f]{6})",
+                  p.read_text(encoding="utf-8")).group(1)
+        for p in sorted((kit_dir / "visuals").glob("carousel-*.html"))
+    ]
+
+
+@pytest.mark.parametrize("mode", [None, "dark", "alternate"])
+def test_background_follows_her_word_and_is_dark_without_it(mode, tmp_path, monkeypatch):
+    # Её ответ: «если попрошу чередовать, то делаем светлую темную, если попрошу
+    # в темной значитт все темное». Поля нет — тёмный: все её эталоны тёмные.
+    import json
+
+    from integrations.visuals import build
+
+    _fake_snap(monkeypatch)
+    kit_dir = tmp_path / "kit"
+    kit_dir.mkdir()
+    data = {"slides": [{"hook": f"Слайд {i}"} for i in range(1, 5)]}
+    if mode:
+        data["background"] = mode
+    (kit_dir / "slides.json").write_text(json.dumps(data, ensure_ascii=False),
+                                         encoding="utf-8")
+
+    assert build.main([str(kit_dir)]) == 0
+
+    backs = _backgrounds(kit_dir)
+    light = tokens.PALETTE["BG_LIGHT_PRIMARY"]
+    if mode == "alternate":
+        assert backs[1] == light and backs[0] != light
+    else:
+        assert light not in backs
+
+
+def test_unknown_background_word_is_a_data_error(tmp_path, capsys):
+    import json
+
+    from integrations.visuals import build
+
+    kit_dir = tmp_path / "kit"
+    kit_dir.mkdir()
+    (kit_dir / "slides.json").write_text(json.dumps(
+        {"slides": [{"hook": "Раз"}], "background": "pink"}), encoding="utf-8")
+    assert build.main([str(kit_dir)]) == 2
+
+
+def test_one_command_builds_carousel_cover_and_story(tmp_path, monkeypatch):
+    import json
+
+    from integrations.visuals import build
+
+    _fake_snap(monkeypatch)
+    kit_dir = tmp_path / "kit"
+    kit_dir.mkdir()
+    (kit_dir / "slides.json").write_text(json.dumps({
+        "slides": [{"hook": "Первый"}, {"hook": "Второй"}],
+        "cover": {"hook": "Обложка\nпоста", "subtitle": "подзаголовок"},
+        "story": {"key_phrase": "Фраза сторис", "caption": "подпись"},
+    }, ensure_ascii=False), encoding="utf-8")
+
+    assert build.main([str(kit_dir)]) == 0
+
+    visuals = kit_dir / "visuals"
+    for name in ("carousel-01", "carousel-02", "cover", "story"):
+        assert (visuals / f"{name}.html").is_file(), name
+    assert "Фраза сторис" in (visuals / "story.html").read_text(encoding="utf-8")
+    assert "Обложка" in (visuals / "cover.html").read_text(encoding="utf-8")
+
+
+# --- таск 13: пометки и их стрелки — внутри её полей §1 ----------------------
+#: Её §1: слева и справа 55–70, сверху 45–60, снизу 60–80. Берём нижние границы.
+SECTION_1_MIN = {"left": 55, "right": 55, "top": 45, "bottom": 60}
+
+_HAND_BOXES_JS = """() => [...document.querySelectorAll('.hand-note, .hand-arrow')]
+  .map(e => { const b = e.getBoundingClientRect();
+    return {cls: e.getAttribute('class'), left: b.left, right: b.right,
+            top: b.top, bottom: b.bottom}; })"""
+
+
+def _in_browser(html, tmp_path, name, js):
+    sync_playwright = render._playwright_module()
+    if sync_playwright is None:
+        pytest.skip("меряем в браузере: питоновского playwright нет")
+    page_path = tmp_path / f"{name}.html"
+    page_path.write_text(html, encoding="utf-8")
+    w, h = tokens.CANVAS["carousel"]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page(viewport={"width": w, "height": h})
+        page.goto(page_path.resolve().as_uri())
+        try:
+            page.wait_for_function("document.fonts.ready", timeout=render.PAGE_TIMEOUT_MS)
+        except Exception:  # noqa: BLE001
+            pass
+        out = page.evaluate(js)
+        browser.close()
+    return out
+
+
+def _outside_margins(boxes):
+    w, h = tokens.CANVAS["carousel"]
+    m = SECTION_1_MIN
+    return [
+        b["cls"] for b in boxes
+        if b["left"] < m["left"] or b["right"] > w - m["right"]
+        or b["top"] < m["top"] or b["bottom"] > h - m["bottom"]
+    ]
+
+
+@pytest.mark.parametrize("slot", ["top-right", "bottom-left", "mid-right", "top-left"])
+def test_handwritten_note_and_its_arrow_stay_inside_her_margins(slot, tmp_path):
+    html = templates.build_carousel_slide(
+        hook="Заголовок\nв две строки", body="Текст слайда.", label="Признак 4",
+        index=5, total=9, style="STYLE_01",
+        handwritten={"text": "ещё один сервис?", "at": slot},
+    )
+    boxes = _in_browser(html, tmp_path, slot, _HAND_BOXES_JS)
+    assert len(boxes) == 2
+    assert _outside_margins(boxes) == []
+
+
+# --- таск 13: её §8 TYPE D — UI-хаос, нарисованный вёрсткой ------------------
+#: Её слова со слайда 02 «7 признаков»: «Промты. Гайды. Подборки сервисов.
+#: Полезные Reels.» — подписи карточек берутся из данных слайда, не из скринов.
+SAVED = ["Промты", "Гайды", "Подборки сервисов", "Полезные Reels"]
+
+_CHAOS_JS = """() => [...document.querySelectorAll('.ui-card')].map(e => {
+  const b = e.getBoundingClientRect(); const cs = getComputedStyle(e);
+  return {top: b.top, bottom: b.bottom, left: b.left, right: b.right,
+          z: +cs.zIndex, filter: cs.filter, border: cs.borderTopColor,
+          active: e.classList.contains('active'), text: e.innerText.trim()}; })"""
+
+
+def test_type_d_draws_ui_cards_from_the_slide_words(tmp_path):
+    html = templates.build_carousel_slide(
+        hook="1. У тебя куча\nсохранённого", body="Текст слайда.", label="Признак 1",
+        index=2, total=9, style="STYLE_01", ui_cards=SAVED,
+    )
+    assert 'data-composition="D"' in html
+    chaos = html[html.index('class="ui-chaos'):]
+    assert "<img" not in chaos.split("</section>")[0]      # не скриншоты
+    cards = _in_browser(html, tmp_path, "chaos", _CHAOS_JS)
+    assert sorted(c["text"] for c in cards) == sorted(SAVED)
+    active = [c for c in cards if c["active"]]
+    assert len(active) == 1
+    assert active[0]["border"] == "rgb(255, 149, 94)"      # её оранжевый #FF955E
+    # разные уровни глубины: активная сверху, дальние — темнее и размыты
+    assert active[0]["z"] == max(c["z"] for c in cards)
+    far = [c for c in cards if not c["active"]]
+    assert all("brightness" in c["filter"] and "blur" in c["filter"] for c in far)
+    # частично перекрываются: соседние по вертикали карточки заходят друг на друга
+    by_top = sorted(cards, key=lambda c: c["top"])
+    assert all(a["bottom"] > b["top"] for a, b in zip(by_top, by_top[1:]))
+    # на разных уровнях: карточки не стоят в одну колонку
+    assert len({round(c["left"]) for c in cards}) >= 3
+
+
+# --- таск 13: «7 признаков» целиком — воздух и поля на всех девяти ----------
+PRIZNAKOV = Path(__file__).resolve().parents[1] / "essa-ai" / "content" / "2026-09-23-7-priznakov"
+
+#: Пустота — строки холста между шапкой и нижним полем, где не стоит ничего
+#: (заголовок меряется по строкам, а не по зарезервированной полосе), плюс
+#: зазор между строками заголовка и тем, что идёт под ним в колонке.
+_KIT_EMPTY_JS = """([mb, mt]) => {
+  const r = e => e.getBoundingClientRect();
+  const H = document.querySelector('#slide').getBoundingClientRect().height;
+  const head = document.querySelector('.header');
+  const start = head ? r(head).bottom : mt, end = H - mb;
+  const sel = '.hero-line, .lead, .rule-accent, .stage > *, .summary, .hand-note,'
+            + ' .device-body, .ui-card, .screen-card, .portrait-img';
+  const iv = [...document.querySelectorAll(sel)].map(r)
+    .filter(b => b.height > 0).map(b => [Math.max(b.top, start), Math.min(b.bottom, end)])
+    .filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+  let covered = 0, cur = null;
+  for (const [a, b] of iv) {
+    if (!cur || a > cur[1]) { if (cur) covered += cur[1] - cur[0]; cur = [a, b]; }
+    else cur[1] = Math.max(cur[1], b);
+  }
+  if (cur) covered += cur[1] - cur[0];
+  const lines = [...document.querySelectorAll('.hero-line')];
+  const heroBottom = Math.max(...lines.map(x => r(x).bottom));
+  const next = [...document.querySelectorAll('.lead, .stage, .summary')]
+    .map(r).filter(b => b.height > 0 && b.top >= heroBottom - 1).map(b => b.top);
+  const heroGap = next.length ? Math.min(...next) - heroBottom : 0;
+  return {uncovered: (end - start) - covered, heroGap: heroGap};
+}"""
+
+
+@pytest.fixture(scope="module")
+def priznakov_pages(tmp_path_factory, request):
+    from integrations.visuals import build
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(render, "render_image", lambda html_path, out_png, width, height:
+               render.RenderResult(ok=True, html_path=html_path, png_path=out_png,
+                                   width=width, height=height, engine="fake"))
+    out = tmp_path_factory.mktemp("priznakov")
+    items = build.build(out, PRIZNAKOV / "slides.json")
+    mp.undo()
+    return {i.html_path.stem: (i.html_path.read_text(encoding="utf-8"), i.html_path.parent)
+            for i in items if i.kind == "carousel"}
+
+
+def test_priznakov_is_all_dark_and_has_four_kinds_with_02_and_05_as_type_d(priznakov_pages):
+    pages = [priznakov_pages[f"carousel-{i:02d}"][0] for i in range(1, 10)]
+    kinds = [re.search(r'data-composition="(\w)"', p).group(1) for p in pages]
+    assert len(set(kinds)) >= 4, kinds
+    assert kinds[1] == "D" and kinds[4] == "D", kinds
+    assert all(tokens.PALETTE["BG_LIGHT_PRIMARY"] not in p.split("</style>")[0]
+               .split(".canvas#slide")[1].split("}")[0] for p in pages)
+    assert "<img" not in pages[1].split('class="ui-chaos')[1].split("</section>")[0]
+
+
+@pytest.mark.parametrize("n", range(1, 10))
+def test_priznakov_slide_has_no_air_and_notes_inside_margins(n, priznakov_pages, tmp_path):
+    name = f"carousel-{n:02d}"
+    html, visuals = priznakov_pages[name]   # меряем рядом с её файлами — скрины грузятся
+    tmp_path = visuals
+    m = tokens.CAROUSEL_MARGIN
+    _, h = tokens.CANVAS["carousel"]
+    assert _outside_margins(_in_browser(html, tmp_path, name, _HAND_BOXES_JS)) == []
+    js = f"() => ({_KIT_EMPTY_JS})([{m['bottom']}, {m['top']}])"
+    got = _in_browser(html, tmp_path, name + "-air", js)
+    empty = got["uncovered"] + got["heroGap"]
+    assert empty <= MAX_EMPTY_SHARE * h, f"{name}: пустоты {got} из {h}"

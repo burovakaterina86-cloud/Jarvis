@@ -3,8 +3,16 @@
     python -m integrations.visuals.build <папка комплекта> [slides.json]
 
 `slides.json` лежит в папке комплекта (по умолчанию `<папка>/slides.json`):
-`{"slides": [{…поля build_carousel_slide…}, …], "style": "STYLE_01"}` — `style`
-необязателен, без него порядок тёмных и светлых берёт `tokens.alternating_styles`.
+`{"slides": [{…поля build_carousel_slide…}, …], "background": "dark",
+"cover": {…}, "story": {…}}`.
+
+`background` — режим фона по её слову в запросе: `"dark"` — все слайды тёмные,
+`"alternate"` — светлый и тёмный попеременно (`tokens.alternating_styles`).
+Поля нет — `dark`: её система задаёт только тёмные фоны. `style` (один стиль
+на всю карусель) по-прежнему перекрывает режим.
+`cover` — поля `build_post_cover` (`hook`, `subtitle`), `story` — поля
+`build_story_background` (`key_phrase`, `caption`): обложка и фон сторис
+собираются той же командой, что и карусель.
 Относительные пути к её файлам (`photo`, `screenshot`, `screens`) считаются от
 папки `slides.json`. Правка одного слова — правка JSON и та же команда.
 """
@@ -16,7 +24,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import kit, templates
+from . import kit, templates, tokens
 
 #: Имя файла данных слайдов в папке комплекта.
 SLIDES_FILE = "slides.json"
@@ -27,6 +35,11 @@ BUILD_OWNED = frozenset({"index", "total", "notes"})
 #: Код выхода: вёрстка собрана, но хоть один заказанный PNG не снят.
 #: 2 — ошибка данных или аргументов, 0 — все PNG на месте.
 EXIT_NOT_RENDERED = 3
+
+#: Режимы фона по её слову: «в тёмной — значит всё тёмное», «чередовать —
+#: светлая, тёмная». Без поля — тёмный.
+BACKGROUNDS = ("dark", "alternate")
+DEFAULT_BACKGROUND = "dark"
 
 
 def slide_fields() -> frozenset:
@@ -72,15 +85,67 @@ def load_slides(slides_json: str | Path) -> tuple[list[dict[str, Any]], str | No
     return out, data.get("style")
 
 
+def carousel_style(data: dict[str, Any]) -> str | None:
+    """Стиль на всю карусель из режима фона. `None` — чередование."""
+    if data.get("style"):
+        return data["style"]
+    mode = data.get("background") or DEFAULT_BACKGROUND
+    if mode not in BACKGROUNDS:
+        raise ValueError(
+            f'фон {mode!r} не из её режимов; допустимы {", ".join(BACKGROUNDS)}'
+        )
+    return tokens.DARK_STYLE if mode == "dark" else None
+
+
+def _kind_fields(data: dict[str, Any], key: str, func) -> dict[str, Any] | None:
+    """Поля обложки или сторис; неизвестное поле — `ValueError`, как у слайда."""
+    value = data.get(key)
+    if not value:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError(f'"{key}" — словарь полей')
+    unknown = sorted(set(value) - set(inspect.signature(func).parameters))
+    if unknown:
+        raise ValueError(f"{key}: неизвестные поля {', '.join(unknown)}")
+    return dict(value)
+
+
 def build(kit_dir: str | Path, slides_json: str | Path | None = None) -> list[kit.VisualItem]:
-    """Собрать карусель комплекта из `slides.json`: вёрстка и снимки в `visuals/`."""
+    """Собрать комплект из `slides.json`: карусель, обложку и фон сторис в `visuals/`."""
     kit_dir = Path(kit_dir)
-    slides, style = load_slides(slides_json or kit_dir / SLIDES_FILE)
-    return kit.build_kit_visuals(kit_dir, carousel_slides=slides, style=style)
+    slides_json = Path(slides_json or kit_dir / SLIDES_FILE)
+    slides, _ = load_slides(slides_json)
+    data = json.loads(slides_json.read_text(encoding="utf-8"))
+    return kit.build_kit_visuals(
+        kit_dir,
+        carousel_slides=slides,
+        cover=_kind_fields(data, "cover", templates.build_post_cover),
+        story=_kind_fields(data, "story", templates.build_story_background),
+        style=carousel_style(data),
+    )
+
+
+def _utf8_output() -> None:
+    """Отчёт не зависит от кодировки консоли: перехваченный вывод (труба, файл —
+    так сборку запускает JARVIS) идёт в UTF-8, в живой консоли символ, которого
+    в её кодировке нет, заменяется, а не роняет уже собранный комплект."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        isatty = getattr(stream, "isatty", lambda: False)
+        try:
+            if isatty():
+                reconfigure(errors="replace")
+            else:
+                reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    _utf8_output()
     if not 1 <= len(argv) <= 2:
         print(__doc__)
         return 2

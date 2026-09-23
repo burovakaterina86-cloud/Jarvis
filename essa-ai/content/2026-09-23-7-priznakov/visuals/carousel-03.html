@@ -62,6 +62,7 @@
            letter-spacing: -0.01em; text-transform: uppercase; color: #F5F3F0;
            margin-bottom: 14px; }
   .hero-line { display: block; }
+  .hero.tight { min-height: 0; justify-content: flex-start; }
   .hero .accent, .hero em { font-style: normal; color: #FF955E; }
   .lead { position: relative; z-index: 2; font-weight: 400;
            font-size: 34px; line-height: 1.42; color: #F5F3F0;
@@ -71,7 +72,11 @@
                   border-radius: 4px; background: #FF955E; margin-top: 14px; }
   /* Текст слева, предметная сцена справа — её раскладка со скриншотом. */
   .canvas.scene .hero, .canvas.scene .lead { max-width: 56%; }
-  .canvas.bottom-note { padding-bottom: 256px; }
+  /* Низ под пометкой — ровно её след (две строки рукописи и поле §1), а не
+     пятая часть холста: лишнее становилось дырой под текстом (B01). */
+  .canvas.bottom-note { padding-bottom: 176px; }
+  /* колонка не сжимает заголовок и текст: строки не наезжают друг на друга */
+  #slide > * { flex-shrink: 0; }
   .stage { position: relative; z-index: 2; flex: 1; display: flex;
             flex-direction: column; justify-content: center; gap: 28px;
             margin-top: 14px; padding-bottom: 14px; }
@@ -219,6 +224,9 @@
                    background: linear-gradient(118deg, rgba(245,243,240,0.14) 0%,
                      transparent 34%); }
   .device.laptop .device-body { border-radius: 18px; padding: 16px 16px 22px; }
+  .canvas.scene .shot.laptop-shot { top: auto; bottom: 120px; width: 62%; }
+  .shot.laptop-shot .device-screen img { max-width: 605px;
+                                          max-height: 567px; }
   .device.laptop .device-screen { border-radius: 8px; }
   .device-hinge { position: absolute; left: 50%; bottom: 7px; width: 92px;
                    height: 5px; margin-left: -46px; border-radius: 3px;
@@ -238,7 +246,8 @@
      просит объект в перспективе, а не марку посреди пустого поля. */
   .shot .device.phone .device-screen img { max-width: 432px;
                                             max-height: 675px; }
-  .canvas.scene .shot.phone-shot { top: 378px; }
+  .canvas.scene .shot.phone-shot { top: 243px; }
+  .shot.phone-shot .device.phone .device-screen img { max-height: 837px; }
   .device-notch { position: absolute; top: 24px; left: 50%; width: 104px;
                    height: 20px; margin-left: -52px; border-radius: 999px;
                    background: #0D0D10; z-index: 2; }
@@ -265,6 +274,35 @@
   .screens.n2 .s1 { top: 0%; }
   .screens.n2 .s2 { top: 40%; }
   .canvas.screens-scene .hero, .canvas.screens-scene .lead { max-width: 46%; }
+  /* §8 TYPE D — UI-хаос по её reference/8.webp: карточки интерфейса в
+     перспективе, на разных уровнях, частично перекрываются, дальние темнее и
+     размыты; активная — ближе всех и с оранжевой обводкой. Карточки рисует
+     вёрстка: плашка, иконка, строка — снимков тут нет. */
+  .ui-chaos { position: absolute; z-index: 1; right: 68px;
+               top: 135px; height: 1135px; width: 508px;
+               perspective: 1400px; }
+  .ui-card { position: absolute; left: calc(var(--shift) * 67px);
+              top: calc(var(--i) * 0px); width: 417px;
+              height: 324px;
+              display: flex; align-items: center; gap: 28px;
+              padding: 0 36px; border-radius: 28px;
+              background: linear-gradient(160deg, rgba(245,243,240,0.1) 0%,
+                #18171E 38%, rgba(13,13,16,0.94) 100%);
+              border: 1px solid rgba(245,243,240,0.16); box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45);
+              transform: rotateY(-16deg) rotateX(9deg) rotateZ(3deg); }
+  .ui-card .icon { flex: 0 0 auto; }
+  .ui-card-title { font-size: 39px; line-height: 1.2; color: #F5F3F0;
+                    min-width: 0; overflow-wrap: break-word; }
+  .ui-card.active { z-index: 10; border: 2px solid #FF955E;
+                     background: linear-gradient(160deg, rgba(255,149,94,0.26) 0%,
+                       #18171E 55%, rgba(13,13,16,0.94) 100%);
+                     box-shadow: inset 0 2px 0 rgba(245,243,240,0.16), inset 0 -2px 0 rgba(13,16,21,0.55), inset 0 20px 44px -20px rgba(245,243,240,0.16), 0 24px 48px rgba(13,16,21,0.55), 0 6px 14px rgba(13,16,21,0.45), 0 0 80px rgba(255,149,94,0.4);
+                     transform: rotateY(-16deg) rotateX(9deg) rotateZ(3deg) scale(1.06); }
+  .ui-card.d1 { z-index: 8; filter: brightness(0.78) blur(0.8px); }
+  .ui-card.d2 { z-index: 6; filter: brightness(0.58) blur(1.8px); }
+  .ui-card.d3 { z-index: 4; filter: brightness(0.42) blur(2.8px); }
+  .canvas.chaos-scene .hero, .canvas.chaos-scene .lead,
+  .canvas.chaos-scene .rule-accent { max-width: 529px; }
   /* §8 TYPE A: человек занимает правые 40–55% кадра. Колонка портрета стоит
      у правого края и её ширина задана числом, а не «половиной с полем»:
      от неё же считается, сколько остаётся тексту. «Фото может уходить за
@@ -327,13 +365,13 @@
   .hand-text { display: block; }
   .hand-arrow { flex: 0 0 auto; width: 41px;
                  height: 54px; }
-  .at-top-right { top: 162px; right: 28px; justify-content: flex-end; }
+  .at-top-right { top: 162px; right: 76px; justify-content: flex-end; }
   .at-top-right .hand-text { transform: rotate(-7deg); }
   .at-top-right .hand-arrow { order: 2; margin-top: -8px; transform: scaleX(-1); }
-  .at-bottom-left { bottom: 27px; left: 28px; }
+  .at-bottom-left { bottom: 80px; left: 76px; }
   .at-bottom-left .hand-text { transform: rotate(-6deg); }
   .at-bottom-left .hand-arrow { order: 2; margin-top: 4px; }
-  .at-mid-right { top: 634px; right: 28px; justify-content: flex-end; }
+  .at-mid-right { top: 634px; right: 76px; justify-content: flex-end; }
   .at-mid-right .hand-text { transform: rotate(-8deg); }
   .at-mid-right .hand-arrow { order: 2; margin-top: -6px; transform: scaleX(-1); }
   /* На обложке справа стоит человек: пометка над его лицом нечитаема. Уводим
@@ -343,9 +381,15 @@
                                        left: 68px;
                                        justify-content: flex-start; }
   .canvas.cover-scene .at-top-right .hand-arrow { transform: none; }
-  .at-top-left { top: 162px; left: 28px; }
+  .at-top-left { top: 162px; left: 76px; }
   .at-top-left .hand-text { transform: rotate(-5deg); }
   .at-top-left .hand-arrow { order: 2; margin-top: 4px; }
+  /* §8 TYPE E: плашка типографского слайда — крупнее, она несёт вывод. */
+  .canvas.type-e .summary { padding: 48px 36px; margin-top: 28px; }
+  .canvas.type-e .summary-line { font-size: 34px; }
+  /* §8 TYPE E: «короткий поясняющий текст» — крупно и узкой колонкой под
+     огромным заголовком, а не мелкой строкой во всю ширину. */
+  .canvas.type-e .lead { max-width: 548px; }
 
 </style>
 </head>
@@ -356,8 +400,9 @@
   
   <div class="shot phone-shot"><div class="device phone"><div class="device-body"><div class="device-screen"><img class="shot-img" src="phone-home.webp" alt="скриншот владелицы" style="filter: blur(10px);"><div class="device-glare"></div></div><div class="device-notch"></div></div></div></div>
   
+  
   <div class="header"><div class="header-count headline"><span class="header-num">03</span><span class="header-total">/ 09</span></div><div class="header-line"></div><div class="header-label">Признак 2</div></div>
-  <div class="hero headline"><div class="hero-line">2. Для одной</div><div class="hero-line">задачи у тебя</div><div class="hero-line">уже <span class="accent">несколько</span></div><div class="hero-line">приложений</div></div>
+  <div class="hero headline tight"><div class="hero-line">2. Для одной</div><div class="hero-line">задачи у тебя</div><div class="hero-line">уже <span class="accent">несколько</span></div><div class="hero-line">приложений</div></div>
   <p class="lead">Одно пишет. Второе оформляет. Третье что-то автоматизирует.<br>Инструментов становится больше.<br>А работы меньше почему-то не становится.</p>
   <div class="rule-accent"></div>
   
