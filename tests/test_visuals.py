@@ -1496,7 +1496,7 @@ def test_nine_slides_do_not_end_up_as_nine_identical_grids(tmp_path, monkeypatch
 def test_skill_teaches_her_carousel_visual_system():
     # навык обязан называть её файл и то, что он отменил
     text = SKILL.read_text(encoding="utf-8")
-    assert "18_CAROUSEL_VISUAL_SYSTEM.md" in text
+    assert "ESSA_PRESENTATION_STYLE.md" in text  # её файл, таск 12 п.4
     for mark in ("CAROUSEL_PALETTE", "CAROUSEL_MARGIN", "PLATE", "composition"):
         assert mark in text, mark
     assert "blobs" in text  # §14: пятен в фоне нет
@@ -1716,3 +1716,89 @@ def test_the_phone_carries_a_grid_of_app_tiles_and_not_a_screenshot():
     assert "<img" not in html                      # ни скриншота, ни картинки
     drawn = {p for p in templates.ICONS.values() if p in html}
     assert len(drawn) >= 8, f"плитки собрались из {len(drawn)} иконок"
+
+
+# --- Таск 12: навык знает всё, что умеет вёрстка -----------------------------
+# Ожидаемое — из таска 12: п.3 (поля слайда ровно по коду), п.1 (её порядок
+# работы дословно), п.4 (ссылка на её дизайн-систему), п.2 (точка входа).
+
+import inspect
+
+#: Поля, которые ставит сборка, а не данные слайда.
+BUILD_OWNED = {"index", "total", "notes"}
+
+
+def _skill_field_table():
+    text = SKILL.read_text(encoding="utf-8")
+    section = text.split("## Поля слайда", 1)[1].split("\n## ", 1)[0]
+    return set(re.findall(r"^\| `(\w+)`", section, flags=re.M))
+
+
+def test_skill_lists_exactly_the_fields_build_carousel_slide_takes():
+    accepted = set(inspect.signature(templates.build_carousel_slide).parameters) - BUILD_OWNED
+    listed = _skill_field_table()
+    assert accepted - listed == set(), "навык молчит о полях"
+    assert listed - accepted == set(), "навык называет полей, которых нет"
+
+
+def test_skill_carries_her_order_of_work_word_for_word():
+    text = SKILL.read_text(encoding="utf-8")
+    for step in (
+        "1. проанализируй смысл;",
+        "2. разбей материал на слайды;",
+        "3. придумай отдельную визуальную метафору для каждого слайда;",
+        "4. составь storyboard;",
+        "5. проверь, чтобы композиции и визуальные объекты не повторялись.",
+    ):
+        assert step in text, step
+    assert "какой кадр или объект лучше всего показывает эту мысль без текста?" in text
+    assert "essa-ai/content/2026-09-23-7-priznakov/storyboard.md" in text
+    assert "-m integrations.visuals.build" in text
+
+def test_build_entry_point_assembles_a_kit_from_slides_json(tmp_path, monkeypatch):
+    import json
+
+    from integrations.visuals import build
+
+    def snapped(html_path, out_png, width, height):   # движок снимка есть и снял
+        return render.RenderResult(ok=True, html_path=html_path, png_path=out_png,
+                                   width=width, height=height, engine="fake")
+
+    monkeypatch.setattr(render, "render_image", snapped)
+    kit_dir = tmp_path / "2026-09-24-test"
+    (kit_dir / "assets").mkdir(parents=True)
+    (kit_dir / "assets" / "shot.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (kit_dir / "slides.json").write_text(json.dumps({"slides": [
+        {"hook": "Первый\nслайд", "accent_word": "слайд", "header": False},
+        {"hook": "Второй", "label": "Признак 1", "body": "Раз · два · три",
+         "screens": ["assets/shot.png"]},
+    ]}, ensure_ascii=False), encoding="utf-8")
+
+    assert build.main([str(kit_dir)]) == 0
+
+    visuals = kit_dir / "visuals"
+    htmls = sorted(p.name for p in visuals.glob("carousel-*.html"))
+    assert htmls == ["carousel-01.html", "carousel-02.html"]
+    second = (visuals / "carousel-02.html").read_text(encoding="utf-8")
+    assert "Второй" in second and "shot.png" in second
+    assert (visuals / "shot.png").is_file()   # путь от папки slides.json, файл рядом с вёрсткой
+
+def test_build_entry_point_fails_loudly_when_png_was_not_taken(tmp_path, monkeypatch, capsys):
+    import json
+
+    from integrations.visuals import build
+
+    monkeypatch.setattr(render, "_playwright_module", lambda: None)   # движка снимка нет
+    kit_dir = tmp_path / "kit"
+    kit_dir.mkdir()
+    (kit_dir / "slides.json").write_text(json.dumps({"slides": [
+        {"hook": "Первый"}, {"hook": "Второй"},
+    ]}, ensure_ascii=False), encoding="utf-8")
+
+    code = build.main([str(kit_dir)])
+
+    assert code not in (0, 2)
+    assert code == build.EXIT_NOT_RENDERED
+    out = capsys.readouterr().out
+    assert "carousel-01.png" in out and "carousel-02.png" in out
+    assert "не снят" in out
