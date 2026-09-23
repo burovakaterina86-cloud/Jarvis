@@ -24,6 +24,8 @@ py -3.12 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
+После установки зависимостей — браузер для снимков карусели: `python -m playwright install chromium` (питоном из `.venv`).
+
 ## Шаг 1. Вход в Claude
 
 В терминале:

@@ -16,6 +16,7 @@ $CLAUDE_PROJECT_DIR, и отдаёт им событие JSON на stdin. Это
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -56,18 +57,70 @@ CASES: list[tuple[str, str, dict, int]] = [
 ]
 
 
+BIG_READ_KB = 150  # больше порога big_read.max_kb (100) в runtime/policy.yaml
+
+
+def big_read_results(root: Path) -> list[tuple[str, str, str]]:
+    """Заслон больших файлов — через `guard.decide`, а не запуском хука.
+
+    Живой guard.py на ответ «ask» отправил бы владелице запрос в Telegram, поэтому
+    здесь решение берётся у чистой функции. Возвращает (случай, ждали, получили).
+    """
+    spec = importlib.util.spec_from_file_location(
+        "jarvis_guard_selfcheck", ROOT / ".claude" / "hooks" / "guard.py")
+    guard = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = guard  # dataclass ищет свой модуль в sys.modules
+    spec.loader.exec_module(guard)
+    policy = guard.load_policy(ROOT / "runtime" / "policy.yaml")
+    root = Path(root)
+    big = root / "essa-ai" / "big-selfcheck.md"
+    big.parent.mkdir(parents=True, exist_ok=True)
+    line = b"big read selfcheck line\n"
+    big.write_bytes(line * (BIG_READ_KB * 1024 // len(line) + 1))
+    cases = [
+        (f"чтение файла {BIG_READ_KB} КБ целиком — подтверждение", {}, "ask"),
+        (f"чтение куска файла {BIG_READ_KB} КБ — пропуск", {"offset": 1, "limit": 20}, "allow"),
+    ]
+    out = []
+    for title, extra, expected in cases:
+        event = {"hook_event_name": "PreToolUse", "session_id": SELFCHECK_SESSION,
+                 "tool_name": "Read", "tool_input": {"file_path": str(big), **extra}}
+        out.append((title, expected, guard.decide(event, policy, root, env={}).action))
+    return out
+
+
+GIT_BASH_GUESSES = [r"C:\Program Files\Git\bin\bash.exe",
+                    r"C:\Program Files (x86)\Git\bin\bash.exe",
+                    str(Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/Git/bin/bash.exe")]
+
+
+def _is_wsl_bash(path: str) -> bool:
+    """bash.exe из System32/WindowsApps — это WSL: путей Windows он не видит."""
+    low = str(path).replace("/", "\\").lower()
+    return "\\windows\\system32\\" in low or "\\windowsapps\\" in low
+
+
 def find_bash() -> str | None:
-    """Тот же bash, которым Claude Code запускает хуки на Windows."""
+    """Тот же bash, которым Claude Code запускает хуки на Windows — Git Bash.
+
+    Раньше брался первый `bash` из PATH, а на этой машине это `C:\\Windows\\System32\\bash.exe`
+    (WSL), где `.venv/Scripts/python.exe` не существует. Claude Code берёт
+    CLAUDE_CODE_GIT_BASH_PATH или bash рядом с git.exe; так же делаем и здесь. WSL — никогда.
+    """
     env = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")
     if env and Path(env).is_file():
         return env
+    candidates = []
+    git = shutil.which("git")
+    if git:  # <Git>\cmd\git.exe или <Git>\mingw64\bin\git.exe → <Git>\bin\bash.exe
+        git_path = Path(git).resolve()
+        candidates += [str(p / "bin" / "bash.exe") for p in git_path.parents[:3]]
     found = shutil.which("bash")
-    if found:
-        return found
-    for guess in (r"C:\Program Files\Git\bin\bash.exe",
-                  r"C:\Program Files (x86)\Git\bin\bash.exe",
-                  str(Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/Git/bin/bash.exe")):
-        if Path(guess).is_file():
+    if found and not _is_wsl_bash(found):
+        candidates.append(found)
+    candidates += GIT_BASH_GUESSES
+    for guess in candidates:
+        if Path(guess).is_file() and not _is_wsl_bash(guess):
             return guess
     return None
 
@@ -122,7 +175,8 @@ def run_hook(bash: str, command: str, payload: dict, root: Path) -> tuple[int, s
 def main() -> int:
     bash = find_bash()
     if bash is None:
-        print("НЕ НАЙДЕН bash: хуки Claude Code на Windows запускаются через Git Bash. "
+        print("НЕ НАЙДЕН Git Bash: хуки Claude Code на Windows запускаются через него, "
+              "а bash из System32 — это WSL, путей проекта он не видит. "
               "Поставь Git for Windows или задай CLAUDE_CODE_GIT_BASH_PATH.")
         return 1
     print(f"bash: {bash}")
@@ -151,6 +205,11 @@ def main() -> int:
                         print(f"    {label}: {text[:300]}")
                 if code != expected:
                     bad += 1
+        for title, expected, actual in big_read_results(sandbox):
+            mark = "ok" if actual == expected else f"НЕ ТО (ждали {expected})"
+            print(f"[decide] {title}: {actual} — {mark}")
+            if actual != expected:
+                bad += 1
     finally:
         drop_sandbox(sandbox)
     print("\nИТОГ:", "все команды хуков исполняются как задумано"

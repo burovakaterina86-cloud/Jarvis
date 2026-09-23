@@ -41,7 +41,7 @@ This file is the orchestrator: modes, phase order, gates. The rules for each pha
 | 6 Review | `phases/6-review.md` | per-ticket review |
 | 7 Instruments | `phases/7-instruments.md` — **in Phase 4**, when the tickets are cut | `state.js`, `dashboard.html` + `index.html` (opened for the user) |
 | 8 Final | `phases/8-final.md` | blind acceptance, final report |
-| 9 Memory | `phases/9-memory.md` — **in Phase 5 and Phase 8** | `AGENTS.md` / `AGENTS.md`, `docs/adr/` — the project as the next session will find it |
+| 9 Memory | `phases/9-memory.md` — **in Phase 5 and Phase 8** | `CLAUDE.md` / `AGENTS.md`, `docs/adr/` — the project as the next session will find it |
 | — | `phases/5-repair.md` — when a ticket comes back anything other than `DONE` | the repair path, retries, spec amendments |
 | — | `phases/rationalizations.md` — on a failed gate, on catching yourself excusing something, once before the report | nothing; it is a checklist |
 | — | `phases/polish.md` — only with the `polish` parameter | доводка rounds |
@@ -148,7 +148,7 @@ Credentials are the user's to hold, not the agent's to handle. This section bind
 ├── sync.py              one call after each update: snapshot into the page, server back up if it died
 └── index.html           a symlink onto dashboard.html, so the pane's `/` is the dashboard
 
-AGENTS.md | AGENTS.md   the project memory — what the next session reads first
+CLAUDE.md | AGENTS.md   the project memory — what the next session reads first
 docs/adr/               decisions worth outliving the run — written in Phase 9, tier T2+
 ```
 
