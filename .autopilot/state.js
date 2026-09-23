@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-21T09:00:00+07:00",
-  "updatedAt": "2026-09-21T17:10:00+07:00",
+  "updatedAt": "2026-09-23T10:45:00+07:00",
   "finishedAt": null,
   "stages": [
     {
@@ -47,27 +47,31 @@ window.STATE =
     },
     {
       "id": "build",
-      "status": "active",
+      "status": "done",
       "startedAt": "2026-09-21T09:30:00+07:00",
-      "note": "готовы 01, 02, 04; 05 на доводке, 03 ждёт — прервано лимитом сессии до 19:00"
+      "note": "12 тасков сданы",
+      "finishedAt": "2026-09-23T10:40:00+07:00"
     },
     {
       "id": "review",
-      "status": "pending"
+      "status": "done",
+      "finishedAt": "2026-09-23T10:40:00+07:00",
+      "note": "12 тасков сданы"
     },
     {
       "id": "final",
-      "status": "pending"
+      "status": "active",
+      "startedAt": "2026-09-23T10:45:00+07:00"
     }
   ],
   "requirements": {
-    "total": 17,
-    "done": 0,
-    "inTicket": 11,
+    "total": 45,
+    "done": 40,
+    "inTicket": 0,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 3,
-    "dropped": 1
+    "dropped": 2
   },
   "tickets": [
     {
@@ -176,14 +180,16 @@ window.STATE =
         ".claude/skills/create-skill/SKILL.md",
         "tests/test_skill_transfer.py"
       ],
-      "status": "pending",
+      "status": "done",
       "retries": 0,
       "repairs": 0,
-      "handoffs": 0
+      "handoffs": 0,
+      "commit": "40fe496",
+      "finishedAt": "2026-09-21T20:30:00+07:00"
     },
     {
       "id": "05",
-      "title": "Плотность и графика по её эталону",
+      "title": "Плотность и графика по первому эталону",
       "requirements": [
         "G01",
         "G02",
@@ -204,21 +210,161 @@ window.STATE =
         ".claude/skills/carousel-instagram/SKILL.md",
         "tests/test_visuals.py"
       ],
-      "status": "repair",
+      "status": "done",
       "retries": 0,
       "repairs": 2,
       "handoffs": 0,
       "startedAt": "2026-09-21T15:45:00+07:00",
-      "commit": "6bedd5a (частично)",
+      "commit": "6bedd5a + 40fe496",
       "repairFindings": [
         "объём и воздух: блоки плоские, вертикаль пустая",
         "карточки перерастянуты во всю высоту вместо компактных; hourglass рисуется развалившейся; остаток пустоты под шагами; вставка скрина ни разу не проверена на настоящем файле"
-      ]
+      ],
+      "finishedAt": "2026-09-21T20:30:00+07:00"
+    },
+    {
+      "id": "06",
+      "retries": 0,
+      "repairs": 0,
+      "handoffs": 0,
+      "blockedBy": [],
+      "zone": [
+        "integrations/visuals/"
+      ],
+      "title": "Пять скиллов с GitHub",
+      "requirements": [
+        "S02"
+      ],
+      "status": "done",
+      "commit": "40fe496",
+      "finishedAt": "2026-09-21T20:30:00+07:00",
+      "wave": 3
+    },
+    {
+      "id": "07",
+      "retries": 0,
+      "repairs": 0,
+      "handoffs": 0,
+      "blockedBy": [],
+      "zone": [
+        "integrations/visuals/"
+      ],
+      "title": "Второй эталон: тонкие линии, оранжевый, портрет",
+      "requirements": [
+        "G09",
+        "G10",
+        "G11",
+        "G12",
+        "G13",
+        "G14",
+        "G15",
+        "D01"
+      ],
+      "status": "done",
+      "commit": "7866bae",
+      "finishedAt": "2026-09-22T11:30:00+07:00",
+      "wave": 4
+    },
+    {
+      "id": "08",
+      "retries": 0,
+      "repairs": 0,
+      "handoffs": 0,
+      "blockedBy": [],
+      "zone": [
+        "integrations/visuals/"
+      ],
+      "title": "Объём и сцена из её скринов",
+      "requirements": [
+        "G16",
+        "G17",
+        "G18"
+      ],
+      "status": "done",
+      "commit": "e64dfc7",
+      "finishedAt": "2026-09-22T13:30:00+07:00",
+      "wave": 5
+    },
+    {
+      "id": "09",
+      "retries": 0,
+      "repairs": 0,
+      "handoffs": 0,
+      "blockedBy": [],
+      "zone": [
+        "integrations/visuals/"
+      ],
+      "title": "Размытые скрины, пометки отдельно",
+      "requirements": [
+        "G19",
+        "G20"
+      ],
+      "status": "done",
+      "commit": "ec24e97 + f6d364d",
+      "finishedAt": "2026-09-22T15:00:00+07:00",
+      "wave": 6
+    },
+    {
+      "id": "10",
+      "retries": 0,
+      "repairs": 0,
+      "handoffs": 0,
+      "blockedBy": [],
+      "zone": [
+        "integrations/visuals/"
+      ],
+      "title": "Её дизайн-система каруселей",
+      "requirements": [
+        "G21",
+        "D03",
+        "D04",
+        "D05"
+      ],
+      "status": "done",
+      "commit": "b04360b",
+      "finishedAt": "2026-09-22T19:00:00+07:00",
+      "wave": 7
+    },
+    {
+      "id": "11",
+      "retries": 1,
+      "repairs": 0,
+      "handoffs": 0,
+      "blockedBy": [],
+      "zone": [
+        "integrations/visuals/"
+      ],
+      "title": "Дефекты «7 признаков» и новые кадры",
+      "requirements": [
+        "G21"
+      ],
+      "status": "done",
+      "commit": "f1fbf5c",
+      "finishedAt": "2026-09-23T09:30:00+07:00",
+      "wave": 8
+    },
+    {
+      "id": "12",
+      "retries": 0,
+      "repairs": 1,
+      "handoffs": 0,
+      "blockedBy": [],
+      "zone": [
+        "integrations/visuals/"
+      ],
+      "title": "Навык знает вёрстку, сборка одной командой",
+      "requirements": [
+        "G21"
+      ],
+      "status": "done",
+      "commit": "e7a8b76",
+      "finishedAt": "2026-09-23T10:40:00+07:00",
+      "wave": 9
     }
   ],
   "singlePass": null,
   "tests": {
-    "passed": 391,
+    "passed": 512,
     "failed": 0
   },
   "debt": {
@@ -237,7 +383,8 @@ window.STATE =
     "формат отметки о проходе конвейера продублирован дословно в трёх файлах — правка формата потребует трёх правок (T01 craft)",
     "заслон намеренно не покрывает чтение через shell (cat/Get-Content): размер в произвольной командной строке надёжно не определить (T04, граница названа в коде)",
     "таски 02 и 05 закоммичены зелёными, но ревью по осям манифест/спецификация/craft им ещё не проводилось — долг (лимит сессии)",
-    "иконка шага при неизвестном имени молча подменяется нейтральным кружком: место не пустует, но ошибка в имени не видна (T05)"
+    "иконка шага при неизвестном имени молча подменяется нейтральным кружком: место не пустует, но ошибка в имени не видна (T05)",
+    "ревью по осям манифест/спецификация/craft проведено для тасков 01 и 04; таски 02–12 шли по её глазу на рендере, формального ревью им не было — долг, закрывается приёмкой"
   ],
   "reviewers": {},
   "blind": {},
