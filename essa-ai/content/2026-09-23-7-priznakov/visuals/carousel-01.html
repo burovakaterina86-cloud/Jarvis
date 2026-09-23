@@ -395,6 +395,11 @@
   .at-bottom-left { bottom: 80px; left: 76px; }
   .at-bottom-left .hand-text { transform: rotate(-6deg); }
   .at-bottom-left .hand-arrow { order: 2; margin-top: 4px; }
+  /* Рядом с нижними строками заголовка: когда верхняя строка длинная и
+     top-right задевает её конец, а mid-right ложится на текст. */
+  .at-upper-right { top: 338px; right: 76px; justify-content: flex-end; }
+  .at-upper-right .hand-text { transform: rotate(-7deg); }
+  .at-upper-right .hand-arrow { order: 2; margin-top: -8px; transform: scaleX(-1); }
   .at-mid-right { top: 634px; right: 76px; justify-content: flex-end; }
   .at-mid-right .hand-text { transform: rotate(-8deg); }
   .at-mid-right .hand-arrow { order: 2; margin-top: -6px; transform: scaleX(-1); }

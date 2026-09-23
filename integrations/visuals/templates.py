@@ -33,6 +33,8 @@ O = tokens.ACCENT["ORANGE_ACCENT"]
 #: Куда ложатся рукописные пометки. Порядок — как в её слайдах: первая сверху
 #: справа от заголовка, вторая снизу слева под текстом, третья — правее середины.
 HAND_SLOTS = ("top-right", "bottom-left", "mid-right", "top-left")
+#: Места, которые задаются только явно (`"at"`), в очередь по умолчанию не входят.
+HAND_EXTRA_SLOTS = ("upper-right",)
 
 #: Служебные пометки функции слайда (07_CONTENT_RULES §5–§6 и §13 её адаптера).
 #: В кадр не попадают никогда: в первом рендере в плашку-рубрику утекло
@@ -1548,6 +1550,11 @@ def build_carousel_slide(
   .at-bottom-left {{ bottom: {hand_bottom}px; left: {hand_x}px; }}
   .at-bottom-left .hand-text {{ transform: rotate(-6deg); }}
   .at-bottom-left .hand-arrow {{ order: 2; margin-top: 4px; }}
+  /* Рядом с нижними строками заголовка: когда верхняя строка длинная и
+     top-right задевает её конец, а mid-right ложится на текст. */
+  .at-upper-right {{ top: {round(h * 0.25)}px; right: {hand_x}px; justify-content: flex-end; }}
+  .at-upper-right .hand-text {{ transform: rotate(-7deg); }}
+  .at-upper-right .hand-arrow {{ order: 2; margin-top: -8px; transform: scaleX(-1); }}
   .at-mid-right {{ top: {round(h * 0.47)}px; right: {hand_x}px; justify-content: flex-end; }}
   .at-mid-right .hand-text {{ transform: rotate(-8deg); }}
   .at-mid-right .hand-arrow {{ order: 2; margin-top: -6px; transform: scaleX(-1); }}

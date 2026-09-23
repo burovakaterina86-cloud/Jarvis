@@ -2027,7 +2027,7 @@ def _outside_margins(boxes):
     ]
 
 
-@pytest.mark.parametrize("slot", ["top-right", "bottom-left", "mid-right", "top-left"])
+@pytest.mark.parametrize("slot", ["top-right", "bottom-left", "mid-right", "top-left", "upper-right"])
 def test_handwritten_note_and_its_arrow_stay_inside_her_margins(slot, tmp_path):
     html = templates.build_carousel_slide(
         hook="Заголовок\nв две строки", body="Текст слайда.", label="Признак 4",
