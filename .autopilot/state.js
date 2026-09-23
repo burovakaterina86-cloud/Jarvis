@@ -1,7 +1,7 @@
 window.STATE =
 {
   "slug": "essa-style-and-visuals",
-  "dir": "2026-09-21-essa-style-and-visuals--wip",
+  "dir": "2026-09-21-essa-style-and-visuals",
   "title": "Стиль Катерины и картинки: конвейер текста + карусели, обложки, фоны сторис",
   "mode": "semi",
   "depth": "normal",
@@ -11,8 +11,8 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/burov/.claude/skills/autopilot",
   "startedAt": "2026-09-21T09:00:00+07:00",
-  "updatedAt": "2026-09-23T10:45:00+07:00",
-  "finishedAt": null,
+  "updatedAt": "2026-09-23T15:00:00+07:00",
+  "finishedAt": "2026-09-23T15:00:00+07:00",
   "stages": [
     {
       "id": "preflight",
@@ -60,8 +60,10 @@ window.STATE =
     },
     {
       "id": "final",
-      "status": "active",
-      "startedAt": "2026-09-23T10:45:00+07:00"
+      "status": "done",
+      "startedAt": "2026-09-23T10:45:00+07:00",
+      "finishedAt": "2026-09-23T15:00:00+07:00",
+      "note": "закрыта облегчённо по её выбору: повторная слепая приёмка не проводилась"
     }
   ],
   "requirements": {
@@ -364,7 +366,7 @@ window.STATE =
   ],
   "singlePass": null,
   "tests": {
-    "passed": 512,
+    "passed": 568,
     "failed": 0
   },
   "debt": {
@@ -387,7 +389,16 @@ window.STATE =
     "ревью по осям манифест/спецификация/craft проведено для тасков 01 и 04; таски 02–12 шли по её глазу на рендере, формального ревью им не было — долг, закрывается приёмкой"
   ],
   "reviewers": {},
-  "blind": {},
+  "blind": {
+    "verdict": "первая слепая приёмка: частично; все её находки закрыты тасками 13–15; повторная не проводилась — владелица выбрала закрыть без неё, чтобы не тратить лимит",
+    "drift": [
+      "повторной слепой проверки после тасков 13–15 не было — соответствие подтверждено только её глазом на рендере и тестами"
+    ],
+    "commands": [
+      ".venv\\Scripts\\python.exe -m pytest -q → 568 passed",
+      "python -m integrations.visuals.build essa-ai\\content6-09-23-7-priznakov → 9 PNG, код 0"
+    ]
+  },
   "coverage": {
     "findings": 6,
     "missing": 4,
