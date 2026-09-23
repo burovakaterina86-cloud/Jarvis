@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>AI-аудит контент-рутины</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&family=Open+Sans:wght@400;600;700&family=Marck+Script&display=swap" rel="stylesheet">
+<style>
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* Поля листа задаёт @page: разделы идут потоком и сами переходят на
+     следующий лист. Раньше каждый раздел занимал свой лист — 8 листов A4
+     с полупустыми страницами, её жалоба «много воздуха» (2026-09-23). */
+  @page { size: A4; margin: 18mm 16mm; }
+  html, body { background: #0D0D10; }
+  body {
+    font-family: 'Open Sans', sans-serif;
+    color: #F5F3F0;
+    -webkit-font-smoothing: antialiased;
+  }
+  .headline {
+    font-family: 'Roboto Condensed', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    line-height: 1.05;
+    letter-spacing: 0.01em;
+  }
+  .accent { color: #FF955E; }
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 22mm 18mm;
+    position: relative;
+    page-break-after: always;
+    break-after: page;
+    display: flex;
+    flex-direction: column;
+  }
+  .page:last-of-type { page-break-after: auto; break-after: auto; }
+  .cover {
+    min-height: calc(297mm - 36mm); position: relative;
+    display: flex; flex-direction: column; justify-content: center;
+    break-after: page; page-break-after: always;
+  }
+  .cover-text { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 12mm; }
+  /* Текст и портрет — разные колонки: портрет не заходит под текст (её правило
+     со слайдов «плашка не налезает на лицо»). */
+  .cover.with-photo .cover-text { max-width: 52%; }
+  .cover-photo {
+    position: absolute; right: -16mm; bottom: -18mm; height: 78%; width: auto;
+    max-width: 50%; object-position: right bottom;
+    z-index: 0; object-fit: contain;
+    -webkit-mask-image: linear-gradient(to left, #000 60%, transparent 100%);
+            mask-image: linear-gradient(to left, #000 60%, transparent 100%);
+  }
+  .section { margin-bottom: 14mm; break-inside: avoid; page-break-inside: avoid; }
+  .section .headline { break-after: avoid; page-break-after: avoid; }
+  .cta { margin-top: 6mm; break-inside: avoid; }
+  .kicker {
+    font-family: 'Open Sans', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: #C9C6C3;
+    font-size: 14px;
+  }
+  .cover .headline { font-size: 64px; }
+  .subtitle {
+    font-family: 'Open Sans', sans-serif;
+    font-size: 22px;
+    color: #C9C6C3;
+    max-width: 140mm;
+  }
+  .intro p { font-size: 18px; line-height: 1.5; margin-bottom: 10px; color: #F5F3F0; }
+  .author {
+    font-family: 'Open Sans', sans-serif;
+    font-weight: 600;
+    color: #FF955E;
+    font-size: 15px;
+  }
+  .rubric { display: flex; align-items: center; gap: 14px; margin-bottom: 10mm; }
+  .rubric .rule { flex: 1; height: 1px; background: #A8A5A5; opacity: 0.5; }
+  .section .headline { font-size: 36px; margin-bottom: 8mm; }
+  .handwritten {
+    font-family: 'Marck Script', cursive;
+    color: #FF955E;
+    font-size: 24px;
+    margin-bottom: 6mm;
+  }
+  .body p { font-size: 16px; line-height: 1.55; margin-bottom: 8px; color: #F5F3F0; }
+  .note-plate {
+    background: #18171E;
+    border-radius: 24px;
+    padding: 14px 18px;
+    margin: 8mm 0;
+    font-size: 15px;
+    line-height: 1.5;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .checklist { list-style: none; margin: 6mm 0; }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 15px;
+    line-height: 1.5;
+    margin-bottom: 8px;
+  }
+  .checklist .box {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid #FF955E;
+    border-radius: 3px;
+    margin-top: 3px;
+    flex: none;
+  }
+  .table-block {
+    margin-top: 8mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    text-align: left;
+    font-family: 'Open Sans', sans-serif;
+    font-weight: 600;
+    color: #C9C6C3;
+    border-bottom: 1.5px solid #A8A5A5;
+    padding: 8px 10px;
+  }
+  td {
+    padding: 10px;
+    border-bottom: 1px solid #A8A5A5;
+    vertical-align: top;
+    color: #F5F3F0;
+  }
+  td.fillable { min-height: 34px; }
+  .fill-line {
+    display: block;
+    width: 100%;
+    height: 22px;
+    border-bottom: 1px dashed #C9C6C3;
+  }
+  .cta { justify-content: center; align-items: center; text-align: center; gap: 10mm; }
+  .cta .rule { width: 60px; height: 2px; background: #FF955E; margin: 0 auto; }
+  .cta-text {
+    font-family: 'Open Sans', sans-serif;
+    font-size: 22px;
+    line-height: 1.5;
+    max-width: 130mm;
+  }
+
+</style>
+</head>
+<body>
+
+<section class="cover with-photo">
+  <img class="cover-photo" src="file:///C:/Users/burov/Projects/Jarvis/essa-ai/photo/katerina-portrait-cutout.png" alt="">
+  <div class="cover-text">
+    <div class="kicker">ESSA.AI</div>
+    <h1 class="headline">AI-аудит <span class="accent">контент-рутины</span></h1>
+    <p class="subtitle">Посчитай, сколько часов в неделю у тебя забирает блог — и с какого процесса начать разбираться</p>
+    <div class="intro"><p>Это не очередная инструкция про нейросети.</p><p>Это один честный лист, который стоит заполнить, прежде чем вообще думать про AI.</p><p>Ты, скорее всего, много делаешь руками — и ни разу не считала, сколько именно часов в неделю на это уходит.</p><p>Заполнишь эту таблицу — и увидишь свой процесс таким, какой он есть. А заодно поймёшь, с какого процесса стоит начать разбираться первым.</p></div>
+    <div class="author">Катерина Бурова · ESSA.AI</div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="rubric"><span class="accent">01 / 06</span><span class="rule"></span></div>
+  <h2 class="headline">Как заполнять</h2>
+  
+  <div class="body"><p>Напротив каждого процесса впиши три вещи: сколько часов в неделю он у тебя забирает, как часто повторяется и насколько сильно раздражает — от 1 до 5.</p><p>Честно, не для галочки. Если какого-то процесса у тебя нет — оставь строку пустой, это тоже результат.</p></div>
+  
+  
+  
+</section>
+
+<section class="section">
+  <div class="rubric"><span class="accent">02 / 06</span><span class="rule"></span></div>
+  <h2 class="headline">Восемь процессов</h2>
+  
+  <div class="body"><p>Вот процессы, с которыми обычно сталкивается эксперт, который сам ведёт блог.</p></div>
+  
+  
+  <div class="table-block"><table><thead><tr><th>Процесс</th><th>Часов в неделю</th><th>Частота</th><th>Раздражение (1–5)</th><th>Итог</th></tr></thead><tbody><tr><td>Монтаж</td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td></tr><tr><td>Видео</td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td></tr><tr><td>Сценарии</td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td></tr><tr><td>Тексты</td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td></tr><tr><td>Карусели</td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td></tr><tr><td>Визуал</td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td></tr><tr><td>Публикация</td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td></tr><tr><td>Планирование</td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td><td class="fillable"><span class="fill-line"></span></td></tr></tbody></table></div>
+</section>
+
+<section class="section">
+  <div class="rubric"><span class="accent">03 / 06</span><span class="rule"></span></div>
+  <h2 class="headline">Как посчитать и прочитать результат</h2>
+  
+  <div class="body"><p>Формула простая: Частота × Время × Раздражение.</p><p>Чем чаще процесс повторяется, чем больше часов забирает и чем сильнее раздражает — тем дороже он тебе обходится.</p><p>Не обязательно умножать цифры буквально. Просто посмотри, какая строка тяжелее остальных сразу по всем трём параметрам.</p></div>
+  <div class="note-plate">Самым дорогим не всегда оказывается самый долгий процесс. Иногда это тот, что повторяется каждый день и постоянно держит в напряжении.</div>
+  
+  
+</section>
+
+<section class="section">
+  <div class="rubric"><span class="accent">04 / 06</span><span class="rule"></span></div>
+  <h2 class="headline">Как выбрать первый процесс</h2>
+  
+  <div class="body"><p>Не начинай с самого сложного. Начинай с самого дорогого — того, что чаще всего повторяется, дольше всего длится и сильнее всего раздражает.</p><p>Не нужно решать всё сразу. Нужен один процесс, с которого начнёшь.</p></div>
+  
+  
+  
+</section>
+
+<section class="section">
+  <div class="rubric"><span class="accent">05 / 06</span><span class="rule"></span></div>
+  <h2 class="headline">Что делать с результатом дальше</h2>
+  
+  <div class="body"><p>Выбери один процесс — не пять.</p><p>Распиши его по шагам: что именно ты делаешь от начала и до конца, в каком порядке. Это уже половина дела — когда процесс расписан по шагам, сразу видно, где в нём можно что-то упростить.</p></div>
+  
+  
+  
+</section>
+
+<section class="section">
+  <div class="rubric"><span class="accent">06 / 06</span><span class="rule"></span></div>
+  <h2 class="headline">Если хочешь показать, что получилось</h2>
+  
+  <div class="body"><p>Дальше можно разбираться самой, а можно — вместе, в AI-Мастерской.</p><p>Спешить некуда. Таблица останется у тебя в любом случае.</p></div>
+  
+  
+  
+</section>
+
+<section class="cta">
+  <div class="rule"></div>
+  <p class="cta-text">Пришли мне свою таблицу и то, что получилось — напиши «АУДИТ», и подскажу, с чего начать именно с твоим процессом. <span class="accent">АУДИТ</span></p>
+</section>
+
+</body>
+</html>
