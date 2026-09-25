@@ -250,9 +250,6 @@ def test_nano_banana_only_for_appearance_and_first_there():
     assert ig.KIE_REF[0] == "nano-banana-2"
 
 
-def test_fresh_look_with_light_makeup():
-    assert "light natural everyday makeup" in ig.KEEP_FACE and "not tired" in ig.KEEP_FACE
-
 
 def test_her_photos_are_never_strict_classic():
     # её слова 2026-09-25: «не делай слишком строгие фото со мной… одежда современная но не строгая»
@@ -295,16 +292,11 @@ def test_generate_routes_style_refs(tmp_path):
     assert seen == {"raw": True, "refs": ["s.png"]}
 
 
-def test_face_is_described_slim_not_round():
-    # её слова 2026-09-25: «у меня не такое пухлое лицо, как ты рисуешь»
-    assert "slim and angular, not round" in ig.KEEP_FACE
-    assert "Do NOT make the face rounder, fuller, puffier" in ig.KEEP_FACE
-
-
 def test_identity_lock_is_her_contract():
-    for part in ("PRIMARY IDENTITY REFERENCE", "Do not redraw the face", "eye spacing", "hairline", "asymmetry",
-                 "making her younger", "more symmetrical", "enlarging the eyes", "beauty retouching",
-                 "always keep the likeness"):
+    for part in ("PRIMARY IDENTITY REFERENCE", "not like a similar woman", "Do not create her from a text",
+                 "how the eyes are set", "hairline", "natural facial asymmetry", "skin tone", "moles, freckles",
+                 "make her younger", "more symmetrical", "plastic or overly smooth", "make the face thinner",
+                 "likeness always wins"):
         assert part in ig.IDENTITY_LOCK, part
     assert ig.KEEP_FACE.startswith(ig.IDENTITY_LOCK)
 
@@ -326,8 +318,35 @@ def test_edit_mode_edits_her_photo_not_regenerates(tmp_path):
     assert "Photorealistic:" not in seen["prompt"]
 
 
-def test_edit_mode_needs_her_photo(tmp_path):
+def test_edit_mode_without_photo_uses_her_main_photo_from_assets(tmp_path):
+    seen = {}
+    ig.generate("x", tmp_path / "a.png", edit_scope="background",
+                codex=lambda p, d, r, refs=(), raw=False: seen.setdefault("refs", refs) and d,
+                kie=lambda *a, **k: None)
+    assert seen["refs"][0].name == "face-selfie-2.jpg"
+
+
+def test_no_text_description_of_her_face():
+    # её инструкция: не заменять фото описанием, не делать лицо худее/глаже
+    for banned in ("slim and angular", "makeup", "narrow oval face"):
+        assert banned not in ig.KEEP_FACE, banned
+
+
+def test_no_identity_reference_no_generation(tmp_path):
     import pytest
-    with pytest.raises(ig.ImageGenError):
-        ig.generate("x", tmp_path / "a.png", edit_scope="background", codex=lambda *a, **k: None,
-                    kie=lambda *a, **k: None)
+    with pytest.raises(ig.NoIdentityReference):
+        ig.require_identity([tmp_path / "нет.jpg"], root=tmp_path)      # ни переданных, ни в ассетах
+
+
+def test_her_frame_takes_her_reference_set_from_assets_in_order():
+    refs = ig.require_identity([])
+    assert [r.name for r in refs][:3] == ["face-selfie-2.jpg", "face-front-studio.png", "face-reference.jpg"]
+
+
+def test_missing_passed_ref_falls_back_to_assets_not_to_text(tmp_path):
+    import pytest
+    seen = {}
+    ig.generate("она за столом", tmp_path / "a.png", her=True, refs=[tmp_path / "нет.jpg"],
+                codex=lambda p, d, r, refs=(), raw=False: seen.setdefault("refs", refs) and d,
+                kie=lambda *a, **k: pytest.fail("codex ответил"))
+    assert seen["refs"] and seen["refs"][0].name == "face-selfie-2.jpg"

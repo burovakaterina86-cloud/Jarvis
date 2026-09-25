@@ -58,33 +58,57 @@ KIE_REF = ("nano-banana-2", "gpt-image-2-5-flare-image-to-image")
 KIE_REF_RESOLUTION = "2K"
 # образец СТИЛЯ (почерк, приём) — не внешности: только GPT Image 2.5, без правил про лицо и фотореализм
 KIE_STYLE = ("gpt-image-2-5-flare-image-to-image",)
-# Её контракт сходства 2026-09-25 («нет, это вообще не я — нужно жёстко фиксировать внешность правилами»):
-# не «сохрани внешность», а перечень что сохранить, что запрещено, и роли картинок.
+# Её инструкция IDENTITY LOCK 2026-09-25 (дословно — `essa-ai/IDENTITY_LOCK.md`), переведена для моделей.
+# Её фото передаётся в модель всегда (HAS_IDENTITY_REFERENCE); словесного описания её лица здесь нет —
+# инструкция прямо запрещает заменять фотографию описанием и делать лицо худее/глаже.
 IDENTITY_LOCK = (
-    "IDENTITY LOCK. IMAGE 1 is the PRIMARY IDENTITY REFERENCE. The person must remain exactly the same person. "
-    "Do not redraw the face from scratch. Preserve exactly: face shape and proportions; eye spacing and how the "
-    "eyes are set; eye colour; eyebrow shape; nose shape and width; lip shape; cheekbones and jawline; forehead "
-    "height; hairline; age; natural skin texture; facial asymmetry and individual features. "
-    "Forbidden unless explicitly requested: making her younger; making the face more symmetrical; enlarging the "
-    "eyes; enlarging the lips; narrowing the nose; changing the face shape; beauty retouching; changing the body "
-    "build. Any other images of this person are the same person from other angles - use them only to understand "
-    "her identity. Style or composition references never give facial features. "
-    "If style and likeness conflict, always keep the likeness. ")
+    "IDENTITY LOCK. The woman in the reference photos is a real person, Ekaterina. Her appearance is an "
+    "UNCHANGEABLE element: she must look like the very same real person from the reference photos, not like a "
+    "similar woman. IMAGE 1 is her PRIMARY IDENTITY REFERENCE; any other photos of her are the same person from "
+    "other angles and serve identity only. Do not create her from a text description. "
+    "Preserve as precisely as possible: face shape and proportions; the distances and proportions between eyes, "
+    "nose and lips; eye shape; how the eyes are set; eye colour; eyebrow shape and position; nose shape; lip "
+    "shape; jawline; chin; forehead shape; cheekbones; natural facial asymmetry; age; skin tone; natural skin "
+    "texture; moles, freckles and other individual features where visible; hairline; hair colour; the overall "
+    "hairstyle unless asked to change it; real body proportions. "
+    "Do NOT, unless explicitly requested: make her younger; make the face more symmetrical; make the skin "
+    "plastic or overly smooth; enlarge the eyes; enlarge the lips; make the nose smaller; change the chin; "
+    "change the face oval; make the face thinner; change the body build. "
+    "If beautiful stylisation conflicts with likeness, likeness always wins. ")
 KEEP_FACE = (IDENTITY_LOCK +
              "Clothing, pose, camera angle and setting may change. "
              # её слова 2026-09-25: «цвет волос запомни — холодный бежевый блонд»
-             "Her hair colour is always cool beige ash blonde - never golden, honey, warm yellow or brown. "
-             # её слова 2026-09-25: «лицо вообще не моё… у меня не такое пухлое лицо, как ты рисуешь»
-             "Her face is slim and angular, not round: a narrow oval face with high defined cheekbones, slightly hollow "
-             "cheeks, a clear jawline and a narrow chin, a straight nose, blue-grey eyes, straight brows darker than "
-             "her hair, natural medium lips. Do NOT make the face rounder, fuller, puffier, wider or softer; do not "
-             "beautify, slim the nose or enlarge the eyes; keep natural skin texture, freckles and fine lines. "
-             # её слова 2026-09-25: «лицо уставшее, можно лёгкий макияж»
-             "She looks fresh and rested, not tired: light natural everyday makeup - a little mascara, groomed brows, "
-             "a soft healthy glow, subtle blush, soft nude lips; no dark circles or heavy shadows under the eyes. "
+             "Her hair colour is cool beige ash blonde, as in the reference photos - never golden, honey or brown. "
              # её слова 2026-09-25: «не делай слишком строгие фото… одежда современная, но не строгая»
              "Her clothing is modern and relaxed, casual-chic (soft knitwear, relaxed shirts, easy trousers, "
-             "soft textures) - never strict classic business wear, no formal suits or stiff blazers; relaxed natural pose.")
+             "soft textures) - never strict classic business wear, no formal suits or stiff blazers.")
+
+
+#: Её identity reference set — порядок важен: первое — главное (IMAGE 1). Её пример 2026-09-25:
+#: `reference_images = [main, front, three_quarter]` → в модель, которая умеет image conditioning.
+IDENTITY_REFS = [
+    Path("essa-ai/photo/portraits/face-selfie-2.jpg"),       # main: анфас, высокое разрешение
+    Path("essa-ai/photo/portraits/face-front-studio.png"),   # front: студийный анфас
+    Path("essa-ai/photo/portraits/face-reference.jpg"),      # three_quarter
+    Path("essa-ai/photo/portraits/face-profile-left.png"),
+    Path("essa-ai/photo/portraits/face-profile-right.png"),
+]
+
+
+def require_identity(refs, root: Path | None = None) -> list:
+    """HAS_IDENTITY_REFERENCE: её фото обязательно передаётся в модель, иначе генерации нет.
+    Не передали — сначала ищем её основной набор в сохранённых ассетах проекта (её инструкция, п. 2)."""
+    base = root or ROOT
+    found = [Path(r) for r in refs or () if Path(r).is_file()]
+    if not found:
+        found = [base / r for r in IDENTITY_REFS if (base / r).is_file()]
+    if not found:
+        raise NoIdentityReference(
+            "нет её фотографии — без исходного фото невозможно гарантировать сохранение внешности "
+            "(essa-ai/IDENTITY_LOCK.md, п. 2); генерацию не выполняю")
+    return found
+
+
 def edit_prompt(scope: str, scene: str = "") -> str:
     """Правка её настоящего фото: лицо не перерисовывается, меняется только перечисленное (её схема 2026-09-25:
     «твоё фото → identity lock → правка фона/стиля → локальные изменения → обложка»)."""
@@ -106,6 +130,11 @@ CODEX_TIMEOUT_S = 600
 
 class ImageGenError(Exception):
     """Картинку получить не удалось."""
+
+
+
+class NoIdentityReference(ImageGenError):
+    """Кадр с ней без её фото — её инструкция (`essa-ai/IDENTITY_LOCK.md`, п. 2): генерацию не выполнять."""
 
 
 class CodexLimit(ImageGenError):
@@ -320,12 +349,14 @@ def _kie_task(model, prompt, dest, aspect_ratio, resolution, *, key, api, ref_ur
 # --- порядок ---
 
 def generate(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution: str = "2K", *,
-             refs=(), style_refs=(), edit_scope: str = "", only: str | None = None,
+             refs=(), style_refs=(), edit_scope: str = "", her: bool = False, only: str | None = None,
              codex=generate_codex, kie=generate_kie) -> Result:
     """`refs` — её фото-образцы, если внешность нужно сохранить; пусто — внешность не важна.
     `edit_scope` — правка её фото `refs[0]` вместо новой генерации: меняется только перечисленное."""
     dest = Path(dest)
     note = ""
+    if her or edit_scope:   # кадр с ней: её фото обязательно (HAS_IDENTITY_REFERENCE)
+        refs = require_identity(refs)
     if edit_scope:
         if not refs:
             raise ImageGenError("правка фото: нужно её фото первым --ref")
@@ -365,6 +396,8 @@ def main() -> int:
     p.add_argument("--ratio", default="3:4")
     p.add_argument("--res", default="2K", choices=["1K", "2K", "4K"])
     p.add_argument("--only", choices=["codex", "kie"])
+    p.add_argument("--her", action="store_true",
+                   help="на кадре она: без её фото в --ref генерация не выполняется (её IDENTITY LOCK)")
     p.add_argument("--edit", default="", help="правка её фото (первый --ref): что менять, например "
                    "«фон на светло-лавандовый, одежду на кремовый свитер»; промпт — какой должна стать сцена")
     p.add_argument("--style-ref", action="append", type=Path, default=[],
@@ -374,7 +407,7 @@ def main() -> int:
     a = p.parse_args()
     try:
         r = generate(a.prompt, a.dest, a.ratio, a.res, refs=a.ref, style_refs=a.style_ref, edit_scope=a.edit,
-                     only=a.only)
+                     her=a.her or bool(a.ref), only=a.only)
     except ImageGenError as e:
         print(f"ОШИБКА: {e}", file=sys.stderr)
         return 1

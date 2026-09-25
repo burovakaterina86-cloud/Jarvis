@@ -1,0 +1,12 @@
+{
+  "name": "cover-dark-real",
+  "bg": "dark",
+  "photo_kind": "her",
+  "hook": "Нейросеть\nпишет\n[[не твоим\nголосом?]]",
+  "pill": "Паспорт голоса",
+  "hand": "один вечер -\nи текст звучит как ты",
+  "support": "Детали\nимеют\nзначение",
+  "photo": "visuals/real-selfie-dark.png",
+  "focus": "55% 20%",
+  "photo_width": 0.52
+}
