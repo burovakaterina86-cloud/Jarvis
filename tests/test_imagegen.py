@@ -88,7 +88,7 @@ def test_missing_kie_key_names_the_variable():
 
 def test_kie_chains_by_task():
     assert ig.KIE_TEXT == ("grok-imagine-image-2-0/text-to-image", "gpt-image-2-5-flare-text-to-image")
-    assert ig.KIE_REF == ("gpt-image-2-5-flare-image-to-image", "nano-banana-2")
+    assert ig.KIE_REF == ("nano-banana-2", "gpt-image-2-5-flare-image-to-image")
     assert ig.KIE_REF_RESOLUTION == "2K"
 
 
@@ -140,14 +140,15 @@ def test_kie_without_refs_grok_then_gpt(tmp_path):
     assert [b["model"] for b in bodies] == list(ig.KIE_TEXT)
 
 
-def test_kie_with_refs_uploads_and_goes_gpt_then_nano_in_2k(tmp_path):
+def test_kie_with_refs_uploads_and_goes_nano_then_gpt_in_2k(tmp_path):
     ref = tmp_path / "me.png"
     ref.write_bytes(b"png")
     bodies = []
     ig.generate_kie("она за столом", tmp_path / "a.png", resolution="1K", refs=[ref], key="k",
                     api=_api_first_fails(bodies), download=lambda u, d: None, sleep=lambda s: None)
     assert [b["model"] for b in bodies] == list(ig.KIE_REF)
-    assert bodies[1]["input"]["image_input"] == ["https://kie/ref.png"]
+    assert bodies[0]["input"]["image_input"] == ["https://kie/ref.png"]      # nano — первая
+    assert bodies[1]["input"]["input_urls"] == ["https://kie/ref.png"]       # gpt — запасная
     assert bodies[1]["input"]["resolution"] == "2K"
 
 
@@ -243,9 +244,14 @@ def test_both_fail_reports_both(tmp_path):
     assert "usage limit" in str(excinfo.value) and "KIE_API_KEY" in str(excinfo.value)
 
 
-def test_nano_banana_only_for_appearance_and_only_as_backup():
-    assert "nano-banana-2" not in ig.KIE_TEXT
-    assert ig.KIE_REF[-1] == "nano-banana-2"
+def test_nano_banana_only_for_appearance_and_first_there():
+    # самая дорогая — только для её внешности; по сходству она выбрала её основной (2026-09-25)
+    assert "nano-banana-2" not in ig.KIE_TEXT and "nano-banana-2" not in ig.KIE_STYLE
+    assert ig.KIE_REF[0] == "nano-banana-2"
+
+
+def test_fresh_look_with_light_makeup():
+    assert "light natural everyday makeup" in ig.KEEP_FACE and "not tired" in ig.KEEP_FACE
 
 
 def test_her_photos_are_never_strict_classic():

@@ -9,8 +9,8 @@
 2. **kie.ai** (ключ `KIE_API_KEY` в `.env`) — если у Codex кончился лимит или он не сработал.
    Платно, кредитами kie.ai. Модель — по задаче (её решение 2026-09-25):
    - внешность сохранять не нужно — Grok Imagine 2.0, не вышло — GPT Image 2.5;
-   - нужно сохранить внешность (`--ref фото`) — GPT Image 2.5 в 2K (дешевле), не вышло — Nano Banana 2
-     в 2K. Фото-образцы сначала загружаются в kie.ai (хранятся там 3 дня).
+   - нужно сохранить внешность (`--ref фото`) — Nano Banana 2 в 2K (её выбор по сходству), не вышло —
+     GPT Image 2.5 в 2K. Фото-образцы сначала загружаются в kie.ai (хранятся там 3 дня).
 
 Картинки только реалистичные — живые фотокадры, не графика и не иллюстрация (её решение
 2026-09-25): к каждому промпту дописывается `REALISM`.
@@ -52,8 +52,9 @@ KIE_SPECS = {
 }
 # порядок попыток: без образцов внешности и с ними
 KIE_TEXT = ("grok-imagine-image-2-0/text-to-image", "gpt-image-2-5-flare-text-to-image")
-# Nano Banana 2 — самая дорогая: только для сохранения внешности и только запасной (её решение 2026-09-25)
-KIE_REF = ("gpt-image-2-5-flare-image-to-image", "nano-banana-2")
+# Nano Banana 2 — самая дорогая, поэтому только для сохранения её внешности. Сначала была запасной;
+# после сравнения на одном запросе она выбрала её: «второй ближе» (2026-09-25) — теперь основная для её кадров.
+KIE_REF = ("nano-banana-2", "gpt-image-2-5-flare-image-to-image")
 KIE_REF_RESOLUTION = "2K"
 # образец СТИЛЯ (почерк, приём) — не внешности: только GPT Image 2.5, без правил про лицо и фотореализм
 KIE_STYLE = ("gpt-image-2-5-flare-image-to-image",)
@@ -67,6 +68,9 @@ KEEP_FACE = ("Keep the person's face from the reference photo(s) exactly the sam
              "cheeks, a clear jawline and a narrow chin, a straight nose, blue-grey eyes, straight brows darker than "
              "her hair, natural medium lips. Do NOT make the face rounder, fuller, puffier, wider or softer; do not "
              "beautify, slim the nose or enlarge the eyes; keep natural skin texture, freckles and fine lines. "
+             # её слова 2026-09-25: «лицо уставшее, можно лёгкий макияж»
+             "She looks fresh and rested, not tired: light natural everyday makeup - a little mascara, groomed brows, "
+             "a soft healthy glow, subtle blush, soft nude lips; no dark circles or heavy shadows under the eyes. "
              # её слова 2026-09-25: «не делай слишком строгие фото… одежда современная, но не строгая»
              "Her clothing is modern and relaxed, casual-chic (soft knitwear, relaxed shirts, easy trousers, "
              "soft textures) - never strict classic business wear, no formal suits or stiff blazers; relaxed natural pose.")

@@ -146,8 +146,8 @@ when_to_use: "Запускай, когда Катерина пишет или г
   не сработал - сам уходит на **kie.ai** (платно, ключ `KIE_API_KEY`). Модель kie.ai выбирается по задаче:
   внешность не нужна - Grok Imagine 2.0 (запасная GPT Image 2.5); нужна она сама - добавь
   `--ref .claude/skills/lead-magnet-agent/assets/author/face-reference.jpg` (+ `face-front-studio.png`, `face-selfie-2.jpg`,
-  `face-profile-left.png`, `face-profile-right.png` там же — все пять `--ref` всегда), тогда GPT Image 2.5 в 2K
-  (запасная Nano Banana 2 в 2K). В ответе видно, кто нарисовал.
+  `face-profile-left.png`, `face-profile-right.png` там же — все пять `--ref` всегда), тогда Nano Banana 2 в 2K
+  (её выбор по сходству; запасная GPT Image 2.5). В ответе видно, кто нарисовал.
   **Её фото - только с `face-reference.jpg` в `--ref`** (её решение 2026-09-25; кадр по другим портретам
   она назвала непохожим). Одежду, позу, причёску, ракурс меняй свободно; внешность и все черты лица
   сохраняются, возраст не добавлять. Готовый кадр сравни с образцом глазами: не похожа - перегенерируй.
