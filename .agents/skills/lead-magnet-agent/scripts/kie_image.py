@@ -3,7 +3,7 @@
 Ключ — `KIE_API_KEY` в `.env` (вписывает владелица). Значение не печатается.
 Запуск из корня JARVIS:
 
-    .venv/Scripts/python .claude/skills/lead-magnet-agent/scripts/kie_image.py \
+    .venv/Scripts/python .Codex/skills/lead-magnet-agent/scripts/kie_image.py \
         "промпт" essa-ai/content/lead-magnets/<папка>/images/cover.png --ratio 3:4 --res 2K
 
 Каждый запуск тратит кредиты kie.ai — генерируй только то, что есть в «Карте визуала».
