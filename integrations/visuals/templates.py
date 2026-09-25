@@ -599,7 +599,9 @@ def _steps_html(steps: list, icon_size: int, stroke: str) -> str:
             + (f'<div class="step-note">{_t(note)}</div>' if note else "")
             + "</div>"
         )
-    return '<div class="steps"><div class="steps-row">' + "".join(cells) + "</div></div>"
+    # --n: сколько шагов — по нему ряд ужимает кружки, подписи и отрезки (5 шагов не влезали в кадр)
+    return (f'<div class="steps"><div class="steps-row" style="--n:{len(steps)}">'
+            + "".join(cells) + "</div></div>")
 
 
 def _flow_html(
@@ -1242,26 +1244,29 @@ def build_carousel_slide(
             flex-direction: column; justify-content: center; }}
   /* Соединение цепочки — отрезки между кружками, а не черта сквозь цифры:
      сквозная линия читалась как перечёркивание (её замечание 2026-09-22). */
-  .step-link {{ flex: 0 0 auto; width: 48px; height: 8px; border-radius: 4px;
+  .step-link {{ flex: 0 0 auto; width: clamp(16px, calc(192px / var(--n, 4)), 48px);
+                height: 8px; border-radius: 4px;
                 background: {O}; align-self: center;
                 box-shadow: 0 0 16px {_rgba(O, 0.55)}; }}
   .steps-row {{ position: relative; display: flex; justify-content: space-between;
-                align-items: stretch; gap: 16px; }}
+                align-items: stretch; gap: clamp(6px, calc(64px / var(--n, 4)), 16px); }}
   /* §8 TYPE C: «одинаковые компактные блоки — тёмный фон, тонкая violet border,
      минималистичная line icon»; стрелки между ними оранжевые. */
-  .step {{ flex: 1; text-align: center; padding: {gap // 2}px {gap // 3}px;
+  .step {{ flex: 1; min-width: 0; text-align: center; padding: {gap // 2}px {gap // 3}px;
            border-radius: {tokens.PLATE_RADIUS}px; background: {s["plate"]};
            border: 1px solid {s["plate_border"]}; box-shadow: {depth};
            display: flex; flex-direction: column; align-items: center; }}
-  .step-dot {{ width: {dot}px; height: {dot}px; border-radius: 50%;
+  .step-dot {{ width: min({dot}px, 100%); aspect-ratio: 1; border-radius: 50%;
+               display: flex; align-items: center; justify-content: center;
                margin: 0 auto; background: {s["fill"]}; color: {C["TEXT"]};
-               font-size: {label_size + 8}px; line-height: {dot}px;
+               font-size: {label_size + 8}px; line-height: 1;
                box-shadow: {node_glow}, inset 0 3px 0 {_rgba(P["TEXT_ON_DARK"], 0.55)},
                  inset 0 -4px 0 {_rgba(P["BG_DARK_PRIMARY"], 0.22)}; }}
   .step-icon {{ margin: {gap // 2}px auto {gap // 3}px; height: {icon_size}px; }}
   .step-caption {{ font-family: '{tokens.FONTS["HEADLINE"]}', {tokens.FALLBACK_STACK};
                    font-weight: {tokens.FONT_WEIGHTS["HEADLINE"]};
-                   font-size: {label_size + 8}px; line-height: 1.15; color: {s["text"]};
+                   font-size: calc({label_size + 8}px * min(1, calc(4 / var(--n, 4))));
+                   line-height: 1.15; color: {s["text"]}; hyphens: manual;
                    min-height: {round((label_size + 8) * 1.15 * 2)}px; }}
   .step-note {{ font-size: {micro_size}px; line-height: {micro_lh}; margin-top: 20px;
                 color: {s["muted"]}; }}

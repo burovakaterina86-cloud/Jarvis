@@ -631,8 +631,20 @@ def test_every_step_gets_an_icon_and_a_connecting_line():
     assert unnamed.count('class="step-icon"><svg') == 2
     assert templates.ICONS[templates.DEFAULT_STEP_ICON] in unnamed
     # отрезки лежат в самом ряду между кружками, а не чертой поверх цифр
-    assert '<div class="steps-row"><div class="step"' in named
+    assert re.search(r'<div class="steps-row"[^>]*><div class="step"', named)
     assert "position: relative" in _rule(named, ".steps-row")
+
+
+def test_five_steps_shrink_to_fit_the_frame():
+    # 2026-09-25: пять шагов вылезали за правый край — кружок был фиксированной ширины,
+    # карточка не сжималась. Ряд знает число шагов и ужимает кружки, подписи и отрезки.
+    five = templates.build_carousel_slide(
+        hook="Пять шагов", steps=[{"caption": c} for c in ("раз", "два", "три", "четыре", "пять")])
+    assert 'class="steps-row" style="--n:5"' in five
+    assert "min-width: 0" in _rule(five, ".step")
+    assert "min(" in _rule(five, ".step-dot") and "aspect-ratio: 1" in _rule(five, ".step-dot")
+    assert "var(--n" in _rule(five, ".step-caption")
+    assert "var(--n" in _rule(five, ".step-link")
 
 
 def test_step_captions_share_one_grid():
