@@ -10,4 +10,4 @@
   её цифры и отзывы — только из фактуры.
 - «Карта визуала» (возьму сам / нарисую / сгенерирую / нужно от тебя) — сразу после фактуры, до текста.
 - Текст — через textwriter → humaniser.
-- Генерация картинок — kie.ai, GPT Image 2 (`scripts/kie_image.py`, ключ `KIE_API_KEY`). ChatGPT Plus без API не подключить.
+- Генерация картинок (лидмагниты и карусели) — сначала Codex по её подписке ChatGPT Plus, кончился лимит — kie.ai (GPT Image 2, `KIE_API_KEY`). Одна команда: `python -m integrations.visuals.imagegen`.
