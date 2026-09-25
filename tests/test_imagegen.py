@@ -241,3 +241,8 @@ def test_both_fail_reports_both(tmp_path):
     with pytest.raises(ig.ImageGenError) as excinfo:
         ig.generate("кот", tmp_path / "a.png", codex=codex, kie=kie)
     assert "usage limit" in str(excinfo.value) and "KIE_API_KEY" in str(excinfo.value)
+
+
+def test_nano_banana_only_for_appearance_and_only_as_backup():
+    assert "nano-banana-2" not in ig.KIE_TEXT
+    assert ig.KIE_REF[-1] == "nano-banana-2"

@@ -51,10 +51,12 @@ KIE_SPECS = {
 }
 # порядок попыток: без образцов внешности и с ними
 KIE_TEXT = ("grok-imagine-image-2-0/text-to-image", "gpt-image-2-5-flare-text-to-image")
+# Nano Banana 2 — самая дорогая: только для сохранения внешности и только запасной (её решение 2026-09-25)
 KIE_REF = ("gpt-image-2-5-flare-image-to-image", "nano-banana-2")
 KIE_REF_RESOLUTION = "2K"
-KEEP_FACE = ("Keep the face, facial features, hair and body type of the person from the reference photo(s) "
-             "exactly the same; the person must be clearly recognizable. Clothing, pose and setting may change.")
+KEEP_FACE = ("Keep the person's face from the reference photo(s) exactly the same: every facial feature, "
+             "eye shape and colour, nose, lips, skin, and the same age - do not make her look older. "
+             "The person must be clearly recognizable. Clothing, pose, hairstyle, camera angle and setting may change.")
 REALISM = (
     "Photorealistic: a real photograph shot on a professional camera, natural light, real textures, "
     "real people and objects, shallow depth of field where it fits. Not an illustration, not flat "
