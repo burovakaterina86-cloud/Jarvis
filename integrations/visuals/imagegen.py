@@ -54,9 +54,16 @@ KIE_TEXT = ("grok-imagine-image-2-0/text-to-image", "gpt-image-2-5-flare-text-to
 # Nano Banana 2 — самая дорогая: только для сохранения внешности и только запасной (её решение 2026-09-25)
 KIE_REF = ("gpt-image-2-5-flare-image-to-image", "nano-banana-2")
 KIE_REF_RESOLUTION = "2K"
+# образец СТИЛЯ (почерк, приём) — не внешности: только GPT Image 2.5, без правил про лицо и фотореализм
+KIE_STYLE = ("gpt-image-2-5-flare-image-to-image",)
 KEEP_FACE = ("Keep the person's face from the reference photo(s) exactly the same: every facial feature, "
              "eye shape and colour, nose, lips, skin, and the same age - do not make her look older. "
-             "The person must be clearly recognizable. Clothing, pose, hairstyle, camera angle and setting may change.")
+             "The person must be clearly recognizable. Clothing, pose, hairstyle, camera angle and setting may change. "
+             # её слова 2026-09-25: «цвет волос запомни — холодный бежевый блонд»
+             "Her hair colour is always cool beige ash blonde - never golden, honey, warm yellow or brown. "
+             # её слова 2026-09-25: «не делай слишком строгие фото… одежда современная, но не строгая»
+             "Her clothing is modern and relaxed, casual-chic (soft knitwear, relaxed shirts, easy trousers, "
+             "soft textures) - never strict classic business wear, no formal suits or stiff blazers; relaxed natural pose.")
 REALISM = (
     "Photorealistic: a real photograph shot on a professional camera, natural light, real textures, "
     "real people and objects, shallow depth of field where it fits. Not an illustration, not flat "
@@ -82,7 +89,12 @@ class Result:
 
 # --- Codex ---
 
-def codex_prompt(prompt: str, filename: str, aspect_ratio: str, refs: bool = False) -> str:
+def codex_prompt(prompt: str, filename: str, aspect_ratio: str, refs: bool = False, raw: bool = False) -> str:
+    if raw:   # образец стиля: промпт как есть, без лица и фотореализма
+        return (f"Use $imagegen to generate exactly one image. Aspect ratio {aspect_ratio}, high resolution.\n"
+                f"The attached image(s) are style references.\n{prompt}\n\n"
+                f"Save the final PNG as {filename} in the current working directory. "
+                "Do not create any other files. Reply with only the saved file path.")
     keep = f"The attached image(s) are reference photos of the person. {KEEP_FACE}\n\n" if refs else ""
     return (
         f"Use $imagegen to generate exactly one image. Aspect ratio {aspect_ratio}, high resolution.\n"
@@ -123,14 +135,14 @@ def run_codex(cmd: list[str], cwd: Path) -> tuple[int, str]:
     return p.returncode, p.stdout
 
 
-def generate_codex(prompt: str, dest: Path, aspect_ratio: str = "3:4", *, refs=(),
+def generate_codex(prompt: str, dest: Path, aspect_ratio: str = "3:4", *, refs=(), raw: bool = False,
                    run=run_codex, home: Path | None = None) -> Path:
     dest = Path(dest).resolve()  # -C и cwd — одна папка; относительный путь удвоился бы
     dest.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["codex", "exec", "--skip-git-repo-check", "--ephemeral", "-s", "workspace-write",
            "-C", str(dest.parent), "--json",
            *[f"--image={Path(r).resolve()}" for r in refs],
-           codex_prompt(prompt, dest.name, aspect_ratio, refs=bool(refs))]
+           codex_prompt(prompt, dest.name, aspect_ratio, refs=bool(refs), raw=raw)]
     _, output = run(cmd, dest.parent)
     thread, error = parse_codex_events(output)
     if error and "usage limit" in error.lower():
@@ -176,9 +188,12 @@ def fit_ratio(model: str, aspect_ratio: str) -> str:
 
 
 def kie_task_body(model: str, prompt: str, aspect_ratio: str = "3:4", resolution: str = "2K",
-                  ref_urls: list[str] | None = None) -> dict:
+                  ref_urls: list[str] | None = None, raw: bool = False) -> dict:
     spec = KIE_SPECS[model]
-    text = f"{prompt}\n\n{KEEP_FACE}\n\n{REALISM}" if ref_urls else f"{prompt}\n\n{REALISM}"
+    if raw:
+        text = prompt
+    else:
+        text = f"{prompt}\n\n{KEEP_FACE}\n\n{REALISM}" if ref_urls else f"{prompt}\n\n{REALISM}"
     inp = {"prompt": text, "aspect_ratio": fit_ratio(model, aspect_ratio)}
     if spec["resolution"]:
         inp["resolution"] = resolution
@@ -225,18 +240,19 @@ def http_download(url: str, dest: Path) -> None:
 
 
 def generate_kie(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution: str = "2K", *, refs=(),
+                 style: bool = False,
                  key: str | None = None, api=kie_http, download=http_download, sleep=time.sleep,
                  timeout_s: int = 300) -> Path:
     """Модели kie.ai по очереди: без образцов — `KIE_TEXT`, с образцами внешности — `KIE_REF` в 2K."""
     key = key or require_kie_key()
     ref_urls = [kie_upload(r, key, api) for r in refs] if refs else None
-    chain = KIE_REF if ref_urls else KIE_TEXT
+    chain = KIE_STYLE if style else (KIE_REF if ref_urls else KIE_TEXT)
     if ref_urls:
         resolution = KIE_REF_RESOLUTION
     errors = []
     for model in chain:
         try:
-            return _kie_task(model, prompt, dest, aspect_ratio, resolution, key=key, api=api, ref_urls=ref_urls,
+            return _kie_task(model, prompt, dest, aspect_ratio, resolution, key=key, api=api, ref_urls=ref_urls, raw=style,
                              download=download, sleep=sleep, timeout_s=timeout_s)
         except ImageGenError as e:
             errors.append(f"{model}: {e}")
@@ -244,9 +260,9 @@ def generate_kie(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution:
 
 
 def _kie_task(model, prompt, dest, aspect_ratio, resolution, *, key, api, ref_urls, download, sleep,
-              timeout_s) -> Path:
+              timeout_s, raw=False) -> Path:
     created = api("POST", "/api/v1/jobs/createTask", key,
-                  kie_task_body(model, prompt, aspect_ratio, resolution, ref_urls))
+                  kie_task_body(model, prompt, aspect_ratio, resolution, ref_urls, raw=raw))
     task_id = (created.get("data") or {}).get("taskId")
     if created.get("code") != 200 or not task_id:
         raise ImageGenError(f"задача не создана: {created.get('msg') or created}")
@@ -271,12 +287,14 @@ def _kie_task(model, prompt, dest, aspect_ratio, resolution, *, key, api, ref_ur
 # --- порядок ---
 
 def generate(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution: str = "2K", *,
-             refs=(), only: str | None = None, codex=generate_codex, kie=generate_kie) -> Result:
+             refs=(), style_refs=(), only: str | None = None, codex=generate_codex, kie=generate_kie) -> Result:
     """`refs` — её фото-образцы, если внешность нужно сохранить; пусто — внешность не важна."""
     dest = Path(dest)
     note = ""
     if only != "kie":
         try:
+            if style_refs:
+                return Result(codex(prompt, dest, aspect_ratio, refs=style_refs, raw=True), "codex")
             return Result(codex(prompt, dest, aspect_ratio, refs=refs), "codex")
         except CodexLimit as e:
             note = f"у Codex кончился лимит подписки ({e})"
@@ -285,6 +303,8 @@ def generate(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution: str
         if only == "codex":
             raise ImageGenError(note)
     try:
+        if style_refs:
+            return Result(kie(prompt, dest, aspect_ratio, resolution, refs=style_refs, style=True), "kie", note)
         return Result(kie(prompt, dest, aspect_ratio, resolution, refs=refs), "kie", note)
     except ImageGenError as e:
         raise ImageGenError("; ".join(filter(None, [note, str(e)]))) from e
@@ -302,11 +322,13 @@ def main() -> int:
     p.add_argument("--ratio", default="3:4")
     p.add_argument("--res", default="2K", choices=["1K", "2K", "4K"])
     p.add_argument("--only", choices=["codex", "kie"])
+    p.add_argument("--style-ref", action="append", type=Path, default=[],
+                   help="образец стиля (почерк, приём), не внешности: промпт идёт как есть")
     p.add_argument("--ref", action="append", type=Path, default=[],
                    help="фото-образец, если внешность нужно сохранить (можно несколько раз)")
     a = p.parse_args()
     try:
-        r = generate(a.prompt, a.dest, a.ratio, a.res, refs=a.ref, only=a.only)
+        r = generate(a.prompt, a.dest, a.ratio, a.res, refs=a.ref, style_refs=a.style_ref, only=a.only)
     except ImageGenError as e:
         print(f"ОШИБКА: {e}", file=sys.stderr)
         return 1

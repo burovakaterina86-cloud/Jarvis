@@ -246,3 +246,44 @@ def test_both_fail_reports_both(tmp_path):
 def test_nano_banana_only_for_appearance_and_only_as_backup():
     assert "nano-banana-2" not in ig.KIE_TEXT
     assert ig.KIE_REF[-1] == "nano-banana-2"
+
+
+def test_her_photos_are_never_strict_classic():
+    # её слова 2026-09-25: «не делай слишком строгие фото со мной… одежда современная но не строгая»
+    assert "never strict classic" in ig.KEEP_FACE
+    body = ig.kie_task_body("gpt-image-2-5-flare-image-to-image", "она за столом", "4:5", "2K", ["u"])
+    assert "never strict classic" in body["input"]["prompt"]
+
+
+def test_hair_is_cool_beige_blonde():
+    assert "cool beige ash blonde" in ig.KEEP_FACE
+
+
+def test_style_refs_skip_face_and_realism_and_use_gpt_only(tmp_path):
+    ref = tmp_path / "hand.png"
+    ref.write_bytes(b"png")
+    bodies = []
+
+    def api(method, path, key, body=None):
+        if path == ig.KIE_UPLOAD:
+            return {"code": 200, "data": {"downloadUrl": "https://kie/hand.png"}}
+        if method == "POST":
+            bodies.append(body)
+            return {"code": 200, "data": {"taskId": "t"}}
+        return {"code": 200, "data": {"state": "success", "resultJson": json.dumps({"resultUrls": ["u"]})}}
+
+    ig.generate_kie("напиши текст", tmp_path / "a.png", refs=[ref], style=True, key="k", api=api,
+                    download=lambda u, d: None, sleep=lambda s: None)
+    assert [b["model"] for b in bodies] == list(ig.KIE_STYLE)
+    assert bodies[0]["input"]["prompt"] == "напиши текст"
+
+
+def test_generate_routes_style_refs(tmp_path):
+    seen = {}
+
+    def codex(p, d, ratio, refs=(), raw=False):
+        seen["raw"], seen["refs"] = raw, refs
+        return d
+
+    ig.generate("x", tmp_path / "a.png", style_refs=["s.png"], codex=codex, kie=lambda *a, **k: None)
+    assert seen == {"raw": True, "refs": ["s.png"]}

@@ -3,7 +3,7 @@
     python -m integrations.visuals.editorial <папка комплекта> [slides.json]
 
 Её решение 2026-09-25 (после «слайд первый ужасен… почему всегда одинаковая структура»):
-- эталон — `essa-ai/visual_references/карусель стиль 2/`: крупный узкий заголовок капсом,
+- эталон — `essa-ai/visual_references/карусель стиль 2/`: крупный узкий заголовок капсом (Oswald), текст — Open Sans,
   акцент **фиолетовый** (оранжевого нет — её `SKILL_carousel-instagram.md` §19–§20);
 - фоны тёмный / светлый **чередуются**;
 - плашки, стрелки, иконки; воздуха не слишком много (кроме обложки-хука);
@@ -32,11 +32,12 @@ PAD_X, PAD_TOP, PAD_BOTTOM = 68, 60, 72
 INNER = W - 2 * PAD_X
 
 #: Шрифты те же два (её DESIGN.md), но заголовку нужен вес 800 — как в её эталоне.
-FONTS_URL = ("https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700;800"
+#: Её решение 2026-09-25: заголовки — Oswald, текст — Open Sans.
+FONTS_URL = ("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700"
              "&family=Open+Sans:wght@400;600;700&display=swap")
 
-#: Средняя ширина знака Roboto Condensed 800 капсом в долях кегля (с запасом).
-CAPS_ADVANCE = 0.60
+#: Средняя ширина знака Oswald 600 капсом в долях кегля (с запасом).
+CAPS_ADVANCE = 0.52
 
 P, C = tokens.PALETTE, tokens.CAROUSEL_PALETTE
 THEMES = {
@@ -190,11 +191,11 @@ html, body {{ background:#000; }}
 .acc {{ color:{t['accent']}; }}
 b {{ font-weight:700; }}
 .head {{ display:flex; align-items:center; gap:26px; font-size:28px; position:relative; z-index:3; flex:none; }}
-.cnt {{ font-family:'Roboto Condensed'; font-weight:700; color:{t['muted']}; letter-spacing:.02em; }}
+.cnt {{ font-family:'Oswald'; font-weight:500; color:{t['muted']}; letter-spacing:.02em; }}
 .cnt b {{ color:{t['accent']}; }}
 .line {{ flex:1; height:2px; background:{t['rule']}; opacity:.6; }}
 .lbl {{ font-size:22px; letter-spacing:.2em; color:{t['muted']}; }}
-h1 {{ font-family:'Roboto Condensed', sans-serif; font-weight:800; text-transform:uppercase; line-height:.96;
+h1 {{ font-family:'Oswald', sans-serif; font-weight:600; text-transform:uppercase; line-height:.96;
   letter-spacing:-.005em; }}
 .rule {{ width:150px; height:8px; border-radius:4px; background:linear-gradient(90deg,{t['accent2']},{t['accent']}); margin:38px 0 34px; flex:none; }}
 .body {{ font-size:39px; line-height:1.36; }}
@@ -209,18 +210,18 @@ h1 {{ font-family:'Roboto Condensed', sans-serif; font-weight:800; text-transfor
 .step-plate {{ display:flex; align-items:center; gap:34px; padding:30px 38px; border-radius:28px; background:{t['plate']};
   border:2px solid {t['plate_border']}; }}
 .num {{ flex:none; width:92px; height:92px; border-radius:50%; background:{t['num_bg']}; color:#fff; display:flex;
-  align-items:center; justify-content:center; font-family:'Roboto Condensed'; font-weight:800; font-size:40px;
+  align-items:center; justify-content:center; font-family:'Oswald'; font-weight:600; font-size:40px;
   border:2px solid {t['accent']}; }}
-.st-title {{ font-family:'Roboto Condensed'; font-weight:800; text-transform:uppercase; font-size:58px; line-height:1; }}
+.st-title {{ font-family:'Oswald'; font-weight:600; text-transform:uppercase; font-size:58px; line-height:1; }}
 .st-text {{ font-size:32px; line-height:1.3; margin-top:10px; color:{t['muted']}; }}
 .arrow-down {{ display:flex; justify-content:center; padding:10px 0; }}
 .cards {{ display:grid; grid-template-columns:1fr 1fr; gap:26px; }}
 .card {{ background:{t['plate']}; border:2px solid {t['plate_border']}; border-radius:28px; padding:36px 32px; min-height:250px;
   display:flex; flex-direction:column; gap:20px; }}
-.c-title {{ font-family:'Roboto Condensed'; font-weight:800; text-transform:uppercase; font-size:46px; line-height:1.02; }}
+.c-title {{ font-family:'Oswald'; font-weight:600; text-transform:uppercase; font-size:46px; line-height:1.02; }}
 .c-text {{ font-size:30px; line-height:1.3; color:{t['muted']}; }}
 .compare {{ display:grid; grid-template-columns:1fr 56px 1.25fr; gap:18px 10px; align-items:stretch; }}
-.ch {{ font-family:'Roboto Condensed'; font-weight:800; text-transform:uppercase; font-size:30px; letter-spacing:.12em; color:{t['muted']}; }}
+.ch {{ font-family:'Oswald'; font-weight:600; text-transform:uppercase; font-size:30px; letter-spacing:.12em; color:{t['muted']}; }}
 .was {{ padding:24px 26px; border-radius:22px; background:{t['plate']}; color:{t['muted']}; font-size:30px; line-height:1.28;
   text-decoration:line-through; text-decoration-color:{t['plate_border']}; display:flex; align-items:center; }}
 .to {{ display:flex; align-items:center; justify-content:center; }}
