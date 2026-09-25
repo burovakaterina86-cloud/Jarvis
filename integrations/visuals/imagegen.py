@@ -69,8 +69,8 @@ IDENTITY_LOCK = (
     "Preserve as precisely as possible: face shape and proportions; the distances and proportions between eyes, "
     "nose and lips; eye shape; how the eyes are set; eye colour; eyebrow shape and position; nose shape; lip "
     "shape; jawline; chin; forehead shape; cheekbones; natural facial asymmetry; age; skin tone; natural skin "
-    "texture; moles, freckles and other individual features where visible; hairline; hair colour; the overall "
-    "hairstyle unless asked to change it; real body proportions. "
+    "texture; moles, freckles and other individual features where visible; hairline; hair colour; real body "
+    "proportions. "
     "Do NOT, unless explicitly requested: make her younger; make the face more symmetrical; make the skin "
     "plastic or overly smooth; enlarge the eyes; enlarge the lips; make the nose smaller; change the chin; "
     "change the face oval; make the face thinner; change the body build. "
@@ -83,7 +83,10 @@ IDENTITY_LOCK = (
     "FOCUS, NO SMOOTHING. Every pore, every eyebrow hair and eyelash is detailed. "
     "If beautiful stylisation conflicts with likeness, likeness always wins. ")
 KEEP_FACE = (IDENTITY_LOCK +
-             "Clothing, pose, camera angle and setting may change. "
+             # её правило 2026-09-25: «причёску, одежду обязательно меняем»
+             "Hairstyle and clothing MUST be different from the reference photos in every new image (a new "
+             "hairstyle and a new outfit that suit the scene); only the hair colour stays exactly as in the "
+             "reference. Pose, camera angle and setting may change. "
              # её слова 2026-09-25: «цвет волос запомни — холодный бежевый блонд»
              "Her hair colour is cool beige ash blonde, as in the reference photos - never golden, honey or brown. "
              # её слова 2026-09-25: «не делай слишком строгие фото… одежда современная, но не строгая»

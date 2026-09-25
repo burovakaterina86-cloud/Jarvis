@@ -360,3 +360,10 @@ def test_missing_passed_ref_falls_back_to_assets_not_to_text(tmp_path):
                 codex=lambda p, d, r, refs=(), raw=False: seen.setdefault("refs", refs) and d,
                 kie=lambda *a, **k: pytest.fail("codex ответил"))
     assert seen["refs"] and seen["refs"][0].name == "face-main-selfie-black.jpg"
+
+
+def test_hairstyle_and_clothing_always_change():
+    # её правило 2026-09-25: «причёску, одежду обязательно меняем» — лицо и цвет волос остаются
+    assert "overall hairstyle unless asked" not in ig.IDENTITY_LOCK
+    assert "Hairstyle and clothing MUST be different from the reference photos" in ig.KEEP_FACE
+    assert "hair colour stays" in ig.KEEP_FACE

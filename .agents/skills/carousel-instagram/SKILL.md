@@ -98,6 +98,8 @@ BRAND IDEA и CTA выглядят по-разному; тип подходит 
 - Сначала её готовые фото (`essa-ai/photo/README.md`); подходящего нет — генерирую по образцу:
   `.venv\Scripts\python.exe -m integrations.visuals.imagegen "промпт" <папка>\visuals\<имя>.png --ratio 4:5 --ref essa-ai/photo/portraits/face-main-selfie-black.jpg --ref essa-ai/photo/portraits/face-front-studio.png --ref essa-ai/photo/portraits/face-selfie-2.jpg --ref essa-ai/photo/portraits/face-reference.jpg --ref essa-ai/photo/portraits/face-profile-left.png --ref essa-ai/photo/portraits/face-profile-right.png`
   (главное селфи первым, студийный анфас, два селфи, два профиля — её образцы 2026-09-25, все всегда; волосы — **холодный бежевый блонд**, зашито в генератор)
+- **Причёска и одежда в каждом сгенерированном кадре — другие, чем на её фото** (её правило 2026-09-25,
+  зашито в `KEEP_FACE`); в промпте называешь новую причёску и новую одежду под сцену, цвет волос не трогаешь.
 - Одежда на её кадрах — **современная, расслабленная, не строгая классика** (её слова 2026-09-25); это
   правило уже зашито в генератор (`KEEP_FACE`), в промпте костюмов и пиджаков не заказываю.
 - В промпте: она **в правой половине кадра**, слева тёмная спокойная стена под текст; вечерний
