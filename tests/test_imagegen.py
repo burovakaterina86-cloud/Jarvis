@@ -299,3 +299,35 @@ def test_face_is_described_slim_not_round():
     # её слова 2026-09-25: «у меня не такое пухлое лицо, как ты рисуешь»
     assert "slim and angular, not round" in ig.KEEP_FACE
     assert "Do NOT make the face rounder, fuller, puffier" in ig.KEEP_FACE
+
+
+def test_identity_lock_is_her_contract():
+    for part in ("PRIMARY IDENTITY REFERENCE", "Do not redraw the face", "eye spacing", "hairline", "asymmetry",
+                 "making her younger", "more symmetrical", "enlarging the eyes", "beauty retouching",
+                 "always keep the likeness"):
+        assert part in ig.IDENTITY_LOCK, part
+    assert ig.KEEP_FACE.startswith(ig.IDENTITY_LOCK)
+
+
+def test_edit_mode_edits_her_photo_not_regenerates(tmp_path):
+    photo = tmp_path / "me.jpg"
+    photo.write_bytes(b"x")
+    seen = {}
+
+    def codex(p, d, ratio, refs=(), raw=False):
+        seen.update(prompt=p, refs=refs, raw=raw)
+        return d
+
+    ig.generate("светлый лавандовый фон", tmp_path / "a.png", refs=[photo], edit_scope="background only",
+                codex=codex, kie=lambda *a, **k: None)
+    assert seen["raw"] is True and seen["refs"] == [photo]
+    assert "EDIT SCOPE - change ONLY: background only" in seen["prompt"]
+    assert "Target: светлый лавандовый фон" in seen["prompt"]
+    assert "Photorealistic:" not in seen["prompt"]
+
+
+def test_edit_mode_needs_her_photo(tmp_path):
+    import pytest
+    with pytest.raises(ig.ImageGenError):
+        ig.generate("x", tmp_path / "a.png", edit_scope="background", codex=lambda *a, **k: None,
+                    kie=lambda *a, **k: None)

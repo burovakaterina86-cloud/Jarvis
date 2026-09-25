@@ -58,9 +58,20 @@ KIE_REF = ("nano-banana-2", "gpt-image-2-5-flare-image-to-image")
 KIE_REF_RESOLUTION = "2K"
 # образец СТИЛЯ (почерк, приём) — не внешности: только GPT Image 2.5, без правил про лицо и фотореализм
 KIE_STYLE = ("gpt-image-2-5-flare-image-to-image",)
-KEEP_FACE = ("Keep the person's face from the reference photo(s) exactly the same: every facial feature, "
-             "eye shape and colour, nose, lips, skin, and the same age - do not make her look older. "
-             "The person must be clearly recognizable. Clothing, pose, hairstyle, camera angle and setting may change. "
+# Её контракт сходства 2026-09-25 («нет, это вообще не я — нужно жёстко фиксировать внешность правилами»):
+# не «сохрани внешность», а перечень что сохранить, что запрещено, и роли картинок.
+IDENTITY_LOCK = (
+    "IDENTITY LOCK. IMAGE 1 is the PRIMARY IDENTITY REFERENCE. The person must remain exactly the same person. "
+    "Do not redraw the face from scratch. Preserve exactly: face shape and proportions; eye spacing and how the "
+    "eyes are set; eye colour; eyebrow shape; nose shape and width; lip shape; cheekbones and jawline; forehead "
+    "height; hairline; age; natural skin texture; facial asymmetry and individual features. "
+    "Forbidden unless explicitly requested: making her younger; making the face more symmetrical; enlarging the "
+    "eyes; enlarging the lips; narrowing the nose; changing the face shape; beauty retouching; changing the body "
+    "build. Any other images of this person are the same person from other angles - use them only to understand "
+    "her identity. Style or composition references never give facial features. "
+    "If style and likeness conflict, always keep the likeness. ")
+KEEP_FACE = (IDENTITY_LOCK +
+             "Clothing, pose, camera angle and setting may change. "
              # её слова 2026-09-25: «цвет волос запомни — холодный бежевый блонд»
              "Her hair colour is always cool beige ash blonde - never golden, honey, warm yellow or brown. "
              # её слова 2026-09-25: «лицо вообще не моё… у меня не такое пухлое лицо, как ты рисуешь»
@@ -74,6 +85,17 @@ KEEP_FACE = ("Keep the person's face from the reference photo(s) exactly the sam
              # её слова 2026-09-25: «не делай слишком строгие фото… одежда современная, но не строгая»
              "Her clothing is modern and relaxed, casual-chic (soft knitwear, relaxed shirts, easy trousers, "
              "soft textures) - never strict classic business wear, no formal suits or stiff blazers; relaxed natural pose.")
+def edit_prompt(scope: str, scene: str = "") -> str:
+    """Правка её настоящего фото: лицо не перерисовывается, меняется только перечисленное (её схема 2026-09-25:
+    «твоё фото → identity lock → правка фона/стиля → локальные изменения → обложка»)."""
+    return (IDENTITY_LOCK +
+            "Her hair colour stays cool beige ash blonde. "
+            f"EDIT IMAGE 1. EDIT SCOPE - change ONLY: {scope}. Everything else about the person - the whole face, "
+            "head, expression, skin and body - stays faithful to IMAGE 1, as in a careful photo retouch, not a "
+            "new portrait. Result is a real photograph, no text or logos."
+            + (f"\n\nTarget: {scene}" if scene else ""))
+
+
 REALISM = (
     "Photorealistic: a real photograph shot on a professional camera, natural light, real textures, "
     "real people and objects, shallow depth of field where it fits. Not an illustration, not flat "
@@ -250,7 +272,7 @@ def http_download(url: str, dest: Path) -> None:
 
 
 def generate_kie(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution: str = "2K", *, refs=(),
-                 style: bool = False,
+                 style: bool = False, raw: bool = False,
                  key: str | None = None, api=kie_http, download=http_download, sleep=time.sleep,
                  timeout_s: int = 300) -> Path:
     """Модели kie.ai по очереди: без образцов — `KIE_TEXT`, с образцами внешности — `KIE_REF` в 2K."""
@@ -262,7 +284,8 @@ def generate_kie(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution:
     errors = []
     for model in chain:
         try:
-            return _kie_task(model, prompt, dest, aspect_ratio, resolution, key=key, api=api, ref_urls=ref_urls, raw=style,
+            return _kie_task(model, prompt, dest, aspect_ratio, resolution, key=key, api=api, ref_urls=ref_urls,
+                             raw=style or raw,
                              download=download, sleep=sleep, timeout_s=timeout_s)
         except ImageGenError as e:
             errors.append(f"{model}: {e}")
@@ -297,12 +320,20 @@ def _kie_task(model, prompt, dest, aspect_ratio, resolution, *, key, api, ref_ur
 # --- порядок ---
 
 def generate(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution: str = "2K", *,
-             refs=(), style_refs=(), only: str | None = None, codex=generate_codex, kie=generate_kie) -> Result:
-    """`refs` — её фото-образцы, если внешность нужно сохранить; пусто — внешность не важна."""
+             refs=(), style_refs=(), edit_scope: str = "", only: str | None = None,
+             codex=generate_codex, kie=generate_kie) -> Result:
+    """`refs` — её фото-образцы, если внешность нужно сохранить; пусто — внешность не важна.
+    `edit_scope` — правка её фото `refs[0]` вместо новой генерации: меняется только перечисленное."""
     dest = Path(dest)
     note = ""
+    if edit_scope:
+        if not refs:
+            raise ImageGenError("правка фото: нужно её фото первым --ref")
+        prompt = edit_prompt(edit_scope, prompt)
     if only != "kie":
         try:
+            if edit_scope:
+                return Result(codex(prompt, dest, aspect_ratio, refs=refs, raw=True), "codex")
             if style_refs:
                 return Result(codex(prompt, dest, aspect_ratio, refs=style_refs, raw=True), "codex")
             return Result(codex(prompt, dest, aspect_ratio, refs=refs), "codex")
@@ -313,6 +344,8 @@ def generate(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution: str
         if only == "codex":
             raise ImageGenError(note)
     try:
+        if edit_scope:
+            return Result(kie(prompt, dest, aspect_ratio, resolution, refs=refs, raw=True), "kie", note)
         if style_refs:
             return Result(kie(prompt, dest, aspect_ratio, resolution, refs=style_refs, style=True), "kie", note)
         return Result(kie(prompt, dest, aspect_ratio, resolution, refs=refs), "kie", note)
@@ -332,13 +365,16 @@ def main() -> int:
     p.add_argument("--ratio", default="3:4")
     p.add_argument("--res", default="2K", choices=["1K", "2K", "4K"])
     p.add_argument("--only", choices=["codex", "kie"])
+    p.add_argument("--edit", default="", help="правка её фото (первый --ref): что менять, например "
+                   "«фон на светло-лавандовый, одежду на кремовый свитер»; промпт — какой должна стать сцена")
     p.add_argument("--style-ref", action="append", type=Path, default=[],
                    help="образец стиля (почерк, приём), не внешности: промпт идёт как есть")
     p.add_argument("--ref", action="append", type=Path, default=[],
                    help="фото-образец, если внешность нужно сохранить (можно несколько раз)")
     a = p.parse_args()
     try:
-        r = generate(a.prompt, a.dest, a.ratio, a.res, refs=a.ref, style_refs=a.style_ref, only=a.only)
+        r = generate(a.prompt, a.dest, a.ratio, a.res, refs=a.ref, style_refs=a.style_ref, edit_scope=a.edit,
+                     only=a.only)
     except ImageGenError as e:
         print(f"ОШИБКА: {e}", file=sys.stderr)
         return 1
