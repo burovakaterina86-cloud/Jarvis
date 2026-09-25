@@ -28,6 +28,7 @@ from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, Mes
 from integrations.telegram import files, outbox, render, voice
 from integrations.telegram.status import STATUS_DELAY, StatusReporter, too_long
 from runtime import activation
+from runtime import schedule as schedule_mod
 from runtime import sessions as sessions_mod
 from runtime import task_router
 from runtime.approvals import ApprovalsServer
@@ -526,6 +527,46 @@ class Gateway:
             delivered += 1
         return delivered
 
+    async def check_schedule(self, now: dt.datetime | None = None) -> list[str]:
+        """Задачи `runtime/schedule.json`, которым пора: слот отмечается ДО запуска (дважды не пойдёт),
+        ход идёт фоном от имени владелицы, ответ приходит ей как обычный ответ JARVIS."""
+        if self.bot is None or self.owner_id is None:
+            return []
+        now = now or dt.datetime.now()
+        started = []
+        state = schedule_mod.load_state(self.root)
+        for task, slot in schedule_mod.due_tasks(now, self.root):
+            prompt = schedule_mod.prompt_for(task, self.root).strip()
+            if not prompt:
+                continue
+            state[task["id"]] = slot.isoformat()
+            schedule_mod.save_state(state, self.root)
+            header = (f"Это задача по расписанию «{task['id']}» ({slot:%Y-%m-%d %H:%M}), владелица сейчас "
+                      "ничего не писала. Твой ответ уйдёт ей в Telegram как есть.\n\n")
+            job = Job(prompt=header + prompt, task=f"по расписанию: {task['id']}", uses_browser=False,
+                      on_event=_ignore_event)   # статус-карточку для фоновой задачи не показываем
+            if not hasattr(self, "_schedule_runs"):
+                self._schedule_runs = []
+            self._schedule_runs.append(asyncio.ensure_future(self._run_scheduled(job)))
+            started.append(task["id"])
+        return started
+
+    async def _run_scheduled(self, job) -> None:
+        try:
+            self.router.submit(self.owner_id, job)
+            result = await job.result
+        except Exception as exc:  # noqa: BLE001 — сбой расписания не роняет бота
+            log.warning("задача по расписанию %s не выполнилась: %s", job.task, type(exc).__name__)
+            return
+        await self._deliver(_BotContext(self.bot), self.owner_id, result)
+
+    async def schedule_tasks_done(self) -> None:
+        """Дождаться запущенных задач по расписанию (нужно тестам и мягкой остановке)."""
+        runs = getattr(self, "_schedule_runs", [])
+        if runs:
+            await asyncio.gather(*runs, return_exceptions=True)
+        self._schedule_runs = []
+
     async def watch_drafts(self, interval: float = DRAFT_POLL_INTERVAL, sleep=None) -> None:
         """Фоновый опрос. Сон подменяем в тестах — ждать по-настоящему там незачем."""
         sleep = sleep or asyncio.sleep
@@ -539,6 +580,10 @@ class Gateway:
                 await self.check_outbox()
             except Exception as exc:  # noqa: BLE001
                 log.warning("опрос почтового ящика не удался: %s", type(exc).__name__)
+            try:
+                await self.check_schedule()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("проверка расписания не удалась: %s", type(exc).__name__)
 
     async def _draft_action(self, query, token: str, value: str, decision: str) -> None:
         kind, _, name = value.partition(":")
@@ -671,6 +716,10 @@ class Gateway:
 
 
 # --------------------------------------------------------------------- вспомогательное
+
+async def _ignore_event(ev) -> None:
+    """События хода фоновой задачи никуда не идут — ей не нужна карточка «думаю…»."""
+
 
 @dataclass
 class _BotContext:

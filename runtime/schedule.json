@@ -1,0 +1,26 @@
+[
+  {
+    "id": "morning",
+    "kind": "daily",
+    "at": "08:00",
+    "catch_up_hours": 4,
+    "prompt": "runtime/prompts/morning.md",
+    "_why": "её решение 2026-09-25: утреннее сообщение в 8:00; позже 12:00 не догоняется"
+  },
+  {
+    "id": "reel-radar",
+    "kind": "weekly",
+    "weekday": 0,
+    "at": "09:00",
+    "prompt": "runtime/prompts/reel-radar.md",
+    "_why": "её решение 2026-09-25: рилс-радар по понедельникам утром; пропущенный догоняется в течение недели"
+  },
+  {
+    "id": "corrections-review",
+    "kind": "weekly",
+    "weekday": 6,
+    "at": "18:00",
+    "prompt": "runtime/prompts/corrections-review.md",
+    "_why": "её решение 2026-09-25: раз в неделю разбор её поправок → предложения правил, решает она"
+  }
+]
