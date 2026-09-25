@@ -7,3 +7,4 @@
 
 - 2026-09-18 — в essa-ai/ уже лежит наполненный knowledge pack (EXPERTISE, 02_AUDIENCE, 04_PRODUCTS_AND_AI_WORKSHOP, VOICE и др.), а короткие PROFILE/STRATEGY/PRODUCTS/ANALYTICS.md — пустые заглушки (подробнее: memory/projects/essa-ai.md)
 - 2026-09-25 — карусели: эталон «стиль 2», фиолетовый акцент, фоны тёмный/светлый по очереди, её фото на 1-м и последнем слайде; сборка `integrations.visuals.editorial` (подробнее: memory/decisions/2026-09-25-carousel-editorial.md)
+- 2026-09-25 — рилс-радар идёт сам по понедельникам 9:08 (задача приложения Claude `reel-radar-weekly`), итог приходит в Telegram через почтовый ящик бота `state/outbox/`; свежий радар (≤7 дней) задаёт тему всему комплекту content-plan; проект выложен в её приватный GitHub burovakaterina86-cloud/Jarvis_essa_ai, ветка main (подробнее: .claude/skills/reel-radar/SKILL.md)
