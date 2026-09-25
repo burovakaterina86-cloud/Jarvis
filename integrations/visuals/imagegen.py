@@ -5,8 +5,11 @@
 Порядок — её решение 2026-09-25:
 1. **Codex** (`codex exec` + встроенный навык `$imagegen`, модель gpt-image) — в рамках её подписки
    ChatGPT Plus, отдельно не платим. Картинки едят лимит Codex в 3-5 раз быстрее текста.
-2. **kie.ai** (GPT Image 2, ключ `KIE_API_KEY` в `.env`) — если у Codex кончился лимит или он не
-   сработал. Платно, кредитами kie.ai.
+2. **kie.ai** (ключ `KIE_API_KEY` в `.env`) — если у Codex кончился лимит или он не сработал.
+   Сначала Nano Banana 2, не вышло — GPT Image 2.5. Платно, кредитами kie.ai.
+
+Картинки только реалистичные — живые фотокадры, не графика и не иллюстрация (её решение
+2026-09-25): к каждому промпту дописывается `REALISM`.
 
 Печатает путь и кто нарисовал; если пришлось уйти на kie.ai — причину в stderr.
 Текст на картинках не заказывай: надписи накладываются вёрсткой.
@@ -28,7 +31,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 KIE_BASE = "https://api.kie.ai"
-KIE_MODEL = "gpt-image-2-text-to-image"
+# порядок попыток на kie.ai и поддерживаемые пропорции каждой модели
+KIE_MODELS = {
+    "nano-banana-2": ("1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"),
+    "gpt-image-2-5-flare-text-to-image": ("1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"),
+}
+REALISM = (
+    "Photorealistic: a real photograph shot on a professional camera, natural light, real textures, "
+    "real people and objects, shallow depth of field where it fits. Not an illustration, not flat "
+    "graphics, not a 3D render, not a cartoon. No text, letters or logos in the image."
+)
 CODEX_TIMEOUT_S = 600
 
 
@@ -52,7 +64,7 @@ class Result:
 def codex_prompt(prompt: str, filename: str, aspect_ratio: str) -> str:
     return (
         f"Use $imagegen to generate exactly one image. Aspect ratio {aspect_ratio}, high resolution.\n"
-        f"Image description:\n{prompt}\n\n"
+        f"Image description:\n{prompt}\n\n{REALISM}\n\n"
         f"Save the final PNG as {filename} in the current working directory. "
         "Do not create any other files. Reply with only the saved file path."
     )
@@ -125,8 +137,26 @@ def require_kie_key(env: dict[str, str] | None = None) -> str:
     return key
 
 
-def kie_task_body(prompt: str, aspect_ratio: str = "3:4", resolution: str = "2K") -> dict:
-    return {"model": KIE_MODEL, "input": {"prompt": prompt, "aspect_ratio": aspect_ratio, "resolution": resolution}}
+def _ratio_value(ratio: str) -> float:
+    w, h = ratio.split(":")
+    return float(w) / float(h)
+
+
+def fit_ratio(model: str, aspect_ratio: str) -> str:
+    """Пропорция, которую модель умеет: та же или ближайшая (4:5 у GPT Image 2.5 -> 3:4)."""
+    supported = KIE_MODELS[model]
+    if aspect_ratio in supported:
+        return aspect_ratio
+    want = _ratio_value(aspect_ratio)
+    return min(supported, key=lambda r: abs(_ratio_value(r) - want))
+
+
+def kie_task_body(model: str, prompt: str, aspect_ratio: str = "3:4", resolution: str = "2K") -> dict:
+    inp = {"prompt": f"{prompt}\n\n{REALISM}", "aspect_ratio": fit_ratio(model, aspect_ratio),
+           "resolution": resolution}
+    if model == "nano-banana-2":
+        inp["output_format"] = "png"
+    return {"model": model, "input": inp}
 
 
 def kie_http(method: str, path: str, key: str, body: dict | None = None) -> dict:
@@ -150,11 +180,23 @@ def http_download(url: str, dest: Path) -> None:
 def generate_kie(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution: str = "2K", *,
                  key: str | None = None, api=kie_http, download=http_download, sleep=time.sleep,
                  timeout_s: int = 300) -> Path:
+    """Модели kie.ai по очереди (`KIE_MODELS`): первая, что отдала картинку."""
     key = key or require_kie_key()
-    created = api("POST", "/api/v1/jobs/createTask", key, kie_task_body(prompt, aspect_ratio, resolution))
+    errors = []
+    for model in KIE_MODELS:
+        try:
+            return _kie_task(model, prompt, dest, aspect_ratio, resolution, key=key, api=api,
+                             download=download, sleep=sleep, timeout_s=timeout_s)
+        except ImageGenError as e:
+            errors.append(f"{model}: {e}")
+    raise ImageGenError("kie.ai: " + "; ".join(errors))
+
+
+def _kie_task(model, prompt, dest, aspect_ratio, resolution, *, key, api, download, sleep, timeout_s) -> Path:
+    created = api("POST", "/api/v1/jobs/createTask", key, kie_task_body(model, prompt, aspect_ratio, resolution))
     task_id = (created.get("data") or {}).get("taskId")
     if created.get("code") != 200 or not task_id:
-        raise ImageGenError(f"kie.ai: задача не создана: {created.get('msg') or created}")
+        raise ImageGenError(f"задача не создана: {created.get('msg') or created}")
 
     waited = 0
     while waited <= timeout_s:
@@ -163,14 +205,14 @@ def generate_kie(prompt: str, dest: Path, aspect_ratio: str = "3:4", resolution:
         if state == "success":
             urls = json.loads(info.get("resultJson") or "{}").get("resultUrls") or []
             if not urls:
-                raise ImageGenError("kie.ai: задача выполнена, но ссылки на картинку нет")
+                raise ImageGenError("задача выполнена, но ссылки на картинку нет")
             download(urls[0], dest)
             return dest
         if state == "fail":
-            raise ImageGenError(f"kie.ai: генерация не удалась: {info.get('failMsg') or info.get('failCode')}")
+            raise ImageGenError(f"генерация не удалась: {info.get('failMsg') or info.get('failCode')}")
         sleep(5)
         waited += 5
-    raise ImageGenError(f"kie.ai: не дождался картинки за {timeout_s} с")
+    raise ImageGenError(f"не дождался картинки за {timeout_s} с")
 
 
 # --- порядок ---

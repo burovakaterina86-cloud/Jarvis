@@ -73,11 +73,44 @@ def test_missing_kie_key_names_the_variable():
     assert "KIE_API_KEY" in str(excinfo.value)
 
 
-def test_kie_task_body_uses_gpt_image_2():
-    assert ig.kie_task_body("кот", aspect_ratio="3:4", resolution="2K") == {
-        "model": "gpt-image-2-text-to-image",
-        "input": {"prompt": "кот", "aspect_ratio": "3:4", "resolution": "2K"},
-    }
+def test_kie_tries_nano_banana_2_then_gpt_image_2_5():
+    assert list(ig.KIE_MODELS) == ["nano-banana-2", "gpt-image-2-5-flare-text-to-image"]
+
+
+def test_kie_task_body_nano_banana_png_and_realism():
+    body = ig.kie_task_body("nano-banana-2", "кот", aspect_ratio="4:5", resolution="2K")
+    assert body["model"] == "nano-banana-2"
+    assert body["input"]["aspect_ratio"] == "4:5"
+    assert body["input"]["output_format"] == "png"
+    assert body["input"]["prompt"].startswith("кот") and ig.REALISM in body["input"]["prompt"]
+
+
+def test_unsupported_ratio_snaps_to_nearest():
+    body = ig.kie_task_body("gpt-image-2-5-flare-text-to-image", "кот", aspect_ratio="4:5")
+    assert body["input"]["aspect_ratio"] == "3:4"
+    assert "output_format" not in body["input"]
+
+
+def test_codex_prompt_asks_for_real_photo():
+    assert ig.REALISM in ig.codex_prompt("кот", "a.png", "4:5")
+    assert "Not an illustration" in ig.REALISM
+
+
+def test_kie_falls_to_second_model(tmp_path):
+    models = []
+
+    def api(method, path, key, body=None):
+        if method == "POST":
+            models.append(body["model"])
+            if body["model"] == "nano-banana-2":
+                return {"code": 500, "msg": "overloaded"}
+            return {"code": 200, "data": {"taskId": "t2"}}
+        return {"code": 200, "data": {"state": "success", "resultJson": json.dumps({"resultUrls": ["u"]})}}
+
+    out = ig.generate_kie("кот", tmp_path / "a.png", key="k", api=api, download=lambda u, d: None,
+                          sleep=lambda s: None)
+    assert out == tmp_path / "a.png"
+    assert models == ["nano-banana-2", "gpt-image-2-5-flare-text-to-image"]
 
 
 def test_kie_polls_until_success_and_downloads(tmp_path):
@@ -98,7 +131,7 @@ def test_kie_polls_until_success_and_downloads(tmp_path):
                           download=lambda url, dest: saved.append((url, dest)), sleep=lambda s: None)
     assert out == tmp_path / "c.png"
     assert saved == [("https://x/img.png", tmp_path / "c.png")]
-    assert calls[0] == ("POST", "/api/v1/jobs/createTask")
+    assert calls[0] == ("POST", "/api/v1/jobs/createTask")  # первой пошла Nano Banana 2
     assert calls[1][1] == "/api/v1/jobs/recordInfo?taskId=t1"
 
 
