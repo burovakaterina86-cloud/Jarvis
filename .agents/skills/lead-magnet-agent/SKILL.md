@@ -145,8 +145,8 @@ when_to_use: "Запускай, когда Катерина пишет или г
   Сначала рисует **Codex** по её подписке ChatGPT Plus (бесплатно для неё), кончился лимит или Codex
   не сработал - сам уходит на **kie.ai** (платно, ключ `KIE_API_KEY`). Модель kie.ai выбирается по задаче:
   внешность не нужна - Grok Imagine 2.0 (запасная GPT Image 2.5); нужна она сама - добавь
-  `--ref .Codex/skills/lead-magnet-agent/assets/author/face-reference.jpg` (+ `face-profile-left.png`,
-  `face-profile-right.png` там же — для кадров сбоку), тогда GPT Image 2.5 в 2K
+  `--ref .Codex/skills/lead-magnet-agent/assets/author/face-reference.jpg` (+ `face-front-studio.png`, `face-selfie-2.jpg`,
+  `face-profile-left.png`, `face-profile-right.png` там же — все пять `--ref` всегда), тогда GPT Image 2.5 в 2K
   (запасная Nano Banana 2 в 2K). В ответе видно, кто нарисовал.
   **Её фото - только с `face-reference.jpg` в `--ref`** (её решение 2026-09-25; кадр по другим портретам
   она назвала непохожим). Одежду, позу, причёску, ракурс меняй свободно; внешность и все черты лица

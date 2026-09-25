@@ -287,3 +287,9 @@ def test_generate_routes_style_refs(tmp_path):
 
     ig.generate("x", tmp_path / "a.png", style_refs=["s.png"], codex=codex, kie=lambda *a, **k: None)
     assert seen == {"raw": True, "refs": ["s.png"]}
+
+
+def test_face_is_described_slim_not_round():
+    # её слова 2026-09-25: «у меня не такое пухлое лицо, как ты рисуешь»
+    assert "slim and angular, not round" in ig.KEEP_FACE
+    assert "Do NOT make the face rounder, fuller, puffier" in ig.KEEP_FACE

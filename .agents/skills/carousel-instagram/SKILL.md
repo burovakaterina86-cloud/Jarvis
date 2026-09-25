@@ -75,8 +75,8 @@ BRAND IDEA и CTA выглядят по-разному; тип подходит 
 ### 3. Её фото — первый и последний слайд
 Её решение: сгенерированные кадры с ней — **только на первом и последнем слайде**.
 - Сначала её готовые фото (`essa-ai/photo/README.md`); подходящего нет — генерирую по образцу:
-  `.venv\Scripts\python.exe -m integrations.visuals.imagegen "промпт" <папка>\visuals\<имя>.png --ratio 4:5 --ref essa-ai/photo/portraits/face-reference.jpg --ref essa-ai/photo/portraits/face-profile-left.png --ref essa-ai/photo/portraits/face-profile-right.png`
-  (анфас + два профиля — её образцы 2026-09-25; волосы — **холодный бежевый блонд**, зашито в генератор)
+  `.venv\Scripts\python.exe -m integrations.visuals.imagegen "промпт" <папка>\visuals\<имя>.png --ratio 4:5 --ref essa-ai/photo/portraits/face-front-studio.png --ref essa-ai/photo/portraits/face-selfie-2.jpg --ref essa-ai/photo/portraits/face-reference.jpg --ref essa-ai/photo/portraits/face-profile-left.png --ref essa-ai/photo/portraits/face-profile-right.png`
+  (студийный анфас, два селфи, два профиля — её образцы 2026-09-25, все пять всегда; волосы — **холодный бежевый блонд**, зашито в генератор)
 - Одежда на её кадрах — **современная, расслабленная, не строгая классика** (её слова 2026-09-25); это
   правило уже зашито в генератор (`KEEP_FACE`), в промпте костюмов и пиджаков не заказываю.
 - В промпте: она **в правой половине кадра**, слева тёмная спокойная стена под текст; вечерний

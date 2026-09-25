@@ -43,7 +43,8 @@ KIE_SPECS = {
                                             "resolution": False},
     "gpt-image-2-5-flare-text-to-image": {"ratios": ("1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"),
                                           "resolution": True},
-    "gpt-image-2-5-flare-image-to-image": {"ratios": ("1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4",
+    # 4:5 и 5:4 kie.ai у этой модели отклоняет (проверено 2026-09-25), хотя в документации они есть
+    "gpt-image-2-5-flare-image-to-image": {"ratios": ("1:1", "2:3", "3:2", "3:4", "4:3",
                                                       "9:16", "16:9", "21:9"),
                                            "resolution": True, "refs_field": "input_urls"},
     "nano-banana-2": {"ratios": ("1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"),
@@ -61,6 +62,11 @@ KEEP_FACE = ("Keep the person's face from the reference photo(s) exactly the sam
              "The person must be clearly recognizable. Clothing, pose, hairstyle, camera angle and setting may change. "
              # её слова 2026-09-25: «цвет волос запомни — холодный бежевый блонд»
              "Her hair colour is always cool beige ash blonde - never golden, honey, warm yellow or brown. "
+             # её слова 2026-09-25: «лицо вообще не моё… у меня не такое пухлое лицо, как ты рисуешь»
+             "Her face is slim and angular, not round: a narrow oval face with high defined cheekbones, slightly hollow "
+             "cheeks, a clear jawline and a narrow chin, a straight nose, blue-grey eyes, straight brows darker than "
+             "her hair, natural medium lips. Do NOT make the face rounder, fuller, puffier, wider or softer; do not "
+             "beautify, slim the nose or enlarge the eyes; keep natural skin texture, freckles and fine lines. "
              # её слова 2026-09-25: «не делай слишком строгие фото… одежда современная, но не строгая»
              "Her clothing is modern and relaxed, casual-chic (soft knitwear, relaxed shirts, easy trousers, "
              "soft textures) - never strict classic business wear, no formal suits or stiff blazers; relaxed natural pose.")
