@@ -25,7 +25,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, MessageHandler,
                           filters)
 
-from integrations.telegram import files, render, voice
+from integrations.telegram import files, outbox, render, voice
 from integrations.telegram.status import STATUS_DELAY, StatusReporter, too_long
 from runtime import activation
 from runtime import sessions as sessions_mod
@@ -502,6 +502,30 @@ class Gateway:
             self._save_seen(seen)
         return fresh
 
+    async def check_outbox(self) -> int:
+        """Письма из `state/outbox/` (задачи по расписанию) — владелице; ушедшие переносятся в sent/."""
+        if self.bot is None or self.owner_id is None:
+            return 0
+        delivered = 0
+        for path in outbox.pending(self.root):
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            text, attachments = files.extract_attachments(raw)
+            try:
+                for part in render.prepare(text.strip()):
+                    if part.strip():
+                        await render.send(self.bot, self.owner_id, part)
+            except Exception as exc:  # noqa: BLE001 — письмо остаётся и уйдёт на следующем опросе
+                log.warning("письмо %s не ушло: %s", path.name, type(exc).__name__)
+                continue
+            if attachments:
+                await self._send_attachments(_BotContext(self.bot), self.owner_id, attachments)
+            outbox.mark_sent(path)
+            delivered += 1
+        return delivered
+
     async def watch_drafts(self, interval: float = DRAFT_POLL_INTERVAL, sleep=None) -> None:
         """Фоновый опрос. Сон подменяем в тестах — ждать по-настоящему там незачем."""
         sleep = sleep or asyncio.sleep
@@ -511,6 +535,10 @@ class Gateway:
                 await self.check_drafts()
             except Exception as exc:  # noqa: BLE001 — наблюдение не должно ронять бота
                 log.warning("опрос черновиков не удался: %s", type(exc).__name__)
+            try:
+                await self.check_outbox()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("опрос почтового ящика не удался: %s", type(exc).__name__)
 
     async def _draft_action(self, query, token: str, value: str, decision: str) -> None:
         kind, _, name = value.partition(":")
@@ -643,6 +671,12 @@ class Gateway:
 
 
 # --------------------------------------------------------------------- вспомогательное
+
+@dataclass
+class _BotContext:
+    """То же, что telegram `context`, для отправки вне хода: `_send_attachments` берёт из него `.bot`."""
+    bot: object
+
 
 def _task_name(prompt: str) -> str:
     first = (prompt or "").strip().splitlines()[0] if prompt.strip() else "задача"
