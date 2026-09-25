@@ -84,6 +84,7 @@ FALLBACK_STACK = (
 #: но не задаёт, как именно превращать частоту в число — подписей со
 #: шкалой там нет. Подписи и числа ниже — решение вёрстки по возрастанию,
 #: не её слова; см. CONCERNS в отчёте таска, она должна проверить формулировки.
+#: Числа — сколько раз в неделю: множитель к «часов за один раз» (её решение 2026-09-25).
 FREQUENCY_SCALE = [
     ("", "— выбери —", 0),
     ("daily", "каждый день", 7),
@@ -515,7 +516,9 @@ def _js() -> str:
       var maxTotal = -1, maxRow = null, hoursSum = 0;
       rows.forEach(function(row){
         var v = readRow(row);
-        hoursSum += v.hours;
+        // Часов в неделю = время за один раз × сколько раз в неделю. Раньше колонка была
+        // «часов в неделю» и ещё раз умножалась на частоту — частота считалась дважды.
+        hoursSum += v.hours * v.freq;
         var total = v.freq * v.hours * v.irritation;
         var cell = row.querySelector(".f-total");
         if (cell) cell.textContent = total ? (Math.round(total * 10) / 10) : "0";

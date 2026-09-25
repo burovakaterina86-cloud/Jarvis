@@ -25,7 +25,7 @@ MINIMAL = {
             "heading": "Восемь процессов",
             "body": ["Вот процессы, с которыми обычно сталкивается эксперт."],
             "table": {
-                "columns": ["Процесс", "Часов в неделю", "Частота", "Раздражение (1–5)", "Итог"],
+                "columns": ["Процесс", "Часов за один раз", "Частота", "Раздражение (1–5)", "Итог"],
                 "rows": [["Монтаж", "", "", "", ""], ["Видео", "", "", "", ""]],
             },
             "checklist": ["Впиши часы", "Впиши раздражение"],
@@ -183,8 +183,11 @@ def test_total_formula_computed_in_browser(tmp_path):
         row.locator(".f-freq").select_option("often")  # 3 — «несколько раз в неделю»
         row.locator(".f-irritation").select_option("4")
         total = row.locator(".f-total").inner_text()
+        week = page.locator("#audit-hours-sum").inner_text()
         browser.close()
-    assert total == "60"  # 3 (частота) × 5 (часы) × 4 (раздражение)
+    assert total == "60"  # 3 (раз в неделю) × 5 (часов за раз) × 4 (раздражение)
+    # часы в неделю — время за раз × частота, частота не считается дважды
+    assert week == "15"
 
 
 @pytest.mark.skipif(render._playwright_module() is None, reason=PLAYWRIGHT_REASON)
