@@ -155,7 +155,7 @@ rules:
   - {tool: "mcp__playwright__browser_file_upload", match: '.', level: EXTERNAL, kind: send_message, reason: "загрузка файла на сайт"}
 
   # --- браузер: деньги и внешние действия ---
-  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(оплат|оплачу|pay\b|pay now|checkout|place order|оформить заказ|подтвердить заказ|купить|buy now|purchase)', level: MONEY, kind: purchase, reason: "оплата / покупка"}
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(оплат|оплачу|pay\b|pay now|checkout|place order|оформить заказ|подтвердить заказ|купить|buy now|purchase)', level: DENY, kind: purchase, reason: "оплату и покупку делает только владелица сама (её решение 2026-09-25): JARVIS только кладёт в корзину"}
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(заброниров|бронир|book now|reserve|booking)', level: MONEY, kind: booking, reason: "бронирование"}
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(удалить|delete|remove account|отменить заказ|cancel order)', level: MONEY, kind: irreversible, reason: "необратимое действие"}
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(отправить|send\b|submit|опубликовать|publish|post\b|поделиться|share|ответить|reply)', level: EXTERNAL, kind: send_message, reason: "отправка / публикация"}

@@ -105,7 +105,8 @@ CASES = [
     ("playwright send click", ev("mcp__playwright__browser_click", element="Кнопка Отправить", ref="e1"), "EXTERNAL", "ask"),
     ("flight check-in", ev("mcp__playwright__browser_click", element="Онлайн-регистрация на рейс", ref="e2"), "EXTERNAL", "ask"),
     # деньги
-    ("pay click", ev("mcp__playwright__browser_click", element="Оплатить 2 300 ₽", ref="e3"), "MONEY", "ask"),
+    # её решение 2026-09-25: покупает только она сама — «оплатить» запрещено всегда, только корзина
+    ("pay click", ev("mcp__playwright__browser_click", element="Оплатить 2 300 ₽", ref="e3"), "DENY", "deny"),
     ("book click", ev("mcp__playwright__browser_click", element="Забронировать билет", ref="e4"), "MONEY", "ask"),
     # ввод в поля карт и паролей — отказ
     ("type password", ev("mcp__playwright__browser_type", element="Password input", ref="e5", text="x"), "DENY", "deny"),
@@ -138,14 +139,14 @@ def test_external_auto_passes_without_request(root):
 
 def test_money_auto_setting_is_ignored(root):
     p = _policy(external={"purchase": "auto", "delete": "auto", "unknown_tool": "ask"})
-    d = guard.decide(ev("mcp__playwright__browser_click", element="Оплатить заказ", ref="e1"), policy=p, root=root, env={})
+    d = guard.decide(ev("mcp__playwright__browser_click", element="Забронировать", ref="e1"), policy=p, root=root, env={})
     assert (d.level, d.action) == ("MONEY", "ask")
     d = guard.decide(ev("Bash", command="rm a.txt"), policy=p, root=root, env={})
     assert (d.level, d.action) == ("MONEY", "ask")
 
 
 def test_money_over_limit_denied_without_request(root):
-    event = ev("mcp__playwright__browser_click", element="Оплатить 12 500 ₽", ref="e1")
+    event = ev("mcp__playwright__browser_click", element="Забронировать за 12 500 ₽", ref="e1")
     over = decide(event, root, env={"JARVIS_PURCHASE_LIMIT_RUB": "10000"})
     under = decide(event, root, env={"JARVIS_PURCHASE_LIMIT_RUB": "20000"})
     assert (over.level, over.action) == ("MONEY", "deny")
@@ -328,9 +329,19 @@ def test_review_table(name, event, level, action):
 
 
 def test_money_without_limit_env_still_asks(root):
-    event = ev("mcp__playwright__browser_click", element="Оплатить 99 999 ₽", ref="e1")
+    event = ev("mcp__playwright__browser_click", element="Забронировать за 99 999 ₽", ref="e1")
     d = decide(event, root, env={})
     assert (d.level, d.action) == ("MONEY", "ask")
+
+
+def test_purchase_is_never_allowed_even_under_limit(root):
+    # её решение 2026-09-25: «сам ничего не покупает, только может накидать товар в корзину»
+    for label in ("Оплатить 300 ₽", "Оформить заказ", "Купить", "Checkout"):
+        d = decide(ev("mcp__playwright__browser_click", element=label, ref="e1"), root,
+                   env={"JARVIS_PURCHASE_LIMIT_RUB": "100000"})
+        assert (d.level, d.action) == ("DENY", "deny"), label
+    cart = decide(ev("mcp__playwright__browser_click", element="В корзину", ref="e2"), root, env={})
+    assert cart.action != "deny"
 
 
 def test_approval_deadline_covers_whole_response(root, tmp_path_factory):

@@ -76,7 +76,7 @@ def test_browser_use_covers_errands():
     for tool in ("browser_snapshot", "browser_take_screenshot", "browser_navigate",
                  "browser_click", "browser_type"):
         assert tool in text, tool
-    for topic in ("Корзина", "Билеты", "три варианта", "сохранённым", "Instagram",
+    for topic in ("Корзина", "Билеты", "три варианта", "оплати сама", "Instagram",
                   "капч", "SMS", "нужен ты:", "/browser login"):
         assert topic in text, topic
 
