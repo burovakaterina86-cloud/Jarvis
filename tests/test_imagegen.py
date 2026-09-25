@@ -301,6 +301,16 @@ def test_identity_lock_is_her_contract():
     assert ig.KEEP_FACE.startswith(ig.IDENTITY_LOCK)
 
 
+def test_identity_lock_has_her_sharpness_and_no_age_rule():
+    # её правило 2026-09-25: возраст не добавлять, фигура та же, лицо ультра-резкое, без размытия и сглаживания
+    for part in ("make her older", "add age", "body build and figure proportions", "strictly as in the reference",
+                 "crystal-clear, ultra-sharp", "NO BLUR, NO SOFT FOCUS, NO SMOOTHING",
+                 "Every pore, every eyebrow hair and eyelash"):
+        assert part in ig.IDENTITY_LOCK, part
+    assert "face is always in sharp focus" in ig.REALISM
+    assert "the face is always in sharp focus" in ig.edit_prompt("background")
+
+
 def test_edit_mode_edits_her_photo_not_regenerates(tmp_path):
     photo = tmp_path / "me.jpg"
     photo.write_bytes(b"x")
@@ -323,7 +333,7 @@ def test_edit_mode_without_photo_uses_her_main_photo_from_assets(tmp_path):
     ig.generate("x", tmp_path / "a.png", edit_scope="background",
                 codex=lambda p, d, r, refs=(), raw=False: seen.setdefault("refs", refs) and d,
                 kie=lambda *a, **k: None)
-    assert seen["refs"][0].name == "face-selfie-2.jpg"
+    assert seen["refs"][0].name == "face-main-selfie-black.jpg"
 
 
 def test_no_text_description_of_her_face():
@@ -340,7 +350,7 @@ def test_no_identity_reference_no_generation(tmp_path):
 
 def test_her_frame_takes_her_reference_set_from_assets_in_order():
     refs = ig.require_identity([])
-    assert [r.name for r in refs][:3] == ["face-selfie-2.jpg", "face-front-studio.png", "face-reference.jpg"]
+    assert [r.name for r in refs][:3] == ["face-main-selfie-black.jpg", "face-front-white.jpg", "face-selfie-2.jpg"]
 
 
 def test_missing_passed_ref_falls_back_to_assets_not_to_text(tmp_path):
@@ -349,4 +359,4 @@ def test_missing_passed_ref_falls_back_to_assets_not_to_text(tmp_path):
     ig.generate("она за столом", tmp_path / "a.png", her=True, refs=[tmp_path / "нет.jpg"],
                 codex=lambda p, d, r, refs=(), raw=False: seen.setdefault("refs", refs) and d,
                 kie=lambda *a, **k: pytest.fail("codex ответил"))
-    assert seen["refs"] and seen["refs"][0].name == "face-selfie-2.jpg"
+    assert seen["refs"] and seen["refs"][0].name == "face-main-selfie-black.jpg"

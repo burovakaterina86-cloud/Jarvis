@@ -74,6 +74,13 @@ IDENTITY_LOCK = (
     "Do NOT, unless explicitly requested: make her younger; make the face more symmetrical; make the skin "
     "plastic or overly smooth; enlarge the eyes; enlarge the lips; make the nose smaller; change the chin; "
     "change the face oval; make the face thinner; change the body build. "
+    # её правило 2026-09-25 (дословно — `essa-ai/IDENTITY_LOCK.md`, п. 5)
+    "Her face and appearance are unchanged relative to the reference: identical facial features - the shape of "
+    "the cheekbones, nose and lips, the shape and colour of the eyes, the eyebrow shape, the jaw and chin are "
+    "fixed. Do not make her older and do not add age. Hair colour strictly as in the reference photo. Do not "
+    "change her identity, face, body build and figure proportions. "
+    "The face is crystal-clear, ultra-sharp, focus strictly on the eyes and skin texture - NO BLUR, NO SOFT "
+    "FOCUS, NO SMOOTHING. Every pore, every eyebrow hair and eyelash is detailed. "
     "If beautiful stylisation conflicts with likeness, likeness always wins. ")
 KEEP_FACE = (IDENTITY_LOCK +
              "Clothing, pose, camera angle and setting may change. "
@@ -87,7 +94,9 @@ KEEP_FACE = (IDENTITY_LOCK +
 #: Её identity reference set — порядок важен: первое — главное (IMAGE 1). Её пример 2026-09-25:
 #: `reference_images = [main, front, three_quarter]` → в модель, которая умеет image conditioning.
 IDENTITY_REFS = [
-    Path("essa-ai/photo/portraits/face-selfie-2.jpg"),       # main: анфас, высокое разрешение
+    Path("essa-ai/photo/portraits/face-main-selfie-black.jpg"),  # main: её выбор 2026-09-25, анфас, резкое
+    Path("essa-ai/photo/portraits/face-front-white.jpg"),    # её референс 2026-09-25: анфас, белый фон, резкий
+    Path("essa-ai/photo/portraits/face-selfie-2.jpg"),       # анфас, высокое разрешение
     Path("essa-ai/photo/portraits/face-front-studio.png"),   # front: студийный анфас
     Path("essa-ai/photo/portraits/face-reference.jpg"),      # three_quarter
     Path("essa-ai/photo/portraits/face-profile-left.png"),
@@ -116,13 +125,14 @@ def edit_prompt(scope: str, scene: str = "") -> str:
             "Her hair colour stays cool beige ash blonde. "
             f"EDIT IMAGE 1. EDIT SCOPE - change ONLY: {scope}. Everything else about the person - the whole face, "
             "head, expression, skin and body - stays faithful to IMAGE 1, as in a careful photo retouch, not a "
-            "new portrait. Result is a real photograph, no text or logos."
+            "new portrait. Result is a real photograph, the face is always in sharp focus, no text or logos."
             + (f"\n\nTarget: {scene}" if scene else ""))
 
 
 REALISM = (
     "Photorealistic: a real photograph shot on a professional camera, natural light, real textures, "
-    "real people and objects, shallow depth of field where it fits. Not an illustration, not flat "
+    "real people and objects, shallow depth of field only for the background - the face is always in sharp "
+    "focus. Not an illustration, not flat "
     "graphics, not a 3D render, not a cartoon. No text, letters or logos in the image."
 )
 CODEX_TIMEOUT_S = 600

@@ -79,8 +79,11 @@ BRAND IDEA и CTA выглядят по-разному; тип подходит 
 (её слова 2026-09-25: «реальное фото + дизайн → предпочтительный вариант; редактирование фото → когда надо изменить
 сцену; полная генерация по reference → только когда первые два не подходят»):
 1. **Реальное фото + дизайн — по умолчанию.** Бери её настоящее фото из `essa-ai/photo/` (индекс — `README.md`)
-   с подходящей позой, убери фон (светлый — `cutout.make_cutout`, тёмный — `cutout.make_dark_fade`) и встрой в
-   вёрстку (`photo` у слайда / обложки). Лицо 100% её, генерации нет.
+   с подходящей позой и встрой в вёрстку (`photo` у слайда / обложки). Лицо 100% её, генерации нет.
+   **Тёмная обложка — `portraits/face-main-selfie-black.jpg` целиком, без вырезания** (фон на фото уже тёмный,
+   вёрстка сама растворяет левый край; `photo_width` 0.5, `focus` "38% 20%" — лицо не заходит под заголовок).
+   Вырезанный фон с рваными краями она не принимает (её поправка 2026-09-25). Фото у неё не просишь —
+   карусель собираешь сам из `essa-ai/photo/`.
 2. **Правка её фото — когда нужна другая сцена, одежда, свет, предмет.** Её фото — первым `--ref`, лицо не трогается:
    `.venv\Scripts\python.exe -m integrations.visuals.imagegen "какой должна стать сцена" <папка>\visuals\<имя>.png --ratio 4:5 --ref essa-ai/photo/portraits/<её фото> --edit "что именно менять"`
 3. **Полная генерация по её фото — только если нужной позы/сцены нет ни на одном её фото:** `--her` (без `--ref`
@@ -93,8 +96,8 @@ BRAND IDEA и CTA выглядят по-разному; тип подходит 
 критерий, критерий — «это тот же человек».
 
 - Сначала её готовые фото (`essa-ai/photo/README.md`); подходящего нет — генерирую по образцу:
-  `.venv\Scripts\python.exe -m integrations.visuals.imagegen "промпт" <папка>\visuals\<имя>.png --ratio 4:5 --ref essa-ai/photo/portraits/face-front-studio.png --ref essa-ai/photo/portraits/face-selfie-2.jpg --ref essa-ai/photo/portraits/face-reference.jpg --ref essa-ai/photo/portraits/face-profile-left.png --ref essa-ai/photo/portraits/face-profile-right.png`
-  (студийный анфас, два селфи, два профиля — её образцы 2026-09-25, все пять всегда; волосы — **холодный бежевый блонд**, зашито в генератор)
+  `.venv\Scripts\python.exe -m integrations.visuals.imagegen "промпт" <папка>\visuals\<имя>.png --ratio 4:5 --ref essa-ai/photo/portraits/face-main-selfie-black.jpg --ref essa-ai/photo/portraits/face-front-studio.png --ref essa-ai/photo/portraits/face-selfie-2.jpg --ref essa-ai/photo/portraits/face-reference.jpg --ref essa-ai/photo/portraits/face-profile-left.png --ref essa-ai/photo/portraits/face-profile-right.png`
+  (главное селфи первым, студийный анфас, два селфи, два профиля — её образцы 2026-09-25, все всегда; волосы — **холодный бежевый блонд**, зашито в генератор)
 - Одежда на её кадрах — **современная, расслабленная, не строгая классика** (её слова 2026-09-25); это
   правило уже зашито в генератор (`KEEP_FACE`), в промпте костюмов и пиджаков не заказываю.
 - В промпте: она **в правой половине кадра**, слева тёмная спокойная стена под текст; вечерний

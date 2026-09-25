@@ -1,0 +1,13 @@
+{
+  "name": "cover-dark-gen",
+  "bg": "dark",
+  "photo_kind": "her",
+  "hook": "Нейросеть\nпишет\n[[не твоим\nголосом?]]",
+  "pill": "Паспорт голоса",
+  "hand": "один вечер -\nи текст звучит как ты",
+  "support": "Детали\nимеют\nзначение",
+  "photo": "visuals/her-gen-desk.png",
+  "focus": "70% 20%",
+  "photo_width": 0.6,
+  "hand_image": "essa-ai/content/2026-09-25-golos-karusel/visuals/cover-dark-real-hand.png"
+}
