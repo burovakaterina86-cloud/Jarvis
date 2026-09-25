@@ -4,6 +4,8 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
+import pytest
+
 from integrations.telegram import files, status, voice
 
 # ---------------------------------------------------------------- files
@@ -545,6 +547,128 @@ async def test_answer_reaches_the_owner_with_markup(tmp_path):
     assert "<b>Итог</b>" in msg["text"] and "<b>раз</b>" in msg["text"]
     assert "•" in msg["text"]
     assert "##" not in msg["text"] and "**" not in msg["text"]
+
+
+# ---------------------------------------------------------------- вложения 📎
+
+
+def test_extract_attachments_strips_lines_and_keeps_order():
+    text = "Привет\n\n📎 a.pdf\nОстальное\n📎 b.png\n"
+    cleaned, paths = files.extract_attachments(text)
+    assert paths == ["a.pdf", "b.png"]
+    assert "📎" not in cleaned
+    assert "Привет" in cleaned and "Остальное" in cleaned
+
+
+def test_resolve_attachment_rejects_path_outside_root(tmp_path):
+    outside = tmp_path.parent / "jarvis-attachment-outside.txt"
+    outside.write_text("x", encoding="utf-8")
+    try:
+        with pytest.raises(ValueError):
+            files.resolve_attachment(tmp_path, str(outside))
+    finally:
+        outside.unlink(missing_ok=True)
+
+
+async def test_attachment_line_is_sent_as_document_and_stripped_from_text(tmp_path):
+    report = tmp_path / "report.pdf"
+    report.write_bytes(b"%PDF-1.4 fake")
+    g = make_gateway(tmp_path, router=FakeRouter(answer="Готово.\n\n📎 report.pdf"))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="сделай pdf")), ctx)
+    assert len(ctx.bot.documents) == 1
+    assert ctx.bot.documents[0]["filename"] == "report.pdf"
+    assert not any("📎" in m["text"] for m in ctx.bot.sent)
+
+
+async def test_attachment_only_answer_still_sends_the_file(tmp_path):
+    """Ответ из одной строки 📎 не должен потеряться из-за проверки «текст пуст»."""
+    (tmp_path / "only.png").write_bytes(b"\x89PNG")
+    g = make_gateway(tmp_path, router=FakeRouter(answer="📎 only.png"))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="картинку")), ctx)
+    assert len(ctx.bot.documents) == 1
+    assert ctx.bot.documents[0]["filename"] == "only.png"
+
+
+@pytest.mark.parametrize("raw", [".env", "./.env", "sub/../.env"])
+async def test_dotenv_never_sent_by_relative_forms(tmp_path, raw):
+    (tmp_path / ".env").write_text("TELEGRAM_BOT_TOKEN=x", encoding="utf-8")
+    (tmp_path / "sub").mkdir()
+    g = make_gateway(tmp_path, router=FakeRouter(answer=f"секрет\n\n📎 {raw}"))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай .env")), ctx)
+    assert ctx.bot.documents == []
+    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+
+
+async def test_dotenv_absolute_path_never_sent(tmp_path):
+    envfile = tmp_path / ".env"
+    envfile.write_text("X=1", encoding="utf-8")
+    g = make_gateway(tmp_path, router=FakeRouter(answer=f"📎 {envfile}"))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай .env")), ctx)
+    assert ctx.bot.documents == []
+    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+
+
+async def test_path_outside_project_not_sent(tmp_path):
+    outside_dir = tmp_path.parent / "jarvis-attachment-outside-dir"
+    outside_dir.mkdir(exist_ok=True)
+    outside_file = outside_dir / "leak.txt"
+    outside_file.write_text("x", encoding="utf-8")
+    try:
+        g = make_gateway(tmp_path, router=FakeRouter(answer=f"📎 {outside_file}"))
+        ctx = FakeContext()
+        await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай файл")), ctx)
+        assert ctx.bot.documents == []
+        assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+    finally:
+        outside_file.unlink(missing_ok=True)
+        outside_dir.rmdir()
+
+
+async def test_directory_not_sent(tmp_path):
+    (tmp_path / "folder").mkdir()
+    g = make_gateway(tmp_path, router=FakeRouter(answer="📎 folder"))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="папку")), ctx)
+    assert ctx.bot.documents == []
+    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+
+
+async def test_too_many_attachments_only_limit_sent(tmp_path):
+    lines = []
+    for i in range(files.ATTACH_MAX_FILES + 1):
+        (tmp_path / f"f{i}.txt").write_text("x", encoding="utf-8")
+        lines.append(f"📎 f{i}.txt")
+    g = make_gateway(tmp_path, router=FakeRouter(answer="комплект\n\n" + "\n".join(lines)))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай всё")), ctx)
+    assert len(ctx.bot.documents) == files.ATTACH_MAX_FILES
+    assert any("Не отправил" in m["text"] and str(files.ATTACH_MAX_FILES) in m["text"]
+               for m in ctx.bot.sent)
+
+
+async def test_over_size_limit_not_sent(tmp_path, monkeypatch):
+    (tmp_path / "big.bin").write_bytes(b"x")
+    monkeypatch.setattr(files, "ATTACH_MAX_BYTES", 0)
+    g = make_gateway(tmp_path, router=FakeRouter(answer="📎 big.bin"))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="файл")), ctx)
+    assert ctx.bot.documents == []
+    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+
+
+async def test_one_bad_attachment_does_not_block_others(tmp_path):
+    (tmp_path / "good.txt").write_text("ok", encoding="utf-8")
+    (tmp_path / ".env").write_text("X=1", encoding="utf-8")
+    g = make_gateway(tmp_path, router=FakeRouter(answer="готово\n\n📎 .env\n📎 good.txt"))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="файлы")), ctx)
+    assert len(ctx.bot.documents) == 1
+    assert ctx.bot.documents[0]["filename"] == "good.txt"
+    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
 
 
 async def test_markup_refusal_never_costs_the_answer(tmp_path):

@@ -344,27 +344,58 @@ class Gateway:
         if getattr(result, "new_session", False):
             await self._send(context, chat_id,
                              "Начал новый разговор — прежний контекст потерялся.")
-        text = (getattr(result, "text", "") or "").strip()
-        if not text:
+        raw = (getattr(result, "text", "") or "").strip()
+        if not raw:
             return
-        # Ответ агента — markdown; владелице он уходит оформленным (render), а в файл
-        # кладётся исходный markdown: файл она открывает и правит, теги там лишние.
-        parts = render.prepare(text)
-        # Порог «лентой или файлом» считается по готовым к отправке кускам HTML, а не по
-        # markdown-кускам: владелице важно число сообщений в чате, а оно берётся отсюда.
-        if too_long(parts):
-            stamp = dt.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-            await context.bot.send_document(
-                chat_id, document=text.encode("utf-8"), filename=f"answer-{stamp}.md",
-                caption="Ответ длинный — целиком в файле.")
-        else:
-            for part in parts:
-                if part.strip():
-                    await render.send(context.bot, chat_id, part)
+        # Строки «📎 <путь>» — не текст для владелицы, а инструкция боту прислать файл;
+        # из показанного текста их убираем до разметки и до поиска черновика комплекта.
+        text, attachments = files.extract_attachments(raw)
+        text = text.strip()
+        if text:
+            # Ответ агента — markdown; владелице он уходит оформленным (render), а в файл
+            # кладётся исходный markdown: файл она открывает и правит, теги там лишние.
+            parts = render.prepare(text)
+            # Порог «лентой или файлом» считается по готовым к отправке кускам HTML, а не по
+            # markdown-кускам: владелице важно число сообщений в чате, а оно берётся отсюда.
+            if too_long(parts):
+                stamp = dt.datetime.now().strftime("%Y-%m-%d-%H%M%S")
+                await context.bot.send_document(
+                    chat_id, document=text.encode("utf-8"), filename=f"answer-{stamp}.md",
+                    caption="Ответ длинный — целиком в файле.")
+            else:
+                for part in parts:
+                    if part.strip():
+                        await render.send(context.bot, chat_id, part)
+        if attachments:
+            await self._send_attachments(context, chat_id, attachments)
         bundle = files.find_content_bundle(text, self.root)
         if bundle:
             await self._send(context, chat_id, "Черновик — ждёт твоего решения.",
                              reply_markup=self._content_keyboard(bundle))
+
+    async def _send_attachments(self, context, chat_id, raw_paths: list[str]) -> None:
+        """Отправляет файлы, названные агентом строками «📎 <путь>» — без пережатия.
+
+        Плохой файл не мешает остальным: причина отказа уходит одной строкой,
+        остальные вложения всё равно доставляются.
+        """
+        for i, raw in enumerate(raw_paths):
+            name = Path(raw.strip()).name or raw.strip() or "(пусто)"
+            if i >= files.ATTACH_MAX_FILES:
+                await self._send(context, chat_id,
+                                 f"Не отправил {name}: больше {files.ATTACH_MAX_FILES} файлов за раз")
+                continue
+            try:
+                path = files.resolve_attachment(self.root, raw)
+            except ValueError as exc:
+                await self._send(context, chat_id, f"Не отправил {name}: {exc}")
+                continue
+            try:
+                with open(path, "rb") as fh:
+                    await context.bot.send_document(chat_id, document=fh, filename=path.name)
+            except Exception as exc:  # noqa: BLE001 — сбой одного файла не должен ронять остальные
+                log.warning("не удалось отправить вложение %s: %s", path.name, type(exc).__name__)
+                await self._send(context, chat_id, f"Не отправил {path.name}: Telegram отказал")
 
     # ---- кнопки
 
