@@ -1,0 +1,16 @@
+{
+  "name": "cover-light",
+  "bg": "light",
+  "photo_kind": "her",
+  "hook": "Нейросеть\nпишет\n[[не твоим]]\nголосом?",
+  "pill": "Паспорт голоса",
+  "hand": "дело не в нейросети,\nа в памятке о тебе",
+  "support": "Свои слова\nвместо общих",
+  "icons": [
+    "chat",
+    "doc",
+    "mic"
+  ],
+  "photo": "visuals/cover-her-light.png",
+  "focus": "60% 15%"
+}

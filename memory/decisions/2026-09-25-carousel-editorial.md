@@ -12,3 +12,9 @@
 
 Сделано: `integrations/visuals/editorial.py` — шесть типов слайдов, проверка ритма, общий лист.
 Навык `carousel-instagram` ведёт на неё первой.
+
+## Обложки поста (тот же день)
+
+Её референсы обложек + её скилл `cover-post-katerina`. Решила: тёмная и светлая по очереди, с её фото
+и с фото по смыслу поста. Сделано: `integrations/visuals/cover.py`, чередование помнит
+`essa-ai/content/.last-cover.json`.

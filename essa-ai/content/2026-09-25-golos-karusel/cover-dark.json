@@ -1,0 +1,16 @@
+{
+  "name": "cover-dark",
+  "bg": "dark",
+  "photo_kind": "topic",
+  "hook": "Как научить\nChatGPT\nговорить\n[[твоим голосом]]",
+  "pill": "Паспорт голоса",
+  "hand": "один вечер -\nи текст звучит как ты",
+  "support": "Детали\nимеют\nзначение",
+  "photo": "visuals/cover-topic-dark.png",
+  "focus": "70% 50%",
+  "icons": [
+    "mic",
+    "doc",
+    "chat"
+  ]
+}

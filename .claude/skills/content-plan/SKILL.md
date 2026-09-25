@@ -71,7 +71,7 @@ when_to_use: "По запросам вида «сделай контент дл�
 1. Карусель — в её «стиле 2» (решение 2026-09-25): карта ритма → `slides.json` в папке комплекта →
    её фото на 1-м и последнем слайде → сборка `.venv\Scripts\python.exe -m integrations.visuals.editorial <папка комплекта>`.
    PNG и общий лист `contact-sheet.png` ложатся в `<папка комплекта>/visuals/`.
-2. Обложка поста и фон сторис — тем же навыком, пока старой сборкой `.venv\Scripts\python.exe -m integrations.visuals.build <папка комплекта>` (её `references/legacy-build.md`), в ту же `visuals/`.
+2. Обложка поста — `.venv\Scripts\python.exe -m integrations.visuals.cover <папка комплекта>` (её референсы, тёмная/светлая по очереди — см. `carousel-instagram`); фон сторис — пока старой сборкой `.venv\Scripts\python.exe -m integrations.visuals.build <папка комплекта>`. Всё в ту же `visuals/`.
 3. Каждый PNG открой глазами до ответа — проверка из `carousel-instagram`.
 
 Код выхода сборки не 0 — картинок нет: скажи владелице прямо, что картинок нет и почему («готово» не пиши; подробности — `.claude/skills/carousel-instagram/SKILL.md`, шаг 4). Тексты комплекта всё равно отдай — неудача вёрстки не отменяет шаг 9.
