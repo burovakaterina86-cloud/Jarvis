@@ -241,10 +241,17 @@ def test_real_browser_makes_png_of_exact_size(tmp_path):
 # --- навык carousel-instagram ---------------------------------------------
 
 SKILL = Path(__file__).resolve().parents[1] / ".claude" / "skills" / "carousel-instagram" / "SKILL.md"
+#: С 2026-09-25 правила старой сборки (обложка поста, сторис, старые комплекты) вынесены
+#: из навыка в его справочный файл; проверки старой сборки читают навык вместе с ним.
+LEGACY = SKILL.parent / "references" / "legacy-build.md"
+
+
+def _skill_text() -> str:
+    return SKILL.read_text(encoding="utf-8") + "\n" + LEGACY.read_text(encoding="utf-8")
 
 
 def test_skill_leads_the_render_and_serves_all_three_kinds():
-    text = SKILL.read_text(encoding="utf-8")
+    text = _skill_text()
     for kind in ("1080×1350", "1080×1920", "обложк", "сторис", "карусел"):
         assert kind in text, kind
     assert "render_image" in text and "build_kit_visuals" in text
@@ -252,7 +259,7 @@ def test_skill_leads_the_render_and_serves_all_three_kinds():
 
 
 def test_skill_keeps_her_constraints():
-    text = SKILL.read_text(encoding="utf-8")
+    text = _skill_text()
     for style in tokens.STYLES:
         assert style in text, style
     assert "STYLE_03" in text  # прямо назван как запрещённый
@@ -535,7 +542,7 @@ def test_kit_carries_her_files_next_to_the_layout_and_reports_a_missing_one(
 
 
 def test_skill_tells_how_dense_slide_is_assembled():
-    text = SKILL.read_text(encoding="utf-8")
+    text = _skill_text()
     for word in ("steps", "flow", "cards", "summary", "handwritten", "photo", "screenshot"):
         assert word in text, word
     assert tokens.HAND_FONT in text
@@ -936,7 +943,7 @@ def test_the_screenshot_becomes_the_scene_on_the_right(tmp_path):
 
 
 def test_skill_describes_the_second_reference():
-    text = SKILL.read_text(encoding="utf-8")
+    text = _skill_text()
     for word in ("accent_word", "hand-note", "ORANGE_ACCENT", "step-link"):
         assert word in text, word
 
@@ -1585,7 +1592,7 @@ def test_nine_slides_do_not_end_up_as_nine_identical_grids(tmp_path, monkeypatch
 
 def test_skill_teaches_her_carousel_visual_system():
     # навык обязан называть её файл и то, что он отменил
-    text = SKILL.read_text(encoding="utf-8")
+    text = _skill_text()
     assert "ESSA_PRESENTATION_STYLE.md" in text  # её файл, таск 12 п.4
     for mark in ("CAROUSEL_PALETTE", "CAROUSEL_MARGIN", "PLATE", "composition"):
         assert mark in text, mark
@@ -1819,7 +1826,7 @@ BUILD_OWNED = {"index", "total", "notes"}
 
 
 def _skill_field_table():
-    text = SKILL.read_text(encoding="utf-8")
+    text = _skill_text()
     section = text.split("## Поля слайда", 1)[1].split("\n## ", 1)[0]
     return set(re.findall(r"^\| `(\w+)`", section, flags=re.M))
 
@@ -1832,7 +1839,7 @@ def test_skill_lists_exactly_the_fields_build_carousel_slide_takes():
 
 
 def test_skill_carries_her_order_of_work_word_for_word():
-    text = SKILL.read_text(encoding="utf-8")
+    text = _skill_text()
     for step in (
         "1. проанализируй смысл;",
         "2. разбей материал на слайды;",
