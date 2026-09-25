@@ -31,8 +31,11 @@ def _paragraphs(text: str) -> list[str]:
 def test_content_plan_calls_carousel_skill_and_build_command():
     text = CONTENT_PLAN.read_text(encoding="utf-8")
     assert "carousel-instagram" in text
+    # карусель — редакционной сборкой в её «стиле 2» (2026-09-25), с картой ритма
+    assert "-m integrations.visuals.editorial" in text
+    assert "slides.json" in text and "карта ритма" in text.lower()
+    # обложка поста и сторис — пока старой сборкой
     assert "-m integrations.visuals.build" in text
-    assert "slides.json" in text and "storyboard" in text
     # обложка поста и фон сторис — тем же навыком
     assert "обложка поста" in text.lower() and "фон сторис" in text.lower()
 
