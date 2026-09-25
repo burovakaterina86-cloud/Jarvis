@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Научи нейросеть говорить твоим голосом</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAF5EC; --ink: #231E19; --soft: #5A5048; --accent: #C4613A; --olive: #5F6F45;
+    --block: #F0E6D6; --line: #E2D5C1; --dark: #2A231D;
+  }
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #d9d2c7; }
+  body { font-family: "Golos Text", sans-serif; color: var(--ink); font-size: 21px; line-height: 1.45; }
+  .page { width: 794px; height: 1123px; background: var(--bg); position: relative; overflow: hidden;
+          padding: 70px 66px 80px; page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  .num { position: absolute; bottom: 34px; right: 66px; font: 600 15px "Manrope"; color: var(--soft); letter-spacing: .08em; }
+  .brand { position: absolute; bottom: 34px; left: 66px; font: 600 15px "Manrope"; color: var(--soft); letter-spacing: .08em; }
+  h2 { font: 800 40px/1.12 "Manrope", sans-serif; margin-bottom: 26px; letter-spacing: -.01em; }
+  h2 .step { display: block; font: 700 17px "Manrope"; color: var(--accent); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 10px; }
+  p { margin-bottom: 16px; }
+  .lead { font-size: 24px; line-height: 1.4; }
+  .accent-line { font: 700 26px/1.3 "Manrope"; color: var(--accent); margin: 22px 0; }
+  ul.clean { list-style: none; margin: 4px 0 18px; }
+  ul.clean li { padding-left: 30px; position: relative; margin-bottom: 10px; }
+  ul.clean li::before { content: ""; position: absolute; left: 4px; top: 12px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); }
+  ul.clean.no li::before { background: none; border: 2.5px solid var(--soft); width: 10px; height: 10px; }
+  .label { font: 700 18px "Manrope"; text-transform: uppercase; letter-spacing: .1em; color: var(--olive); margin: 18px 0 10px; }
+  .photo { width: calc(100% + 132px); margin: 0 -66px; display: block; object-fit: cover; }
+  .route { font: 600 20px "Manrope"; background: var(--block); border-radius: 14px; padding: 16px 20px; margin: 10px 0 20px; }
+  .route b { color: var(--accent); }
+  .prompt { background: var(--dark); color: #F6EEE2; border-radius: 18px; padding: 26px 28px 24px; margin: 14px 0 18px;
+            font-size: 18.5px; line-height: 1.42; white-space: pre-wrap; position: relative; break-inside: avoid; }
+  .prompt .tag { position: absolute; top: -14px; left: 24px; background: var(--accent); color: #fff; font: 700 14px "Manrope";
+                 letter-spacing: .12em; text-transform: uppercase; padding: 5px 12px; border-radius: 8px; }
+  .prompt .ph { color: #E8A27F; }
+  .note { border-left: 6px solid var(--accent); background: #fff; border-radius: 0 14px 14px 0; padding: 16px 20px; margin: 16px 0; }
+  .note b { color: var(--accent); }
+  table { width: 100%; border-collapse: separate; border-spacing: 0 10px; margin: 6px 0 14px; font-size: 19px; line-height: 1.35; }
+  th { font: 700 17px "Manrope"; text-transform: uppercase; letter-spacing: .08em; text-align: left; padding: 0 16px 2px; }
+  th:first-child { color: var(--soft); } th:last-child { color: var(--olive); }
+  td { padding: 14px 16px; vertical-align: top; }
+  td:first-child { background: #EFE9E0; color: var(--soft); border-radius: 12px 0 0 12px; width: 36%; text-decoration: line-through; text-decoration-color: rgba(90,80,72,.45); }
+  td:last-child { background: #fff; border-radius: 0 12px 12px 0; border: 2px solid var(--olive); border-left: none; }
+  .path { display: flex; flex-direction: column; align-items: stretch; gap: 0; margin: 10px 0 18px; }
+  .path .node { background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 13px 20px; font: 700 21px "Manrope"; display: flex; align-items: center; gap: 16px; }
+  .path .node .n { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: #fff; font: 800 17px "Manrope"; display: flex; align-items: center; justify-content: center; }
+  .path .node small { display: block; font: 500 16px "Golos Text"; color: var(--soft); margin-top: 2px; }
+  .path .node.last { border-color: var(--olive); background: #F2F4EC; }
+  .path .arrow { height: 22px; margin-left: 36px; border-left: 3px solid var(--accent); position: relative; }
+  .path .arrow::after { content: ""; position: absolute; left: -8px; bottom: -2px; border: 7px solid transparent; border-top: 9px solid var(--accent); }
+  .flow { display: grid; grid-template-columns: 1fr 34px 1fr; gap: 8px 0; align-items: center; margin: 12px 0 20px; }
+  .flow .box { background: #fff; border: 2px solid var(--line); border-radius: 16px; padding: 16px 16px; font: 700 19px/1.3 "Manrope"; text-align: center; min-height: 104px; display: flex; flex-direction: column; justify-content: center; }
+  .flow .box small { font: 500 15.5px/1.35 "Golos Text"; color: var(--soft); margin-top: 6px; }
+  .flow .box.hi { border-color: var(--accent); }
+  .flow .box.ok { border-color: var(--olive); background: #F2F4EC; }
+  .flow .ar { text-align: center; color: var(--accent); font: 800 28px "Manrope"; }
+  .flow .down { grid-column: 3; text-align: center; color: var(--accent); font: 800 28px "Manrope"; line-height: 1; }
+  .check { list-style: none; margin: 10px 0 20px; }
+  .check li { background: #fff; border-radius: 14px; padding: 15px 18px 15px 64px; margin-bottom: 11px; position: relative; }
+  .check li::before { content: ""; position: absolute; left: 20px; top: 16px; width: 26px; height: 26px; border: 3px solid var(--olive); border-radius: 7px; }
+  /* обложка */
+  .cover { padding: 0; }
+  .cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 30% 60%; }
+  .cover .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(250,245,236,.96) 0%, rgba(250,245,236,.9) 30%, rgba(250,245,236,.0) 52%); }
+  .cover .top { position: absolute; top: 66px; left: 66px; right: 66px; }
+  .cover .kicker { font: 700 17px "Manrope"; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin-bottom: 20px; }
+  .cover h1 { font: 800 60px/1.04 "Manrope"; letter-spacing: -.02em; color: var(--ink); }
+  .cover h1 span { color: var(--accent); }
+  .cover .sub { font: 500 24px/1.35 "Golos Text"; color: var(--soft); margin-top: 20px; }
+  .cover .by { position: absolute; left: 66px; bottom: 56px; background: rgba(35,30,25,.82); color: #FAF5EC; font: 700 18px "Manrope"; letter-spacing: .06em; padding: 12px 18px; border-radius: 12px; }
+  /* финал */
+  .final { background: var(--dark); color: #F6EEE2; padding: 0; }
+  .final img { width: 100%; height: 640px; object-fit: cover; object-position: 50% 30%; display: block; }
+  .final .body { padding: 44px 66px 0; }
+  .final h2 { color: #fff; }
+  .final p { color: #E9DFD2; }
+  .final .sign { margin-top: 26px; font: 800 26px "Manrope"; color: #fff; }
+  .final .link { font: 700 22px "Manrope"; color: #E8A27F; margin-top: 6px; }
+  .final .num, .final .brand { color: #A89A8A; }
+</style>
+</head>
+<body>
+
+<!-- 1. Обложка -->
+<section class="page cover">
+  <img src="../images/cover.jpg" alt="">
+  <div class="shade"></div>
+  <div class="top">
+    <div class="kicker">Гайд · пошагово за вечер</div>
+    <h1>Нейросеть пишет безлико?<br><span>Научи её говорить твоим голосом</span></h1>
+    <div class="sub">Паспорт голоса для ChatGPT: соберёшь за 40-60 минут, промпты внутри</div>
+  </div>
+  <div class="by">Екатерина | ESSA.AI</div>
+</section>
+
+<!-- 2. Знакомо? -->
+<section class="page">
+  <h2>Знакомо?</h2>
+  <p class="lead">Просишь нейросеть написать пост. Через десять секунд он готов.</p>
+  <p>Читаешь - всё правильно и грамотно, даже эмодзи на месте.</p>
+  <p class="accent-line">Но читаешь и понимаешь, что ты так не говоришь.</p>
+  <p>Такой пост мог выложить любой эксперт в ленте. Он безликий. И ты садишься переписывать его руками - иногда дольше, чем писала бы сама с нуля.</p>
+  <img class="photo" src="../images/doubt.jpg" alt="" style="height:500px; margin-top:26px;">
+  <div class="brand">ESSA.AI</div><div class="num">02</div>
+</section>
+
+<!-- 3. Так вот + что понадобится -->
+<section class="page">
+  <p class="accent-line" style="margin-top:0">Так вот, нейросеть здесь не виновата.</p>
+  <p>Она просто не знает, как ты говоришь. Ей никто этого не рассказал, и она пишет «средним» голосом, собранным из миллионов чужих текстов.</p>
+  <p>Проще говоря, ей нужна короткая памятка о тебе: какими словами ты говоришь, как строишь фразу, как шутишь и чего никогда не скажешь. Я называю это <b>паспортом голоса</b>.</p>
+  <p>У меня самой такой паспорт есть. Я собирала его из своих интервью, постов и материалов.</p>
+  <p>В этом гайде покажу, как собрать свой паспорт пошагово и научить ChatGPT им пользоваться.</p>
+  <h2 style="margin-top:40px">Что понадобится</h2>
+  <ul class="clean">
+    <li>5-7 твоих живых текстов: посты, ответы клиентам, голосовые, переведённые в текст;</li>
+    <li>аккаунт в ChatGPT - хватит и бесплатного тарифа;</li>
+    <li>40-60 минут спокойного времени.</li>
+  </ul>
+  <div class="note">Промпты я дам целиком. <b>Промпт</b> - это просто текст-просьба, которую ты отправляешь нейросети. Копируешь, вставляешь, жмёшь отправить.</div>
+  <div class="brand">ESSA.AI</div><div class="num">03</div>
+</section>
+
+<!-- 4. Шаг 1 -->
+<section class="page">
+  <h2><span class="step">Шаг 1</span>Собери свои живые тексты</h2>
+  <p>Нейросеть будет учиться на том, что ты ей дашь. Поэтому брать нужно тексты, где ты звучишь как в жизни, даже если они неидеальные.</p>
+  <div class="label">Что подойдёт лучше всего</div>
+  <ul class="clean">
+    <li>посты, которые ты писала сама, без нейросети;</li>
+    <li>твои ответы клиентам в переписке - там ты говоришь естественнее всего;</li>
+    <li>голосовые. Открой заметки в телефоне, нажми значок микрофона на клавиатуре и пару минут расскажи о своей работе, как рассказала бы подруге. Телефон сам превратит речь в текст.</li>
+  </ul>
+  <div class="label">Что лучше не брать</div>
+  <ul class="clean no">
+    <li>тексты, которые уже писала нейросеть, - она начнёт учиться сама у себя;</li>
+    <li>официальные тексты: договоры, прайсы, описание услуг для сайта. Там у всех одинаковый «деловой» голос.</li>
+  </ul>
+  <p>Сложи всё в одну заметку. 5-7 фрагментов хватит.</p>
+  <img class="photo" src="../images/desk.jpg" alt="" style="height:200px; margin-top:10px;">
+  <div class="brand">ESSA.AI</div><div class="num">04</div>
+</section>
+
+<!-- 5. Шаг 2 -->
+<section class="page">
+  <h2><span class="step">Шаг 2</span>Попроси нейросеть собрать паспорт</h2>
+  <div class="route">Открываешь ChatGPT <b>→</b> новый чат <b>→</b> вставляешь промпт <b>→</b> под ним свои тексты <b>→</b> отправляешь</div>
+  <div class="prompt"><span class="tag">Промпт · копируй</span>Ниже - несколько моих текстов. Изучи, как я пишу и говорю, и составь паспорт моего голоса.
+
+В паспорте опиши:
+1. Как я обращаюсь к читателю (на «ты» или на «вы», как называю аудиторию).
+2. Какие слова и выражения я использую часто - выпиши их дословно из текстов.
+3. Как я строю фразы: длинные или короткие, простые или сложные, есть ли вопросы, восклицания, многоточия.
+4. Как я шучу и есть ли у меня самоирония - с примерами из текстов.
+5. Как я начинаю и как заканчиваю тексты.
+6. Каких слов и оборотов у меня нет и быть не должно.
+
+Правила:
+- Опирайся только на мои тексты. Ничего не додумывай.
+- Каждый пункт подтверждай цитатой из моих текстов.
+- Не используй общие слова вроде «дружелюбный», «экспертный», «вовлекающий» - пиши конкретно.
+- Уложи паспорт в 1200 знаков.
+
+Мои тексты:
+<span class="ph">[вставь сюда свои 5-7 фрагментов]</span></div>
+  <div class="brand">ESSA.AI</div><div class="num">05</div>
+</section>
+
+<!-- 6. Шаг 2 после + Шаг 3 начало -->
+<section class="page">
+  <p class="lead">Через минуту у тебя черновик паспорта.</p>
+  <p>Если он вышел длинным, напиши в тот же чат:</p>
+  <div class="prompt"><span class="tag">Промпт</span>Сократи паспорт до 1200 знаков, оставь самое характерное.</div>
+  <p>Длина важна: дальше паспорт пойдёт в настройки, а там поле ограничено.</p>
+  <div class="note"><b>Важно:</b> пока это черновик, сохранять его рано.</div>
+  <h2 style="margin-top:38px"><span class="step">Шаг 3</span>Почисти паспорт</h2>
+  <p>Нейросеть обожает общие слова. Даже если попросить без них, часть всё равно проскочит))</p>
+  <p>А общие слова ничего о тебе не говорят. «Пишет дружелюбно» подходит к любому блогу, и по такому паспорту нейросеть снова напишет безлико.</p>
+  <p>Поэтому скопируй паспорт в заметку и пройдись по нему глазами. Каждую общую фразу замени конкретной: как именно ты это делаешь, каким словом.</p>
+  <div class="brand">ESSA.AI</div><div class="num">06</div>
+</section>
+
+<!-- 7. Шаг 3: таблица -->
+<section class="page">
+  <p class="lead">Допустим, бьюти-мастер Маша получила такой паспорт:</p>
+  <table>
+    <tr><th>Было в паспорте</th><th>Стало после чистки</th></tr>
+    <tr><td>Дружелюбный тон</td><td>На «ты», клиенток называет «девочки»</td></tr>
+    <tr><td>Использует юмор</td><td>Шутит над собой: «опять заказала лак, которого у меня уже три»</td></tr>
+    <tr><td>Экспертная подача</td><td>Объясняет через бытовое сравнение: «ногтевая пластина - как ткань, её можно пересушить»</td></tr>
+    <tr><td>Позитивный настрой</td><td>Не пишет «идеально» и «безупречно», пишет «аккуратно» и «держится»</td></tr>
+  </table>
+  <p>Левую колонку подпишет любой мастер в городе. В правой уже слышно Машу, с её словечками и её клиентками.</p>
+  <p>Если своих словечек сразу не вспоминаешь, загляни в переписку с клиентами. Там они точно есть: как ты здороваешься, как успокаиваешь, как шутишь, когда что-то пошло не так.</p>
+  <div class="note">Проверь себя: если закрыть имя, можно по паспорту узнать, что это ты? Если пока нет - дописывай.</div>
+  <div class="brand">ESSA.AI</div><div class="num">07</div>
+</section>
+
+<!-- 8. Шаг 4 -->
+<section class="page">
+  <h2><span class="step">Шаг 4</span>Вставь паспорт в настройки ChatGPT</h2>
+  <p>Чтобы не вставлять паспорт в каждый чат руками, его можно сохранить в настройках. Тогда ChatGPT будет учитывать его сам в каждом новом чате. На компьютере и в приложении путь примерно одинаковый:</p>
+  <div class="path">
+    <div class="node"><span class="n">1</span><div>Твоё имя или значок профиля</div></div><div class="arrow"></div>
+    <div class="node"><span class="n">2</span><div>Настройки</div></div><div class="arrow"></div>
+    <div class="node"><span class="n">3</span><div>Персонализация<small>или Personalization</small></div></div><div class="arrow"></div>
+    <div class="node"><span class="n">4</span><div>«Настроить ChatGPT»<small>или Customize ChatGPT - включи там свои инструкции</small></div></div><div class="arrow"></div>
+    <div class="node"><span class="n">5</span><div>Поле о том, как ChatGPT должен тебе отвечать<small>вставь сюда паспорт</small></div></div><div class="arrow"></div>
+    <div class="node last"><span class="n" style="background:var(--olive)">✓</span><div>Сохранить</div></div>
+  </div>
+  <div class="brand">ESSA.AI</div><div class="num">08</div>
+</section>
+
+<!-- 9. Шаг 4 моменты + запасной путь -->
+<section class="page">
+  <div class="label" style="margin-top:0">Пара важных моментов</div>
+  <ul class="clean">
+    <li>Настройки работают в новых чатах. Старый чат паспорт не подхватит, поэтому после сохранения открой новый.</li>
+    <li>Названия пунктов иногда меняются, а часть меню может остаться на английском. Если не нашла дословно, ищи «Персонализация» или Personalization, настройка живёт там.</li>
+    <li>Если поле не пускает весь текст, значит, паспорт длинноват. Попроси нейросеть сократить его, как в шаге 2.</li>
+  </ul>
+  <div class="note"><b>Запасной путь</b>, если с настройками разбираться не хочется: храни паспорт в заметках и вставляй его в начало чата перед задачей. Чуть дольше, работает так же.</div>
+  <h2 style="margin-top:36px"><span class="step">Шаг 5</span>Проверь на реальной задаче</h2>
+  <p>Возьми тему поста, который тебе правда нужно написать на этой неделе. Открой новый чат и отправь один из промптов.</p>
+  <div class="label">Если паспорт сохранён в настройках</div>
+  <div class="prompt"><span class="tag">Промпт</span>Напиши пост для моего блога на тему: <span class="ph">[твоя тема]</span>.
+Пиши моим голосом по паспорту из настроек.
+Длина - до 1500 знаков.</div>
+  <div class="brand">ESSA.AI</div><div class="num">09</div>
+</section>
+
+<!-- 10. Шаг 5: заметки + вслух -->
+<section class="page">
+  <div class="label" style="margin-top:0">Если паспорт хранится в заметках</div>
+  <div class="prompt"><span class="tag">Промпт</span>Вот паспорт моего голоса:
+<span class="ph">[вставь паспорт]</span>
+
+Напиши пост для моего блога на тему: <span class="ph">[твоя тема]</span>.
+Пиши строго по этому паспорту.
+Длина - до 1500 знаков.</div>
+  <p class="accent-line">Прочитай результат вслух.</p>
+  <p>Глазами легко проскочить мимо чужого слова, а вслух ты сразу споткнёшься на месте, где «это не я».</p>
+  <p>А потом подключи <b>вторую голову</b>. Так я называю проверку другой нейросетью. Открываешь отдельный новый чат (или другую нейросеть) и отдаёшь ей текст вместе с паспортом.</p>
+  <div class="flow">
+    <div class="box">Пост<small>написан по паспорту</small></div><div class="ar">→</div>
+    <div class="box hi">Вторая голова<small>отдельный чат читает пост и паспорт</small></div>
+    <div></div><div></div><div class="down">↓</div>
+    <div class="box ok">Правка<small>ты решаешь, что поменять</small></div><div class="ar">←</div>
+    <div class="box">Список мест<small>где звучит «не твоим голосом»</small></div>
+  </div>
+  <div class="brand">ESSA.AI</div><div class="num">10</div>
+</section>
+
+<!-- 11. промпт второй головы -->
+<section class="page">
+  <h2>Промпт для второй головы</h2>
+  <div class="prompt"><span class="tag">Промпт · копируй</span>Вот паспорт моего голоса и пост, написанный по нему.
+Найди в посте места, которые звучат не моим голосом:
+общие фразы, слова, которых нет в паспорте, слишком гладкие или пафосные обороты.
+Выпиши эти места списком и к каждому предложи, как сказать ближе к паспорту.
+
+Паспорт:
+<span class="ph">[вставь паспорт]</span>
+
+Пост:
+<span class="ph">[вставь пост]</span></div>
+  <p>Вторая голова не видела, как писался текст, и читает его свежим взглядом. Там, где первая нейросеть увлеклась, вторая это заметит.</p>
+  <div class="brand">ESSA.AI</div><div class="num">11</div>
+</section>
+
+<!-- 12. чек-лист + не обещаю -->
+<section class="page">
+  <h2>Как понять, что сработало</h2>
+  <ul class="check">
+    <li>Ты прочитала пост вслух и ни разу не споткнулась на «это не я».</li>
+    <li>В тексте есть хотя бы пара твоих словечек из паспорта.</li>
+    <li>Начало не похоже на «В современном мире…» или «Давайте поговорим о…».</li>
+    <li>Править пришлось меньше, чем обычно без паспорта.</li>
+    <li>Вторая голова нашла замечания, и ты с ними согласна (или спокойно не согласна - тоже нормально).</li>
+  </ul>
+  <p>Если три пункта из пяти есть, паспорт работает. Дальше его можно докручивать.</p>
+  <h2 style="margin-top:34px">Чего не обещаю</h2>
+  <p class="accent-line" style="margin-top:0">Это не волшебная кнопка ❗️</p>
+  <p>С паспортом нейросеть пишет ближе к тебе, но читать и править текст всё равно тебе. Результат проверяет человек.</p>
+  <p>И ещё: паспорт живой. Через месяц ты заметишь новые словечки или поймёшь, что какой-то пункт лишний. Возвращайся и правь.</p>
+  <div class="brand">ESSA.AI</div><div class="num">12</div>
+</section>
+
+<!-- 13. финал -->
+<section class="page final">
+  <img src="../images/author-final.jpg" alt="">
+  <div class="body">
+    <h2>Что дальше</h2>
+    <p>Если соберёшь паспорт, напиши, как прошло. Самой интересно, где было сложнее всего: собрать тексты, почистить паспорт или найти настройки.</p>
+    <p>А если хочется дальше - заглядывай в мой Telegram-канал, там я пишу про нейросети в работе экспертов.</p>
+    <div class="sign">Екатерина | ESSA.AI</div>
+    <a class="link" href="https://t.me/studio_essa_ai" style="display:block;text-decoration:none">t.me/studio_essa_ai</a>
+  </div>
+</section>
+
+</body>
+</html>
