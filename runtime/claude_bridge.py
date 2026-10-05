@@ -46,6 +46,8 @@ class TurnResult:
     structured: dict | None = None                     # ответ по --json-schema (structured_output)
     review: dict | None = None                         # вердикт независимой проверки (ставит task_router)
     brief: bool = False                                # свежая сессия после паузы со сводкой (P3.1)
+    runtime: str = "claude"                            # кто выполнял ход: claude | codex (P4.1)
+    resets_at: float | None = None                     # когда снимется лимит (epoch), если известно
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,7 @@ class TurnOptions:
     max_turns: int = MAX_TURNS
     json_schema: dict | None = None
     persist: bool = True
+    read_only: bool = False      # Codex: песочница read-only (Claude ограничивают его settings)
 
 
 DEFAULT_OPTIONS = TurnOptions()
@@ -326,7 +329,12 @@ def _to_result_core(out: _Outcome, session_id_in: str | None, run_id: str | None
     if run_id in _stopped:
         return TurnResult("Остановлено.", sid, new, cost, "stopped", "stopped")
     if out.api_error == "rate_limit" and not (out.result and not res.get("is_error")):
-        return TurnResult(_human_rate_limit(out.resets_at), sid, new, cost, "rate_limited", "rate_limit")
+        limited = TurnResult(_human_rate_limit(out.resets_at), sid, new, cost, "rate_limited", "rate_limit")
+        try:
+            limited.resets_at = float(out.resets_at) if out.resets_at is not None else None
+        except (TypeError, ValueError):
+            limited.resets_at = None
+        return limited
     failed = out.result is None or res.get("is_error") or res.get("subtype") not in (None, "success")
     blob = " ".join([str(res.get("result") or ""), out.stderr]).lower()
     if failed and (out.api_error == "authentication_failed" or _AUTH_MARKERS(blob)):

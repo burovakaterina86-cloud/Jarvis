@@ -138,6 +138,7 @@ protected_write_paths:
   - "integrations/**"
   - ".git/hooks/**"
   - ".mcp.json"
+  - ".codex/hooks.json"   # Guard для Codex (P4.1): его доверие подтверждает владелица
   - "**/.env*"
 
 # Правила, по которым JARVIS думает и действует. Не DENY: разбор поправок законно пишет

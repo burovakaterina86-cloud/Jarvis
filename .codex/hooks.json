@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".venv/Scripts/python.exe .claude/hooks/guard.py --runtime codex",
+            "timeout": 620,
+            "statusMessage": "JARVIS Guard"
+          }
+        ]
+      }
+    ]
+  }
+}

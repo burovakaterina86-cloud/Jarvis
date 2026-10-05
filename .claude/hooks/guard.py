@@ -14,6 +14,12 @@
           запреты из `policy.yaml: dev_mode.deny_kinds` (секреты, опасные команды, пароли/карты,
           оплата); защищённые пути сняты, остальное решают штатные разрешения Claude Code.
 Неизвестный режим — отказ (ADR 0012).
+
+Codex (P4.1, аргумент `--runtime codex`, из `.codex/hooks.json`): вход хука Codex переводится в события Guard
+(`Bash` — как есть; `apply_patch` — по файлу патча: добавление/правка → Write/Edit, удаление → rm) и решается
+тем же `decide()`. Codex слушает только JSON-запрет и пропускает вызов, если хук упал, — поэтому ответ
+всегда JSON, выход всегда 0, любая ошибка — запрет. Режим: есть `JARVIS_TASK_ID` (ставит бот) — полный,
+нет — режим разработки (её собственные сессии Codex). Окружение тут может только ужесточить режим.
 """
 from __future__ import annotations
 
@@ -639,7 +645,7 @@ def _masked(reason: str, root) -> str:
 
 
 def _log_blocked(root, event: dict, reason: str, task_id: str | None = None,
-                 mode: str = "jarvis") -> None:
+                 mode: str = "jarvis", runtime: str = "claude") -> None:
     try:
         path = Path(root) / "state" / "events.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -647,7 +653,8 @@ def _log_blocked(root, event: dict, reason: str, task_id: str | None = None,
         line = {"ts": datetime.now(timezone.utc).isoformat(), "type": "blocked",
                 "session": event.get("session_id"), "agent": agent, "task": "",
                 "status": "working", "progress": None, "task_id": task_id,
-                "tool": event.get("tool_name"), "reason": _masked(reason, root), "mode": mode}
+                "tool": event.get("tool_name"), "reason": _masked(reason, root), "mode": mode,
+                "runtime": runtime}
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
     except Exception:
@@ -665,7 +672,8 @@ def _dev_policy(policy: dict) -> dict:
     return {**policy, "protected_write_paths": [], "ask_write_paths": [], "rules": rules}
 
 
-def run(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None, mode: str = "jarvis") -> tuple[int, str]:
+def run(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None, mode: str = "jarvis",
+        runtime: str = "claude") -> tuple[int, str]:
     env = os.environ if env is None else env
     task_id = (env or {}).get("JARVIS_TASK_ID")  # ставит мост — связывает запись с задачей
     try:
@@ -677,7 +685,7 @@ def run(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None, mode: str 
             deny_kinds = set((policy.get("dev_mode") or {}).get("deny_kinds") or [])
             if decision.action == "deny" and decision.kind in deny_kinds:
                 reason = f"JARVIS Guard: отказ — {decision.reason}"
-                _log_blocked(root, event if isinstance(event, dict) else {}, reason, task_id, mode)
+                _log_blocked(root, event if isinstance(event, dict) else {}, reason, task_id, mode, runtime)
                 return 2, reason
             return 0, ""
         decision = decide(event, policy=policy, root=root, env=env)
@@ -693,22 +701,122 @@ def run(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None, mode: str 
             reason = f"JARVIS Guard: отказ — {decision.reason}"
     except Exception as exc:
         reason = f"JARVIS Guard: внутренняя ошибка, отказ ({type(exc).__name__})"
-    _log_blocked(root, event if isinstance(event, dict) else {}, reason, task_id)
+    _log_blocked(root, event if isinstance(event, dict) else {}, reason, task_id, runtime=runtime)
     return 2, reason
+
+
+# ---------- Codex ----------
+
+CANARY = "JARVIS_HOOK_CANARY"
+_PATCH_LINE = re.compile(r"^\*\*\* (Add File|Update File|Delete File|Move to): (.+?)\s*$", re.MULTILINE)
+
+
+def codex_events(event: dict) -> list[dict]:
+    """Вход хука Codex → события Guard. apply_patch без единого файла → Write без пути (отказ)."""
+    tool = event.get("tool_name")
+    tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    base = {k: event.get(k) for k in ("hook_event_name", "session_id", "cwd") if event.get(k) is not None}
+    if tool == "apply_patch":
+        text = str(tool_input.get("command") or tool_input.get("patch") or "")
+        out = []
+        for action, path in _PATCH_LINE.findall(text):
+            if action == "Delete File":
+                out.append({**base, "tool_name": "Bash", "tool_input": {"command": f"rm {path}"}})
+            else:
+                name = "Edit" if action == "Update File" else "Write"
+                out.append({**base, "tool_name": name,
+                            "tool_input": {"file_path": path, "content": text[:4000]}})
+        return out or [{**base, "tool_name": "Write", "tool_input": {"file_path": "", "content": text[:4000]}}]
+    if tool == "Bash" and isinstance(tool_input.get("command"), list):
+        return [{**event, "tool_input": {**tool_input, "command": " ".join(map(str, tool_input["command"]))}}]
+    return [event]
+
+
+def _canary(event: dict, root, env) -> str | None:
+    command = str((event.get("tool_input") or {}).get("command") or "") if isinstance(event.get("tool_input"), dict) else ""
+    if event.get("tool_name") != "Bash" or CANARY not in command:
+        return None
+    try:
+        mark = Path(root) / "state" / "codex_canary.json"
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.write_text(json.dumps({"ts": datetime.now(timezone.utc).isoformat(),
+                                    "task_id": (env or {}).get("JARVIS_TASK_ID")}), encoding="utf-8")
+    except OSError:
+        pass
+    return "JARVIS Guard: canary — проверка, что хук Codex жив и ему доверяют"
+
+
+def codex_decision(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None,
+                   mode: str | None = None) -> str | None:
+    """Причина запрета для Codex или None (разрешено). Никогда не бросает исключений."""
+    env = os.environ if env is None else env
+    try:
+        canary = _canary(event, root, env)
+        if canary:
+            return canary
+        mode = mode or ("jarvis" if (env or {}).get("JARVIS_TASK_ID") else "dev")
+        for item in codex_events(event):
+            code, reason = run(item, root=root, policy_path=policy_path, env=env, mode=mode, runtime="codex")
+            if code != 0:
+                return reason
+        return None
+    except Exception as exc:  # noqa: BLE001 — для Codex сбой хука обязан быть запретом
+        return f"JARVIS Guard: внутренняя ошибка, отказ ({type(exc).__name__})"
+
+
+def codex_deny_json(reason: str) -> str:
+    return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                              "permissionDecisionReason": reason}}, ensure_ascii=False)
+
+
+def _parse_argv(argv: list[str]) -> tuple[str | None, str]:
+    """(`--mode`, `--runtime`) в любом порядке. Другие аргументы — ошибка, то есть отказ."""
+    mode, runtime, rest = None, "claude", list(argv)
+    while rest:
+        if len(rest) >= 2 and rest[0] == "--mode":
+            mode, rest = rest[1], rest[2:]
+        elif len(rest) >= 2 and rest[0] == "--runtime" and rest[1] in ("claude", "codex"):
+            runtime, rest = rest[1], rest[2:]
+        else:
+            raise ValueError("неизвестные аргументы Guard")
+    return mode, runtime
 
 
 def _mode_from_argv(argv: list[str]) -> str:
     """`--mode <режим>` или ничего (режим бота). Любые другие аргументы — ошибка, то есть отказ."""
-    if not argv:
-        return "jarvis"
-    if len(argv) == 2 and argv[0] == "--mode":
-        return argv[1]
-    raise ValueError("неизвестные аргументы Guard")
+    mode, _ = _parse_argv(argv)
+    return mode or "jarvis"
+
+
+def codex_main(mode: str | None) -> int:
+    """Хук Codex: JSON-запрет в stdout или тишина; выход всегда 0 (код 2 Codex не слушает)."""
+    try:
+        event = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+        if not isinstance(event, dict):
+            raise ValueError("event is not an object")
+        reason = codex_decision(event, mode=mode)
+    except Exception as exc:  # noqa: BLE001
+        reason = f"JARVIS Guard: внутренняя ошибка, отказ ({type(exc).__name__})"
+    if reason:
+        sys.stdout.buffer.write((codex_deny_json(reason) + "\n").encode("utf-8"))
+        sys.stdout.flush()
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
     try:
-        mode = _mode_from_argv(sys.argv[1:] if argv is None else argv)
+        mode_arg, runtime = _parse_argv(args)
+    except ValueError:
+        if "--runtime" in args and "codex" in args:
+            sys.stdout.buffer.write((codex_deny_json("JARVIS Guard: неизвестные аргументы, отказ") + "\n").encode("utf-8"))
+            return 0
+        sys.stderr.buffer.write("JARVIS Guard: неизвестные аргументы, отказ\n".encode("utf-8"))
+        return 2
+    if runtime == "codex":
+        return codex_main(mode_arg)
+    try:
+        mode = mode_arg or "jarvis"
         raw = sys.stdin.buffer.read().decode("utf-8")
         event = json.loads(raw)
         if not isinstance(event, dict):
