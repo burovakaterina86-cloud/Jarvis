@@ -1,0 +1,44 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>cover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Open+Sans:wght@400;600&family=Marck+Script&display=swap" rel="stylesheet"><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { background:#000; }
+.canvas { width:1080px; height:1350px; position:relative; overflow:hidden; color:#14151A; font-family:'Open Sans',sans-serif;
+  background: radial-gradient(circle at 85% 30%, rgba(159,135,236,0.30) 0%, transparent 45%),
+              radial-gradient(circle at 10% 95%, rgba(159,135,236,0.30) 0%, transparent 35%),
+              linear-gradient(160deg, #F1EFFA 0%, #E6E1F7 100%); }
+.decor { position:absolute; inset:0; z-index:1; }
+.photo { position:absolute; right:0; bottom:0; width:66%; height:100%; object-fit:cover; z-index:2;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 30%), linear-gradient(0deg, #000 85%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 30%); }
+.top { position:absolute; left:66px; top:78px; width:640px; z-index:3; display:flex; align-items:center; }
+.pill { flex:none; border:2px solid rgba(113,88,231,0.55); border-radius:44px; padding:16px 32px;
+  font-size:25px; font-weight:600; letter-spacing:.24em; text-transform:uppercase; }
+.pill-line { flex:1; height:2px; background:rgba(113,88,231,0.55); margin:0 16px 0 22px; }
+.node { flex:none; width:16px; height:16px; border-radius:50%; background:#592DE2; }
+.tag { position:absolute; right:70px; top:82px; z-index:3; font-size:21px; letter-spacing:.3em; line-height:1.75; color:#686775; }
+.hero { position:absolute; left:66px; top:210px; width:610px; z-index:3; }
+h1 { font-family:'Oswald',sans-serif; font-weight:600; text-transform:uppercase; line-height:.95; font-size:128px;
+  letter-spacing:-.01em; }
+.acc { color:#592DE2; }
+.hand { font-family:'Marck Script',cursive; color:#C4552A; font-size:42px; line-height:1.08; margin:34px 0 0 22px;
+  transform:rotate(-6deg); transform-origin:left; white-space:nowrap; }
+.hand-img { display:block; width:500px; max-height:170px; object-fit:contain; object-position:left;
+  margin:26px 0 0 4px; }
+.support { margin:64px 0 0 26px; padding-left:22px; border-left:2px solid rgba(113,88,231,0.55); font-size:21px; letter-spacing:.3em;
+  line-height:1.75; color:#686775; text-transform:uppercase; }
+.tiles { position:relative; width:380px; height:290px; margin-top:40px; transform:scale(.9); transform-origin:left top; }
+.links { position:absolute; left:0; top:0; }
+.tile { position:absolute; width:124px; height:120px; border-radius:22px; background:rgba(255,255,255,0.78); border:1.5px solid rgba(113,88,231,0.18);
+  display:flex; align-items:center; justify-content:center; box-shadow:0 18px 40px rgba(159,135,236,0.30); }
+.dots { position:absolute; left:66px; bottom:70px; width:100px; height:100px; z-index:3; }
+.dots i { position:absolute; width:7px; height:7px; border-radius:50%; background:#592DE2; opacity:.8; }
+</style></head><body><div class="canvas"><svg class="decor" viewBox="0 0 1080 1350" width="1080" height="1350">
+  <path d="M640 60 C 820 20, 960 90, 1000 250" stroke="rgba(113,88,231,0.55)" stroke-width="2" fill="none"/>
+  <circle cx="1000" cy="250" r="9" fill="#592DE2"/>
+  <circle cx="905" cy="100" r="13" stroke="#592DE2" stroke-width="3" fill="none"/>
+  <line x1="1068" y1="40" x2="1068" y2="160" stroke="rgba(113,88,231,0.55)" stroke-width="2"/>
+  <path d="M140 1180 C 300 1300, 520 1320, 700 1280" stroke="rgba(113,88,231,0.55)" stroke-width="2" fill="none"/>
+  <circle cx="300" cy="1262" r="11" stroke="#592DE2" stroke-width="3" fill="none"/>
+</svg><img class="photo" src="file:///C:/Users/burov/Projects/Jarvis/essa-ai/content/2026-09-25-golos-karusel/visuals/cover-her-light.png" style="object-position:60% 15%"><div class="top"><div class="pill">Паспорт голоса</div><div class="pill-line"></div><i class="node"></i></div>
+<div class="hero"><h1>Нейросеть<br>пишет<br><span class="acc">не твоим</span><br>голосом?</h1><img class="hand-img" src="file:///C:/Users/burov/Projects/Jarvis/essa-ai/content/2026-09-25-golos-karusel/visuals/cover-light-hand.png"><div class="support">Свои слова<br>вместо общих</div><div class="tiles"><svg class="links" width="380" height="290"><path d="M60 150 V110 Q60 60 122 60 M306 150 V110 Q306 60 244 60 M183 120 V200 M60 210 Q60 230 150 230 H183 H216 Q306 230 306 210" stroke="rgba(113,88,231,0.55)" stroke-width="2" fill="none"/><circle cx="183" cy="200" r="10" stroke="#592DE2" stroke-width="3" fill="#F1EFFA"/></svg><div class="tile" style="left:122px;top:0px"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#592DE2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg></div><div class="tile" style="left:0px;top:150px"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#592DE2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M9 12h6M9 16h6"/></svg></div><div class="tile" style="left:244px;top:150px"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#592DE2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div></div></div><div class="dots" style="left:430px;bottom:96px"><i style="left:0px;top:0px"></i><i style="left:26px;top:0px"></i><i style="left:52px;top:0px"></i><i style="left:78px;top:0px"></i><i style="left:0px;top:26px"></i><i style="left:26px;top:26px"></i><i style="left:52px;top:26px"></i><i style="left:78px;top:26px"></i><i style="left:0px;top:52px"></i><i style="left:26px;top:52px"></i><i style="left:52px;top:52px"></i><i style="left:78px;top:52px"></i><i style="left:0px;top:78px"></i><i style="left:26px;top:78px"></i><i style="left:52px;top:78px"></i><i style="left:78px;top:78px"></i></div></div></body></html>

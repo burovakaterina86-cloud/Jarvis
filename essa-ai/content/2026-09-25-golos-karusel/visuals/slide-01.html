@@ -1,0 +1,67 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>01</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet"><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { background:#000; }
+.canvas { width:1080px; height:1350px; position:relative; overflow:hidden; background:linear-gradient(160deg, #292834 0%, #0D1015 55%, #16131F 100%); color:#F7F5FA;
+  font-family:'Open Sans', sans-serif; padding:60px 68px 72px; display:flex; flex-direction:column; }
+.acc { color:#A77BFF; }
+b { font-weight:700; }
+.head { display:flex; align-items:center; gap:26px; font-size:28px; position:relative; z-index:3; flex:none; }
+.cnt { font-family:'Oswald'; font-weight:500; color:#B8B4C2; letter-spacing:.02em; }
+.cnt b { color:#A77BFF; }
+.line { flex:1; height:2px; background:rgba(167,123,255,0.55); opacity:.6; }
+.lbl { font-size:22px; letter-spacing:.2em; color:#B8B4C2; }
+h1 { font-family:'Oswald', sans-serif; font-weight:600; text-transform:uppercase; line-height:.96;
+  letter-spacing:-.005em; }
+.rule { width:150px; height:8px; border-radius:4px; background:linear-gradient(90deg,#7158E7,#A77BFF); margin:38px 0 34px; flex:none; }
+.body { font-size:39px; line-height:1.36; }
+.center { flex:1; display:flex; flex-direction:column; justify-content:center; }
+.fill { flex:1; display:flex; flex-direction:column; justify-content:space-evenly; padding-top:24px; }
+.fill > h1 { margin-bottom:6px; }
+.fill > .rule { margin:10px 0; }
+.plate { background:rgba(255,255,255,0.045); border:2px solid rgba(167,123,255,0.45); border-radius:28px; }
+.summary { display:flex; align-items:center; gap:32px; padding:34px 40px; font-size:36px; line-height:1.3; font-weight:600; }
+.summary .sep { width:2px; align-self:stretch; background:rgba(167,123,255,0.45); }
+.steps { display:flex; flex-direction:column; flex:1; justify-content:center; }
+.step-plate { display:flex; align-items:center; gap:34px; padding:30px 38px; border-radius:28px; background:rgba(255,255,255,0.045);
+  border:2px solid rgba(167,123,255,0.45); }
+.num { flex:none; width:92px; height:92px; border-radius:50%; background:#3A2A6B; color:#fff; display:flex;
+  align-items:center; justify-content:center; font-family:'Oswald'; font-weight:600; font-size:40px;
+  border:2px solid #A77BFF; }
+.st-title { font-family:'Oswald'; font-weight:600; text-transform:uppercase; font-size:58px; line-height:1; }
+.st-text { font-size:32px; line-height:1.3; margin-top:10px; color:#B8B4C2; }
+.arrow-down { display:flex; justify-content:center; padding:10px 0; }
+.cards { display:grid; grid-template-columns:1fr 1fr; gap:26px; }
+.card { background:rgba(255,255,255,0.045); border:2px solid rgba(167,123,255,0.45); border-radius:28px; padding:36px 32px; min-height:250px;
+  display:flex; flex-direction:column; gap:20px; }
+.c-title { font-family:'Oswald'; font-weight:600; text-transform:uppercase; font-size:46px; line-height:1.02; }
+.c-text { font-size:30px; line-height:1.3; color:#B8B4C2; }
+.compare { display:grid; grid-template-columns:1fr 56px 1.25fr; gap:18px 10px; align-items:stretch; }
+.ch { font-family:'Oswald'; font-weight:600; text-transform:uppercase; font-size:30px; letter-spacing:.12em; color:#B8B4C2; }
+.was { padding:24px 26px; border-radius:22px; background:rgba(255,255,255,0.045); color:#B8B4C2; font-size:30px; line-height:1.28;
+  text-decoration:line-through; text-decoration-color:rgba(167,123,255,0.45); display:flex; align-items:center; }
+.to { display:flex; align-items:center; justify-content:center; }
+.now { padding:24px 26px; border-radius:22px; background:rgba(255,255,255,0.045); border:2px solid #A77BFF; font-size:31px;
+  line-height:1.28; font-weight:600; display:flex; align-items:center; }
+/* воздуха не слишком много (её слово 2026-09-25): блоки растягиваются на свободную высоту */
+.k-cards .cards { flex:1; grid-auto-rows:1fr; margin-top:34px; }
+.k-cards .card { justify-content:center; }
+.k-cards .c-title { font-size:54px; }
+.k-cards .c-text { font-size:33px; }
+.k-compare .compare { flex:1; grid-template-rows:auto; grid-auto-rows:1fr; margin-top:26px; }
+.k-compare .was, .k-compare .now { font-size:35px; padding:28px 30px; }
+.k-compare .fill, .k-cards .fill { justify-content:flex-start; }
+.k-statement .body, .k-text .body { font-size:43px; line-height:1.34; }
+.k-text .summary { font-size:40px; padding:40px 44px; }
+.k-text h1 { margin-bottom:34px; }
+.bg-photo { position:absolute; inset:0; width:100%; height:100%; object-fit: cover; z-index:0; }
+.shade { position:absolute; inset:0; z-index:1; background:
+  linear-gradient(90deg, rgba(13,16,21,.92) 0%, rgba(13,16,21,.78) 36%, rgba(13,16,21,.18) 64%, rgba(13,16,21,0) 80%),
+  linear-gradient(0deg, rgba(13,16,21,.55) 0%, rgba(13,16,21,0) 30%),
+  linear-gradient(180deg, rgba(13,16,21,.6) 0%, rgba(13,16,21,0) 14%); }
+.photo-col { position:relative; z-index:2; margin-top:auto; margin-bottom:auto; }
+.photo-col .body { font-size:38px; }
+.cta { position:relative; z-index:2; display:flex; align-items:center; gap:28px; padding:30px 36px; font-size:36px;
+  line-height:1.3; font-weight:600; background:rgba(13,16,21,.72); flex:none; }
+</style></head><body><div class="canvas k-photo"><img class="bg-photo" src="file:///C:/Users/burov/Projects/Jarvis/essa-ai/content/2026-09-25-golos-karusel/visuals/cover-her.png" style="object-position:62% 28%;transform:scale(1.1) translateX(9.0%);"><div class="shade"></div><div class="head"><span class="cnt"><b>01</b> / 08</span><span class="line"></span><span class="lbl">ГОЛОС</span></div><div class="photo-col" style="width:528px"><h1 style="font-size:112px">Нейросеть<br>пишет<br><span class="acc">не твоим<br>голосом?</span></h1><div class="rule"></div><p class="body">Это поправимо.<br>За один вечер.</p></div></div></body></html>
