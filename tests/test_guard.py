@@ -861,3 +861,9 @@ def test_blocked_line_names_the_subagent(root):
 
 def test_dev_mode_does_not_apply_role_scopes(root):
     assert run_dev(ev_agent("reviewer", "Write", file_path="docs/x.md", content="x"), root)[0] == 0
+
+
+def test_structured_output_tool_is_harmless_read():
+    """--json-schema сдаёт ответ инструментом StructuredOutput; найдено живым прогоном ревьюера (P2.2)."""
+    d = decide(ev("StructuredOutput", verdict="pass", problems=[], checked=[]), REPO)
+    assert (d.level, d.action) == ("READ", "allow")

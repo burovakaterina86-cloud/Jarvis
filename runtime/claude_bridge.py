@@ -43,6 +43,25 @@ class TurnResult:
     tool_uses: int = 0                                 # вызовов инструментов, включая субагентов
     files: list[str] = field(default_factory=list)     # пути из Write/Edit/MultiEdit/NotebookEdit
     attempts: int = 1                                  # запусков claude за ход (повтор без resume — 2)
+    structured: dict | None = None                     # ответ по --json-schema (structured_output)
+    review: dict | None = None                         # вердикт независимой проверки (ставит task_router)
+
+
+@dataclass(frozen=True)
+class TurnOptions:
+    """Чем ход отличается от обычного хода JARVIS. По умолчанию — обычный ход.
+
+    Проверяющий (P2.2) идёт со своими настройками (только чтение), своим промптом, схемой
+    вердикта и без сохранения сессии: каждый раз свежий контекст.
+    """
+    settings: Path = SETTINGS_FILE
+    prompt_file: Path = TURN_PROMPT_FILE
+    max_turns: int = MAX_TURNS
+    json_schema: dict | None = None
+    persist: bool = True
+
+
+DEFAULT_OPTIONS = TurnOptions()
 
 
 _running: dict[str, asyncio.subprocess.Process] = {}
@@ -57,14 +76,18 @@ def build_env(base: dict | None = None) -> dict:
             if k.upper() in _ENV_KEEP or not k.upper().startswith(_ENV_DROP_PREFIX)}
 
 
-def build_args(session_id: str | None) -> list[str]:
+def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS) -> list[str]:
     args = ["-p", "--output-format", "stream-json", "--verbose"]
     if session_id:
         args += ["--resume", session_id]
     args += ["--permission-mode", "dontAsk",
-             "--append-system-prompt-file", str(TURN_PROMPT_FILE),
-             "--settings", str(SETTINGS_FILE),
-             "--max-turns", str(MAX_TURNS)]
+             "--append-system-prompt-file", str(options.prompt_file),
+             "--settings", str(options.settings),
+             "--max-turns", str(options.max_turns)]
+    if options.json_schema is not None:
+        args += ["--json-schema", json.dumps(options.json_schema, ensure_ascii=False)]
+    if not options.persist:
+        args += ["--no-session-persistence"]
     return args
 
 
@@ -162,8 +185,8 @@ class _Outcome:
 
 
 async def _run_once(prompt, session_id, on_event, run_id, task, env, claude_cmd, cwd,
-                    task_id: str = "") -> _Outcome:
-    cmd = list(claude_cmd) + build_args(session_id)
+                    task_id: str = "", options: TurnOptions = DEFAULT_OPTIONS) -> _Outcome:
+    cmd = list(claude_cmd) + build_args(session_id, options)
     kwargs = {}
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -289,6 +312,8 @@ AUTH_TEXT ="Нужно заново войти в Claude на компьютер
 def _to_result(out: _Outcome, session_id_in: str | None, run_id: str | None = None) -> TurnResult:
     res = _to_result_core(out, session_id_in, run_id)
     res.tool_uses, res.files = out.tool_uses, list(out.files)
+    structured = (out.result or {}).get("structured_output")
+    res.structured = structured if isinstance(structured, dict) else None
     return res
 
 
@@ -316,7 +341,7 @@ def _to_result_core(out: _Outcome, session_id_in: str | None, run_id: str | None
 async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
                    run_id: str | None = None, task: str = "", env: dict | None = None,
                    claude_cmd: list[str] | None = None, cwd: str | Path | None = None,
-                   task_id: str = "") -> TurnResult:
+                   task_id: str = "", options: TurnOptions = DEFAULT_OPTIONS) -> TurnResult:
     """Выполняет один ход Claude Code. Никогда не бросает исключений — ошибка в TurnResult.
 
     `task_id` попадает во все события хода и в окружение дочернего claude (`JARVIS_TASK_ID`),
@@ -330,7 +355,8 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
     _stopped.discard(run_id)
     try:
         cmd = claude_cmd or default_claude_cmd()
-        out = await _run_once(prompt, session_id, on_event, run_id, task, child_env, cmd, cwd, task_id)
+        out = await _run_once(prompt, session_id, on_event, run_id, task, child_env, cmd, cwd, task_id,
+                              options)
         res = _to_result(out, session_id, run_id)
         if session_id and res.status == "error" and out.activity:
             # Ход уже вызывал инструменты: повтор мог бы повторить внешнее действие.
@@ -345,14 +371,15 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
             events.emit("error", subtype="context_overflow", session=session_id, task=task,
                         task_id=task_id)
             out = await _run_once(_overflow_prompt(prompt), None, on_event, run_id, task,
-                                  child_env, cmd, cwd, task_id)
+                                  child_env, cmd, cwd, task_id, options)
             res = _to_result(out, None, run_id)
             res.new_session, res.attempts = True, 2
         elif session_id and res.status == "error" and not out.activity:
             # resume не удался (сессия повреждена/истекла) — один повтор без него.
             events.emit("error", subtype="resume_failed", session=session_id, task=task,
                         task_id=task_id, error=_short(out.stderr.strip(), 300))
-            out = await _run_once(prompt, None, on_event, run_id, task, child_env, cmd, cwd, task_id)
+            out = await _run_once(prompt, None, on_event, run_id, task, child_env, cmd, cwd, task_id,
+                                  options)
             res = _to_result(out, None, run_id)
             res.new_session, res.attempts = True, 2
         return res

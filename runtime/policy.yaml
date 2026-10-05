@@ -78,6 +78,7 @@ read_tools:
   - Agent
   - Skill
   - ExitPlanMode
+  - StructuredOutput   # ответ по --json-schema (ревьюер P2.2): без побочных эффектов
   - BashOutput
   - KillShell
   - ListMcpResourcesTool

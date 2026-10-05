@@ -12,6 +12,10 @@
 
 План крупной задачи (P2.1, `runtime/spec.py`): ответ-план сохраняется для чата, следующий ход чата
 получает его в `Job.spec` и закрывает; задачи по расписанию планов не видят.
+
+Независимая проверка (P2.2, `runtime/review.py`): после существенного хода чата — отдельный
+процесс-проверяющий без истории исполнителя; `fix` → замечания исполнителю → повторная проверка.
+Каждый запуск проверяющего и исправления тратит дневной лимит запусков, как обычный ход.
 """
 from __future__ import annotations
 
@@ -27,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from runtime import claude_bridge, events, spec
+from runtime import claude_bridge, events, review, spec
 from runtime import sessions as sessions_mod
 from runtime.redact import redact
 
@@ -92,6 +96,19 @@ def git_status(root: Path = ROOT) -> set[str]:
     return paths
 
 
+def run_tests(root: Path = ROOT) -> str:
+    """Хвост вывода `pytest -q` — для проверяющего, когда ход менял код."""
+    python = root / ".venv" / "Scripts" / "python.exe"
+    try:
+        proc = subprocess.run([str(python if python.exists() else "python"), "-m", "pytest", "-q"],
+                              cwd=str(root), capture_output=True, timeout=900,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"тесты не запустились: {type(exc).__name__}"
+    out = proc.stdout.decode("utf-8", "replace").strip().splitlines()
+    return "\n".join(out[-30:])
+
+
 def _human_duration(sec: float) -> str:
     return f"{sec:g} с" if sec < 60 else f"{sec / 60:g} мин"
 
@@ -103,7 +120,7 @@ def run_id_for(chat_id) -> str:
 class TaskRouter:
     def __init__(self, *, budget: int | None = None, budget_path: str | Path | None = None,
                  env: dict | None = None, claude_cmd: list[str] | None = None, sessions=None,
-                 git_status=None):
+                 git_status=None, tests_runner=None):
         self.budget = budget
         self.budget_path = Path(budget_path) if budget_path else BUDGET_PATH
         self.env = env
@@ -111,6 +128,7 @@ class TaskRouter:
         self.sessions = sessions or sessions_mod
         self.default_timeout = _timeout_from_env()
         self.git_status = git_status or globals()["git_status"]
+        self.tests_runner = tests_runner or run_tests
         self._queues: dict[str, deque] = {}
         self._active: dict[str, Job] = {}
         self._workers: dict[str, asyncio.Task] = {}
@@ -178,12 +196,29 @@ class TaskRouter:
         if not isolated:
             job.spec = spec.load(key)
         limit = job.timeout_sec or self.default_timeout
-        run_id = run_id_for(key)
         before = await asyncio.to_thread(self.git_status)
         job.started = time.monotonic()
+        res = await self._timed(key, job, job.prompt, sid, limit, on_event=job.on_event)
+        if res.status in ("rate_limited", "auth_required", "error"):
+            self._refund_budget()  # неуспешный ход не тратит дневной лимит; таймаут — тратит
+        if not isolated and res.session_id and res.session_id != sid:
+            self.sessions.set(key, res.session_id)
+        # Файлы хода: записи Write/Edit плюс то, что git увидел нового (запись командами shell).
+        after = await asyncio.to_thread(self.git_status)
+        res.files = sorted(set(res.files) | (set(after) - set(before)))
+        if not isolated and res.status == "ok":
+            self._track_spec(key, job, res)
+        if review.needs_review(job, res, env=self.env if self.env is not None else os.environ):
+            res = await self._review(key, job, res, limit)
+        return res
+
+    async def _timed(self, key: str, job: Job, prompt: str, sid, limit: float,
+                     options=claude_bridge.DEFAULT_OPTIONS, on_event=None):
+        """Один запуск claude с пределом времени: по истечении — стоп дерева процесса, статус timeout."""
+        run_id = run_id_for(key)
         turn = asyncio.ensure_future(claude_bridge.run_turn(
-            job.prompt, sid, job.on_event, run_id=run_id, task=job.task, env=self.env,
-            claude_cmd=self.claude_cmd, task_id=job.task_id))
+            prompt, sid, on_event, run_id=run_id, task=job.task, env=self.env,
+            claude_cmd=self.claude_cmd, task_id=job.task_id, options=options))
         done, _ = await asyncio.wait({turn}, timeout=limit)
         if not done:
             # Останавливаем тем же путём, что /stop: дерево процесса, ход возвращает «stopped».
@@ -198,15 +233,46 @@ class TaskRouter:
             res.status, res.error = "timeout", "timeout"
             res.text = (f"Остановил задачу: она шла дольше {_human_duration(limit)}. "
                         "Часть действий могла выполниться — скажи, продолжать ли и с чего.")
-        if res.status in ("rate_limited", "auth_required", "error"):
-            self._refund_budget()  # неуспешный ход не тратит дневной лимит; таймаут — тратит
-        if not isolated and res.session_id and res.session_id != sid:
-            self.sessions.set(key, res.session_id)
-        # Файлы хода: записи Write/Edit плюс то, что git увидел нового (запись командами shell).
-        after = await asyncio.to_thread(self.git_status)
-        res.files = sorted(set(res.files) | (set(after) - set(before)))
-        if not isolated and res.status == "ok":
-            self._track_spec(key, job, res)
+        return res
+
+    async def _review(self, key: str, job: Job, res, limit: float):
+        """Проверяющий → (fix → исправление исполнителем → снова проверяющий), не больше MAX_ROUNDS."""
+        tests = await asyncio.to_thread(self.tests_runner) if review.code_changed(res.files) else None
+        result = {"verdict": None, "rounds": 0, "problems": [], "checked": []}
+        for round_no in range(1, review.MAX_ROUNDS + 1):
+            if not self._take_budget():
+                result["error"] = "дневной лимит запусков исчерпан"
+                break
+            checked = await self._timed(key, job, review.build_prompt(job, res, tests), None, limit,
+                                        options=review.OPTIONS)
+            verdict = review.parse(checked)
+            if verdict is None:
+                if checked.status in ("rate_limited", "auth_required", "error"):
+                    self._refund_budget()
+                result["error"] = checked.error or "нет вердикта"
+                break
+            result.update(verdict, rounds=round_no)
+            events.emit("review_verdict", task=job.task, task_id=job.task_id, verdict=verdict["verdict"],
+                        round=round_no, problems=verdict["problems"][:10], cost=checked.cost_usd)
+            if verdict["verdict"] != "fix" or round_no == review.MAX_ROUNDS or not self._take_budget():
+                break
+            before = await asyncio.to_thread(self.git_status)
+            fixed = await self._timed(key, job, review.fix_prompt(verdict), res.session_id, limit,
+                                      on_event=job.on_event)
+            if fixed.status != "ok":
+                break
+            after = await asyncio.to_thread(self.git_status)
+            fixed.files = sorted(set(res.files) | set(fixed.files) | (set(after) - set(before)))
+            fixed.attempts += res.attempts
+            fixed.tool_uses += res.tool_uses
+            fixed.cost_usd = (fixed.cost_usd or 0) + (res.cost_usd or 0)
+            if fixed.session_id and fixed.session_id != res.session_id:
+                self.sessions.set(key, fixed.session_id)
+            res = fixed
+            if review.code_changed(res.files):
+                tests = await asyncio.to_thread(self.tests_runner)
+        res.review = result
+        res.text = review.annotate(res.text, result)
         return res
 
     def _track_spec(self, key: str, job: Job, res) -> None:
@@ -231,7 +297,9 @@ class TaskRouter:
                         result_status=res.status, error=res.error, duration=float(duration),
                         tools=res.tool_uses, files_changed=list(res.files), attempts=res.attempts,
                         cost=res.cost_usd, context=job.context, session=res.session_id,
-                        spec_task_id=(job.spec or {}).get("task_id"), progress=1.0)
+                        spec_task_id=(job.spec or {}).get("task_id"),
+                        review_verdict=(res.review or {}).get("verdict"),
+                        review_rounds=(res.review or {}).get("rounds"), progress=1.0)
             if res.status in WORKED and res.attempts > 0:
                 self._write_episode(job, res)
         except Exception:  # noqa: BLE001 — журнал не должен ронять очередь

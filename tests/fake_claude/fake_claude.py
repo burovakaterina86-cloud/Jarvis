@@ -45,6 +45,29 @@ def main():
     resume = argv[argv.index("--resume") + 1] if "--resume" in argv else None
     sid = resume or SID_NEW
 
+    if "--json-schema" in argv:
+        # проверяющий: вердикты по очереди из FAKE_REVIEW_VERDICTS («fix,pass»), счётчик — в файле
+        verdicts = os.environ.get("FAKE_REVIEW_VERDICTS", "pass").split(",")
+        counter = os.environ.get("FAKE_REVIEW_COUNTER")
+        n = 0
+        if counter and os.path.exists(counter):
+            n = int(open(counter, encoding="utf-8").read() or 0)
+        if counter:
+            with open(counter, "w", encoding="utf-8") as fh:
+                fh.write(str(n + 1))
+        verdict = verdicts[min(n, len(verdicts) - 1)]
+        out({"type": "system", "subtype": "init", "session_id": "review-sess", "tools": ["Read"]})
+        if verdict == "broken":
+            out({"type": "result", "subtype": "success", "is_error": False, "session_id": "review-sess",
+                 "result": "не смог", "total_cost_usd": 0.001, "duration_ms": 5})
+            return
+        problems = [] if verdict == "pass" else [f"в post.md нет отметки pipeline (круг {n + 1})"]
+        data = {"verdict": verdict, "problems": problems, "checked": ["essa-ai/content/x/post.md"]}
+        out({"type": "result", "subtype": "success", "is_error": False, "session_id": "review-sess",
+             "result": json.dumps(data, ensure_ascii=False), "structured_output": data,
+             "total_cost_usd": 0.004, "duration_ms": 50})
+        return
+
     if scenario in ("resume_fail", "overflow") and resume:
         if scenario == "resume_fail":
             sys.stderr.write(f"No conversation found with session ID: {resume}\n")
