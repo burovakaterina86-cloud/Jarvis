@@ -13,6 +13,8 @@
 #   shell_tools: [<имя>, ...]            — инструменты, чьё поле command проверяется как команда
 #   deny_paths: [<glob>, ...]            — секреты: любое чтение/упоминание → DENY
 #   protected_write_paths: [<glob>, ...] — запись → DENY
+#   ask_write_paths: [<glob>, ...]       — собственные правила JARVIS: запись → EXTERNAL (kind self_modify),
+#                                          на кнопке путь и начало правки (её решение 2026-10-05, аудит P0.4)
 #   allow_write_paths: [<glob>, ...]     — запись вне корня проекта, разрешённая без запроса
 #                                          (внутри корня WRITE и так автоматически)
 #   big_read: {max_kb: int, tools: {<имя>: <поле пути>}, chunk_fields: [<поле>, ...]}
@@ -38,6 +40,7 @@ external:
   write_outside_root: ask
   unknown_tool: ask
   big_read: ask
+  self_modify: ask
 
 # Порог чтения целиком. Самый большой живой текстовый файл проекта — 59 КБ,
 # так что ложных срабатываний на обычной работе нет.
@@ -120,6 +123,17 @@ protected_write_paths:
   - ".git/hooks/**"
   - ".mcp.json"
   - "**/.env*"
+
+# Правила, по которым JARVIS думает и действует. Не DENY: разбор поправок законно пишет
+# в .claude/rules/ — но только через кнопку. MEMORY.md и memory/ сюда не входят.
+ask_write_paths:
+  - "CLAUDE.md"
+  - "SOUL.md"
+  - "GOALS.md"
+  - "AGENTS.md"
+  - ".claude/rules/**"
+  - ".agents/**"
+  - ".codex/**"
 
 allow_write_paths: []
 

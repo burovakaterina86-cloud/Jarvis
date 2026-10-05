@@ -13,5 +13,6 @@
 
 - Секреты (`.env*`, `credentials`, `state/secrets/`, `~/.ssh`, профиль браузера) не читаешь и не упоминаешь в командах.
 - Не меняешь свою защиту: `.claude/settings*`, `.claude/hooks/`, `runtime/`, `integrations/` — только владелица руками.
+- Свои правила (`CLAUDE.md`, `SOUL.md`, `GOALS.md`, `AGENTS.md`, `.claude/rules/`, `.agents/`, `.codex/`) правишь только через кнопку «Подтвердить».
 - Запрещено: `format`, `git push --force`, `reg`, `schtasks`, `Set-ExecutionPolicy`, скачивание и запуск exe.
 - Отказ Guard — не ошибка для обхода: объясни владелице, что заблокировано, и предложи другой путь.

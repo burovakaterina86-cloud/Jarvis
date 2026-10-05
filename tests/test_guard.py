@@ -80,7 +80,7 @@ CASES = [
     ("write memory", ev("Write", file_path="memory/decisions/a.md", content="x"), "WRITE", "allow"),
     ("write drafts skill", ev("Write", file_path="drafts/skills/x/SKILL.md", content="x"), "WRITE", "allow"),
     ("write inbox", ev("Write", file_path="inbox/photo.txt", content="x"), "WRITE", "allow"),
-    ("edit SOUL.md", ev("Edit", file_path="SOUL.md", old_string="a", new_string="b"), "WRITE", "allow"),
+    ("edit SOUL.md asks (self_modify)", ev("Edit", file_path="SOUL.md", old_string="a", new_string="b"), "EXTERNAL", "ask"),
     ("write GOALS/MEMORY", ev("Write", file_path="MEMORY.md", content="x"), "WRITE", "allow"),
     ("read runtime ok", ev("Read", file_path="runtime/policy.yaml"), "READ", "allow"),
     ("bash cat runtime ok", ev("Bash", command="cat runtime/policy.yaml"), "WRITE", "allow"),
@@ -502,3 +502,67 @@ def test_big_read_threshold_lives_in_policy(small_file):
     p = _policy(big_read={**base, "max_kb": 10})
     d = guard.decide(ev("Read", file_path=str(small_file)), policy=p, root=REPO, env={})
     assert (d.level, d.action) == ("EXTERNAL", "ask"), d.reason
+
+
+# ---------- правка собственных правил: через кнопку (P0.4, аудит 2026-10-05) ----------
+
+SELF_MODIFY = [
+    ("edit CLAUDE.md", ev("Edit", file_path="CLAUDE.md", old_string="a", new_string="b")),
+    ("write GOALS.md", ev("Write", file_path="GOALS.md", content="x")),
+    ("write AGENTS.md abs", ev("Write", file_path=str(REPO / "AGENTS.md"), content="x")),
+    ("edit rules", ev("Edit", file_path=".claude/rules/safety.md", old_string="a", new_string="b")),
+    ("write new rule", ev("Write", file_path=r".claude\rules\new.md", content="x")),
+    ("multiedit rules", ev("MultiEdit", file_path=".claude/rules/memory.md", edits=[])),
+    ("write mirror skill", ev("Write", file_path=".agents/skills/x/SKILL.md", content="x")),
+    ("write codex agent", ev("Write", file_path=".codex/agents/x.toml", content="x")),
+    ("bash redirect into rules", ev("Bash", command="echo x >> .claude/rules/safety.md")),
+    ("ps set-content CLAUDE.md", ev("PowerShell", command="Set-Content CLAUDE.md 'x'")),
+    ("bash cp into mirror", ev("Bash", command="cp /tmp/x.md .agents/skills/x/SKILL.md")),
+    ("python writes rules", ev("Bash", command="python -c \"open('.claude/rules/a.md','w').write('x')\"")),
+    ("git checkout CLAUDE.md", ev("Bash", command="git checkout -- CLAUDE.md")),
+]
+
+
+@pytest.mark.parametrize("name,event", SELF_MODIFY, ids=[c[0] for c in SELF_MODIFY])
+def test_self_modify_asks_owner(name, event):
+    d = decide(event, REPO)
+    assert (d.level, d.action, d.kind) == ("EXTERNAL", "ask", "self_modify"), d
+
+
+NOT_SELF_MODIFY = [
+    ("read rules", ev("Read", file_path=".claude/rules/safety.md"), "READ"),
+    ("grep CLAUDE.md", ev("Grep", pattern="Guard", path="CLAUDE.md"), "READ"),
+    ("bash cat CLAUDE.md", ev("Bash", command="cat CLAUDE.md"), "WRITE"),
+    ("bash git diff rules", ev("Bash", command="git diff .claude/rules"), "WRITE"),
+    ("write MEMORY.md", ev("Write", file_path="MEMORY.md", content="x"), "WRITE"),
+    ("write corrections", ev("Write", file_path="memory/corrections.md", content="x"), "WRITE"),
+    ("write essa-ai", ev("Write", file_path="essa-ai/VOICE.md", content="x"), "WRITE"),
+]
+
+
+@pytest.mark.parametrize("name,event,level", NOT_SELF_MODIFY, ids=[c[0] for c in NOT_SELF_MODIFY])
+def test_ordinary_work_is_not_self_modify(name, event, level):
+    d = decide(event, REPO)
+    assert (d.level, d.action) == (level, "allow"), d
+
+
+def test_protected_paths_stay_deny_not_ask():
+    d = decide(ev("Write", file_path=".claude/skills/x/SKILL.md", content="x"), REPO)
+    assert (d.level, d.action) == ("DENY", "deny")
+
+
+def test_self_modify_button_shows_path_and_change():
+    """Кнопка владелицы показывает только reason: в нём путь и начало правки."""
+    d = decide(ev("Edit", file_path=".claude/rules/safety.md", old_string="старое",
+                  new_string="новое правило " + "я" * 1000), REPO)
+    assert ".claude/rules/safety.md" in d.reason
+    assert "новое правило" in d.reason
+    assert len(d.reason) < 600
+    d = decide(ev("Write", file_path="CLAUDE.md", content="весь новый текст"), REPO)
+    assert "CLAUDE.md" in d.reason and "весь новый текст" in d.reason
+
+
+def test_self_modify_can_not_be_switched_to_auto_silently():
+    policy = guard.load_policy(POLICY_PATH)
+    assert policy["external"].get("self_modify") == "ask"
+    assert policy.get("ask_write_paths"), "список ask_write_paths пуст"

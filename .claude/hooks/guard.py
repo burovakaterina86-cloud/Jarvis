@@ -280,6 +280,24 @@ def _finish(level: str, kind: str, reason: str, policy: dict, tool_input, env) -
     return Decision(level, "allow", reason, kind)
 
 
+_PREVIEW_LIMIT = 300
+
+
+def _change_preview(tool_input: dict) -> str:
+    """Начало правки одной строкой — его владелица видит на кнопке."""
+    parts = [tool_input.get(f) for f in ("new_string", "content", "new_source")]
+    for edit in tool_input.get("edits") or []:
+        if isinstance(edit, dict):
+            parts.append(edit.get("new_string"))
+    text = " ".join(" ".join(str(p).split()) for p in parts if isinstance(p, str) and p.strip())
+    return text if len(text) <= _PREVIEW_LIMIT else text[:_PREVIEW_LIMIT] + "…"
+
+
+def _self_modify_reason(target: str, tool_input: dict) -> str:
+    preview = _change_preview(tool_input)
+    return f"правка собственных правил JARVIS: {target}" + (f" — «{preview}»" if preview else "")
+
+
 def _tool_matches(spec: str, tool: str) -> bool:
     return spec in ("*", None, "") or re.fullmatch(spec, tool) is not None
 
@@ -296,6 +314,7 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
     blob = json.dumps(tool_input, ensure_ascii=False)
     deny_paths = policy.get("deny_paths") or []
     protected = policy.get("protected_write_paths") or []
+    ask_paths = policy.get("ask_write_paths") or []
 
     # 1. секреты — в любом инструменте, в полях путей и в тексте команд
     for field in policy.get("path_fields") or []:
@@ -323,7 +342,9 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
         for pat in protected:
             if _glob_hit(absolute, pat, root):
                 return Decision("DENY", "deny", f"запись в защищённое место запрещена ({target})", "protected")
-        if _inside(absolute, root) or any(_glob_hit(absolute, p, root) for p in policy.get("allow_write_paths") or []):
+        if any(_glob_hit(absolute, pat, root) for pat in ask_paths):
+            level, kind, reason = "EXTERNAL", "self_modify", _self_modify_reason(target, tool_input)
+        elif _inside(absolute, root) or any(_glob_hit(absolute, p, root) for p in policy.get("allow_write_paths") or []):
             level, kind, reason = "WRITE", "write", "запись внутри JARVIS"
         else:
             level, kind, reason = "EXTERNAL", "write_outside_root", f"запись вне папки JARVIS: {target}"
@@ -333,7 +354,13 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
                 and (_WRITE_VERBS.search(command) or _INTERPRETERS.search(command)):
             return Decision("DENY", "deny", "команда меняет защищённые файлы", "protected")
         level, kind, reason = "WRITE", "shell", "команда"
-        if _WRITE_VERBS.search(command):
+        changes_files = _WRITE_VERBS.search(command) or _INTERPRETERS.search(command)
+        if changes_files and (_text_mentions(command, ask_paths, root)
+                              or _text_mentions(_dequote(command), ask_paths, root)):
+            short = " ".join(command.split())
+            short = short if len(short) <= _PREVIEW_LIMIT else short[:_PREVIEW_LIMIT] + "…"
+            level, kind, reason = "EXTERNAL", "self_modify", f"правка собственных правил JARVIS командой: {short}"
+        elif _WRITE_VERBS.search(command):
             outside = _outside_targets(command, root, base, policy.get("allow_write_paths") or [])
             if outside:
                 level, kind, reason = "EXTERNAL", "write_outside_root", f"запись вне папки JARVIS: {outside[0]}"
