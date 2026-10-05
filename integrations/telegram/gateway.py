@@ -345,7 +345,10 @@ class Gateway:
                 log.warning("не удалось сообщить о неудачной отправке")
 
     async def _deliver_inner(self, context, chat_id, result) -> None:
-        if getattr(result, "new_session", False):
+        if getattr(result, "brief", False) is True:
+            await self._send(context, chat_id,
+                             "Начал новый разговор после паузы — что было раньше, взял из журнала задач.")
+        elif getattr(result, "new_session", False):
             await self._send(context, chat_id,
                              "Начал новый разговор — прежний контекст потерялся.")
         raw = (getattr(result, "text", "") or "").strip()

@@ -12,6 +12,8 @@ REPO = Path(__file__).resolve().parents[1]
 LIVE_JOURNALS = (
     REPO / "state" / "events.jsonl",
     REPO / "state" / "approvals.jsonl",
+    REPO / "state" / "sessions.json",
+    REPO / "state" / "session_activity.json",   # время её последнего хода (P3.1)
     # эпизоды пишет и мост (task_router.EPISODES_DIR): тест с настоящим роутером подменяет путь
     REPO / "memory" / "episodes" / f"{date.today():%Y-%m}.jsonl",
 )

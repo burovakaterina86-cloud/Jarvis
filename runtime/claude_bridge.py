@@ -45,6 +45,7 @@ class TurnResult:
     attempts: int = 1                                  # запусков claude за ход (повтор без resume — 2)
     structured: dict | None = None                     # ответ по --json-schema (structured_output)
     review: dict | None = None                         # вердикт независимой проверки (ставит task_router)
+    brief: bool = False                                # свежая сессия после паузы со сводкой (P3.1)
 
 
 @dataclass(frozen=True)

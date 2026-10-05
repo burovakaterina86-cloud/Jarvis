@@ -16,6 +16,10 @@
 Независимая проверка (P2.2, `runtime/review.py`): после существенного хода чата — отдельный
 процесс-проверяющий без истории исполнителя; `fix` → замечания исполнителю → повторная проверка.
 Каждый запуск проверяющего и исправления тратит дневной лимит запусков, как обычный ход.
+
+Режимы контекста хода (P3.1): `chat` — продолжение сессии чата (`--resume`); `isolated` — без истории
+(расписание, проверяющий); `brief` — чат молчал дольше JARVIS_SESSION_IDLE_HOURS (8 ч, 0 — выключено):
+новая сессия, в начале промпта — сводка трёх последних задач чата из `memory/episodes/` и ждущий план.
 """
 from __future__ import annotations
 
@@ -44,6 +48,9 @@ EPISODE_FILES_LIMIT = 20
 WORKED = ("ok", "timeout", "stopped", "error")
 DEFAULT_DAILY_BUDGET = 100
 DEFAULT_TASK_TIMEOUT_SEC = 2700
+DEFAULT_IDLE_HOURS = 8
+BRIEF_EPISODES = 3
+BRIEF_TEXT_LIMIT = 300
 CONTEXTS = ("chat", "isolated")
 
 
@@ -60,6 +67,7 @@ class Job:
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     started: float | None = field(default=None, init=False, repr=False)  # ставит роутер
     spec: dict | None = field(default=None, init=False, repr=False)      # план, который исполняет ход
+    session_mode: str = field(default="", init=False, repr=False)        # resume | new | brief | isolated
 
     def __post_init__(self):
         if self.context not in CONTEXTS:
@@ -109,6 +117,14 @@ def run_tests(root: Path = ROOT) -> str:
     return "\n".join(out[-30:])
 
 
+def _idle_from_env() -> float:
+    try:
+        value = float(os.environ.get("JARVIS_SESSION_IDLE_HOURS", DEFAULT_IDLE_HOURS))
+    except ValueError:
+        return DEFAULT_IDLE_HOURS
+    return value if value >= 0 else DEFAULT_IDLE_HOURS
+
+
 def _human_duration(sec: float) -> str:
     return f"{sec:g} с" if sec < 60 else f"{sec / 60:g} мин"
 
@@ -120,7 +136,7 @@ def run_id_for(chat_id) -> str:
 class TaskRouter:
     def __init__(self, *, budget: int | None = None, budget_path: str | Path | None = None,
                  env: dict | None = None, claude_cmd: list[str] | None = None, sessions=None,
-                 git_status=None, tests_runner=None):
+                 git_status=None, tests_runner=None, clock=None):
         self.budget = budget
         self.budget_path = Path(budget_path) if budget_path else BUDGET_PATH
         self.env = env
@@ -129,6 +145,8 @@ class TaskRouter:
         self.default_timeout = _timeout_from_env()
         self.git_status = git_status or globals()["git_status"]
         self.tests_runner = tests_runner or run_tests
+        self.clock = clock or time.time
+        self.idle_hours = _idle_from_env()
         self._queues: dict[str, deque] = {}
         self._active: dict[str, Job] = {}
         self._workers: dict[str, asyncio.Task] = {}
@@ -193,12 +211,22 @@ class TaskRouter:
                 self.sessions.get(key), False, None, "error", "daily_budget_exceeded", attempts=0)
         isolated = job.context == "isolated"
         sid = None if isolated else self.sessions.get(key)
+        prompt = job.prompt
+        job.session_mode = "isolated" if isolated else ("resume" if sid else "new")
         if not isolated:
             job.spec = spec.load(key)
+            idle = self._idle(key)
+            if sid and idle is not None and self.idle_hours and idle >= self.idle_hours:
+                prompt, sid, job.session_mode = self._brief_prompt(job, idle), None, "brief"
+            touch = getattr(self.sessions, "touch", None)   # хранилище без учёта активности — без brief
+            if touch:
+                touch(key, self.clock())
         limit = job.timeout_sec or self.default_timeout
         before = await asyncio.to_thread(self.git_status)
         job.started = time.monotonic()
-        res = await self._timed(key, job, job.prompt, sid, limit, on_event=job.on_event)
+        res = await self._timed(key, job, prompt, sid, limit, on_event=job.on_event)
+        if job.session_mode == "brief":
+            res.brief, res.new_session = True, False   # новая сессия запланирована, контекст не «потерян»
         if res.status in ("rate_limited", "auth_required", "error"):
             self._refund_budget()  # неуспешный ход не тратит дневной лимит; таймаут — тратит
         if not isolated and res.session_id and res.session_id != sid:
@@ -275,6 +303,42 @@ class TaskRouter:
         res.text = review.annotate(res.text, result)
         return res
 
+    def _idle(self, key: str) -> float | None:
+        """Часы с последнего хода владелицы в чате; None — не записано (сессию не трогаем)."""
+        last_active = getattr(self.sessions, "last_active", None)
+        last = last_active(key) if last_active else None
+        return None if last is None else max(0.0, (self.clock() - last) / 3600)
+
+    def _recent_episodes(self, limit: int = BRIEF_EPISODES) -> list[dict]:
+        rows = []
+        for path in sorted(Path(EPISODES_DIR).glob("*.jsonl"))[-2:]:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(row, dict) and row.get("context", "chat") == "chat" and row.get("request"):
+                    rows.append(row)
+        rows.sort(key=lambda r: str(r.get("date") or ""))
+        return rows[-limit:]
+
+    def _brief_prompt(self, job: Job, idle_hours: float) -> str:
+        """Новая сессия после паузы: короткая сводка вместо всей истории (режим brief)."""
+        cut = lambda text: " ".join(str(text or "").split())[:BRIEF_TEXT_LIMIT]  # noqa: E731
+        lines = [f"[JARVIS] Чат молчал {idle_hours:g} ч — начат новый разговор. Прошлую переписку ты не видишь; "
+                 "вот сводка последних задач (memory/episodes/). Нужны подробности — открой файлы оттуда."]
+        episodes = self._recent_episodes()
+        for row in episodes:
+            lines.append(f"- {str(row.get('date', ''))[:16]} — {cut(row.get('request'))} → "
+                         f"{cut(row.get('result'))} [{row.get('status', '?')}]")
+        if not episodes:
+            lines.append("- (записей нет)")
+        if job.spec:
+            lines += ["", "Ждёт её ответа твой план (его она, скорее всего, сейчас подтверждает или правит):",
+                      str(job.spec.get("text") or "")[:2000]]
+        lines += ["", "Сообщение владелицы:", job.prompt]
+        return "\n".join(lines)
+
     def _track_spec(self, key: str, job: Job, res) -> None:
         """Ответ-план — сохранить для чата; иначе ход исполнил прежний план — закрыть его."""
         try:
@@ -299,7 +363,8 @@ class TaskRouter:
                         cost=res.cost_usd, context=job.context, session=res.session_id,
                         spec_task_id=(job.spec or {}).get("task_id"),
                         review_verdict=(res.review or {}).get("verdict"),
-                        review_rounds=(res.review or {}).get("rounds"), progress=1.0)
+                        review_rounds=(res.review or {}).get("rounds"),
+                        session_mode=job.session_mode, progress=1.0)
             if res.status in WORKED and res.attempts > 0:
                 self._write_episode(job, res)
         except Exception:  # noqa: BLE001 — журнал не должен ронять очередь
@@ -310,7 +375,8 @@ class TaskRouter:
         cut = lambda text: redact((text or "").strip())[:EPISODE_TEXT_LIMIT]  # noqa: E731
         record = {"date": now.isoformat(timespec="seconds"), "session": res.session_id,
                   "trigger": "turn_end", "task_id": job.task_id, "task": job.task,
-                  "status": res.status, "request": cut(job.prompt), "result": cut(res.text),
+                  "status": res.status, "context": job.context,
+                  "request": cut(job.prompt), "result": cut(res.text),
                   "files": list(res.files)[:EPISODE_FILES_LIMIT]}
         path = Path(EPISODES_DIR) / f"{now:%Y-%m}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
