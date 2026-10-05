@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from runtime import claude_bridge, events, review, spec
+from runtime import claude_bridge, events, review, spec, task_state
 from runtime import sessions as sessions_mod
 from runtime.redact import redact
 
@@ -162,6 +162,7 @@ class TaskRouter:
         q = self._queues.setdefault(key, deque())
         position = len(q) + (1 if key in self._active else 0)
         q.append(job)
+        task_state.emit(job.task_id, job.task, "queued", chat=key)
         events.emit("user_message", task=job.task, task_id=job.task_id, status="queued",
                     chat=key, position=position, session=self.sessions.get(key))
         worker = self._workers.get(key)
@@ -189,7 +190,7 @@ class TaskRouter:
                                                "error", repr(exc)[:500], attempts=0)
             finally:
                 self._active.pop(key, None)
-            self._record(job, res)
+            self._record(job, res, key)
             if not job.result.done():
                 job.result.set_result(res)
             await _call(job.on_done, res)
@@ -209,6 +210,7 @@ class TaskRouter:
                 f"Дневной лимит запусков ({limit}) исчерпан — продолжу завтра "
                 "или владелица может поднять JARVIS_DAILY_RUN_BUDGET.",
                 self.sessions.get(key), False, None, "error", "daily_budget_exceeded", attempts=0)
+        task_state.emit(job.task_id, job.task, "running", chat=key)
         isolated = job.context == "isolated"
         sid = None if isolated else self.sessions.get(key)
         prompt = job.prompt
@@ -271,6 +273,7 @@ class TaskRouter:
             if not self._take_budget():
                 result["error"] = "дневной лимит запусков исчерпан"
                 break
+            task_state.emit(job.task_id, job.task, "review", chat=key, round=round_no)
             checked = await self._timed(key, job, review.build_prompt(job, res, tests), None, limit,
                                         options=review.OPTIONS)
             verdict = review.parse(checked)
@@ -284,6 +287,7 @@ class TaskRouter:
                         round=round_no, problems=verdict["problems"][:10], cost=checked.cost_usd)
             if verdict["verdict"] != "fix" or round_no == review.MAX_ROUNDS or not self._take_budget():
                 break
+            task_state.emit(job.task_id, job.task, "running", chat=key, fixing=True)
             before = await asyncio.to_thread(self.git_status)
             fixed = await self._timed(key, job, review.fix_prompt(verdict), res.session_id, limit,
                                       on_event=job.on_event)
@@ -351,11 +355,12 @@ class TaskRouter:
         except Exception:  # noqa: BLE001 — план не должен ронять очередь
             pass
 
-    def _record(self, job: Job, res) -> None:
+    def _record(self, job: Job, res, key: str | None = None) -> None:
         """Итог задачи в журнал и, если ход работал, строка эпизода. Не бросает исключений."""
         started = job.started
         duration = round(time.monotonic() - started, 1) if started else 0.0
         try:
+            task_state.emit(job.task_id, job.task, task_state.final_state(res.status), chat=key)
             events.emit("task_done", task=job.task, task_id=job.task_id,
                         status="done" if res.status == "ok" else "failed",
                         result_status=res.status, error=res.error, duration=float(duration),

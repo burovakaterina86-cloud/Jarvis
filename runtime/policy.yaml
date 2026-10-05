@@ -21,6 +21,9 @@
 #   agents: {<роль>: {write: [<glob>], shell: bool}} — права субагента по роли (agent_type во входе хука);
 #                                          запись вне write и команды без shell: true → DENY (kind agent_scope);
 #                                          роли нет в списке — общие правила, как у главного агента
+#   url_data: {tools: {<имя>: <поле адреса>}, max_query: int, max_token: int}
+#                                          — «чтение» страницы с данными в адресе (параметры длиннее max_query
+#                                          или непрозрачный кусок от max_token символов) → EXTERNAL url_data
 #   allow_write_paths: [<glob>, ...]     — запись вне корня проекта, разрешённая без запроса
 #                                          (внутри корня WRITE и так автоматически)
 #   big_read: {max_kb: int, tools: {<имя>: <поле пути>}, chunk_fields: [<поле>, ...]}
@@ -49,6 +52,7 @@ external:
   big_read: ask
   self_modify: ask
   run_script: ask
+  url_data: ask
 
 # Порог чтения целиком. Самый большой живой текстовый файл проекта — 59 КБ,
 # так что ложных срабатываний на обычной работе нет.
@@ -167,6 +171,12 @@ agents:
   reviewer: {write: []}
   strategist: {write: []}
   competitor-analyst: {write: []}
+
+# Данные в адресе запроса (аудит 2026-10-05: через WebFetch/навигацию можно вынести секрет в URL).
+url_data:
+  tools: {WebFetch: url, mcp__playwright__browser_navigate: url}
+  max_query: 200
+  max_token: 32
 
 dev_mode:
   deny_kinds: [secret, dangerous, secret_field, purchase, malformed]

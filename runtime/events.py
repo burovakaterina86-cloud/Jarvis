@@ -2,7 +2,7 @@
 
 Обязательные поля: ts, type, session, agent, task, status, progress; у событий хода — task_id.
 Словарь type: user_message, assistant_message, tool_use, tool_result,
-approval_request, approval_decision, blocked, result, error, task_done, spec_proposed, review_verdict.
+approval_request, approval_decision, blocked, result, error, task_done, spec_proposed, review_verdict, task_state.
 Строковые поля проходят `runtime.redact` — значения токенов и ключей в журнал не попадают.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ EVENTS_PATH = ROOT / "state" / "events.jsonl"
 MAX_BYTES = 10 * 1024 * 1024  # ротация: events.jsonl -> events.1.jsonl
 
 TYPES = {"user_message", "assistant_message", "tool_use", "tool_result", "approval_request",
-         "approval_decision", "blocked", "result", "error", "task_done", "spec_proposed", "review_verdict"}
+         "approval_decision", "blocked", "result", "error", "task_done", "spec_proposed", "review_verdict", "task_state"}
 
 _lock = threading.Lock()
 

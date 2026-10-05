@@ -343,6 +343,31 @@ def _big_shell_read(command: str, policy: dict, base: Path) -> str | None:
     return None
 
 
+# ---------- данные в адресе запроса ----------
+
+def _url_data(tool: str, tool_input: dict, policy: dict) -> str | None:
+    """Адрес чтения несёт данные (длинные параметры или непрозрачный кусок вроде токена) →
+    причина для EXTERNAL url_data: так через «чтение страницы» нельзя вынести секрет или файл.
+    Обычные страницы, поиск, ссылки на рилсы и видео проходят свободно."""
+    from urllib.parse import urlsplit
+
+    cfg = policy.get("url_data") or {}
+    field = (cfg.get("tools") or {}).get(tool)
+    url = tool_input.get(field) if field else None
+    if not isinstance(url, str) or not url:
+        return None
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return f"непонятный адрес запроса: {url[:200]}"
+    max_query, max_token = int(cfg.get("max_query") or 200), int(cfg.get("max_token") or 32)
+    tail = parts.query + parts.fragment
+    opaque = re.compile(r"(?=[A-Za-z0-9+=_]*\d)(?=[A-Za-z0-9+=_]*[A-Za-z])[A-Za-z0-9+=_]{%d,}" % max_token)
+    if len(tail) > max_query or opaque.search(parts.path + "?" + tail):
+        return f"в адресе запроса к {parts.netloc or '?'} похоже есть данные: {url[:200]}"
+    return None
+
+
 # ---------- суммы ----------
 
 _AMOUNT_RE = re.compile(r"(\d[\d\s ]*(?:[.,]\d+)?)\s*(?:₽|руб|rub|р\.)", re.IGNORECASE)
@@ -521,6 +546,11 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
         big = _big_read(tool, tool_input, policy, base)
         if big:
             level, kind, reason = "EXTERNAL", "big_read", big
+    # 2в. данные в адресе «чтения» страницы — тоже кнопкой (аудит: риск выноса через WebFetch)
+    if level == "READ":
+        leak = _url_data(tool, tool_input, policy)
+        if leak:
+            level, kind, reason = "EXTERNAL", "url_data", leak
 
     # 3. правила: побеждает самый строгий уровень; правило уточняет вид при равном уровне умолчания
     from_rule = False

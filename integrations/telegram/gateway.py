@@ -30,7 +30,7 @@ from integrations.telegram.status import STATUS_DELAY, StatusReporter, too_long
 from runtime import activation
 from runtime import schedule as schedule_mod
 from runtime import sessions as sessions_mod
-from runtime import task_router
+from runtime import task_router, task_state
 from runtime.approvals import ApprovalsServer
 from runtime.task_router import Job
 
@@ -220,9 +220,14 @@ class Gateway:
     async def cmd_status(self, update, context) -> None:
         if not self._allowed(update):
             return
-        pending = self.router.pending(update.effective_chat.id)
-        text = "Сейчас ничего не выполняю." if not pending else f"В работе и в очереди: {pending}."
-        await self._send(context, update.effective_chat.id, text)
+        chat_id = update.effective_chat.id
+        # Что делаю, что в очереди и чем кончилась последняя задача — по журналу (P2.4).
+        snap = task_state.snapshot(self.root / "state" / "events.jsonl", chat=chat_id)
+        text = task_state.describe(snap)
+        pending = self.router.pending(chat_id)
+        if not snap["active"] and not snap["queued"] and pending:
+            text = f"В работе и в очереди: {pending}.\n" + text
+        await self._send(context, chat_id, text)
 
     async def cmd_browser_login(self, update, context) -> None:
         if not self._allowed(update):
