@@ -90,3 +90,66 @@ def test_line_endings_alone_are_not_a_difference(tmp_path):
     tree(tmp_path, {".claude/skills/a/SKILL.md": b"line1\nline2\n",
                     ".agents/skills/a/SKILL.md": b"line1\r\nline2\r\n"})
     assert sync.compare(tmp_path) == []
+
+
+# ---------- правило зеркала и пересборка (P4.2: зеркала поддерживаются — она пользуется Codex) ----------
+
+def test_project_rule_paths_are_rewritten(tmp_path):
+    in_sync(tmp_path)
+    tree(tmp_path, {".claude/skills/a/SKILL.md": "читай .claude/rules и CLAUDE.md",
+                    ".agents/skills/a/SKILL.md": "читай .Codex/rules и AGENTS.md"})
+    assert sync.compare(tmp_path) == []
+
+
+def test_raw_copy_without_rewrite_is_drift(tmp_path):
+    in_sync(tmp_path)
+    tree(tmp_path, {".claude/skills/a/SKILL.md": "читай .claude/rules",
+                    ".agents/skills/a/SKILL.md": "читай .claude/rules"})
+    assert sync.compare(tmp_path) == ["расходится: .agents/skills/a/SKILL.md"]
+
+
+def test_autopilot_is_verbatim(tmp_path):
+    in_sync(tmp_path)
+    tree(tmp_path, {".claude/skills/autopilot/SKILL.md": "~/.claude/skills",
+                    ".agents/skills/autopilot/SKILL.md": "~/.claude/skills"})
+    assert sync.compare(tmp_path) == []
+
+
+def test_binary_line_ending_noise_is_not_drift(tmp_path):
+    in_sync(tmp_path)
+    tree(tmp_path, {".claude/skills/a/p.jpg": b"\xff\xd8\r\n\x00", ".agents/skills/a/p.jpg": b"\xff\xd8\n\x00"})
+    assert sync.compare(tmp_path) == []
+
+
+def test_write_rebuilds_everything_from_claude(tmp_path):
+    in_sync(tmp_path)
+    body = 'Читай .claude/rules и CLAUDE.md.\nПуть C:\\Users\\x и тройные кавычки """ внутри.'
+    tree(tmp_path, {
+        ".agents/skills/a/SKILL.md": "старая версия",
+        ".claude/skills/b/SKILL.md": "новый навык про .claude",
+        ".agents/skills/old/SKILL.md": "удалённый",
+        ".claude/agents/x.md": AGENT_MD.format(n="x", d="Помощник — «кавычки» и \\\\.", body=body),
+        ".codex/agents/gone.toml": AGENT_TOML.format(n="gone", d="нет", body="x"),
+    })
+    changed = sync.write(tmp_path)
+    assert sync.compare(tmp_path) == []
+    assert ".agents/skills/b/SKILL.md" in changed and ".codex/agents/x.toml" in changed
+    assert (tmp_path / ".agents/skills/b/SKILL.md").read_text(encoding="utf-8") == "новый навык про .Codex"
+    assert not (tmp_path / ".agents/skills/old/SKILL.md").exists()
+    assert not (tmp_path / ".codex/agents/gone.toml").exists()
+    import tomllib
+    t = tomllib.loads((tmp_path / ".codex/agents/x.toml").read_text(encoding="utf-8"))
+    assert t["developer_instructions"].strip() == body.replace(".claude", ".Codex").replace("CLAUDE.md", "AGENTS.md")
+    assert sync.write(tmp_path) == []          # второй раз — нечего менять
+
+
+def test_write_flag_returns_zero_when_done(tmp_path):
+    in_sync(tmp_path)
+    tree(tmp_path, {".claude/skills/b/SKILL.md": "новый"})
+    assert sync.main(["--write", "--root", str(tmp_path)]) == 0
+    assert sync.main(["--check", "--root", str(tmp_path)]) == 0
+
+
+def test_real_repo_mirrors_are_in_sync():
+    """После P4.2 зеркала совпадают; поменял .claude/ — запусти `scripts/sync_mirrors.py --write`."""
+    assert sync.compare(REPO) == []
