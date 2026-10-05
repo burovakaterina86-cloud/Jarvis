@@ -419,3 +419,76 @@ async def test_stranger_cannot_activate_a_draft(tmp_path):
     cb = FakeCallback(data, user_id=999999)
     await g.on_callback(FakeUpdate(999999, callback_query=cb), FakeContext())
     assert (tmp_path / "drafts" / "skills" / "post-checker").is_dir()
+
+
+# ---------------------------------------------------------------- код в черновике (P1.5, аудит 2026-10-05)
+
+
+@pytest.mark.parametrize("name", ["run.exe", "setup.bat", "x.cmd", "a.scr", "pkg.msi"])
+def test_windows_executables_block_activation(tmp_path, name):
+    folder = make_skill(tmp_path)
+    (folder / "tools").mkdir()
+    (folder / "tools" / name).write_bytes(b"MZ")
+    problems = activation.validate("skill", "post-checker", tmp_path)
+    assert any("исполняемый файл" in p and name in p for p in problems), problems
+    with pytest.raises(activation.ActivationError):
+        activation.activate("skill", "post-checker", tmp_path)
+
+
+def test_scripts_are_a_warning_not_a_refusal(tmp_path):
+    folder = make_skill(tmp_path)
+    (folder / "scripts").mkdir()
+    (folder / "scripts" / "build.py").write_text("print(1)", encoding="utf-8")
+    (folder / "helper.ps1").write_text("Write-Host 1", encoding="utf-8")
+    (folder / "notes.md").write_text("текст", encoding="utf-8")
+    assert activation.validate("skill", "post-checker", tmp_path) == []
+    assert activation.code_files("skill", "post-checker", tmp_path) == ["helper.ps1", "scripts/build.py"]
+    draft = {d.name: d for d in activation.list_drafts(tmp_path)}["post-checker"]
+    assert draft.code_files == ["helper.ps1", "scripts/build.py"]
+
+
+def test_text_only_skill_has_no_code_files(tmp_path):
+    make_skill(tmp_path)
+    assert activation.code_files("skill", "post-checker", tmp_path) == []
+
+
+def test_pycache_is_not_counted_as_code(tmp_path):
+    folder = make_skill(tmp_path)
+    (folder / "__pycache__").mkdir()
+    (folder / "__pycache__" / "x.cpython-312.pyc").write_bytes(b"\x00")
+    assert activation.code_files("skill", "post-checker", tmp_path) == []
+
+
+async def test_button_warns_when_skill_brings_code(tmp_path):
+    folder = make_skill(tmp_path)
+    (folder / "scripts").mkdir()
+    (folder / "scripts" / "build.py").write_text("print(1)", encoding="utf-8")
+    g = make_gateway(tmp_path)
+    bot = FakeBot()
+    g.attach(bot)
+    await g.check_drafts()
+    text = bot.sent[-1]["text"]
+    assert "код" in text.lower() and "scripts/build.py" in text
+
+
+async def test_button_text_has_no_code_warning_for_text_skill(tmp_path):
+    make_skill(tmp_path)
+    g = make_gateway(tmp_path)
+    bot = FakeBot()
+    g.attach(bot)
+    await g.check_drafts()
+    assert "код" not in bot.sent[-1]["text"].lower()
+
+
+async def test_show_button_also_sends_the_code(tmp_path):
+    folder = make_skill(tmp_path)
+    (folder / "scripts").mkdir()
+    (folder / "scripts" / "build.py").write_text("print('собираю')", encoding="utf-8")
+    g = make_gateway(tmp_path)
+    bot = FakeBot()
+    g.attach(bot)
+    cb = FakeCallback(g.draft_callback_data("skill", "post-checker", "show"))
+    await g.on_callback(FakeUpdate(OWNER, callback_query=cb), FakeContext(bot=bot))
+    names = [d["filename"] for d in bot.documents]
+    assert names == ["post-checker-SKILL.md", "post-checker-TEST.md", "post-checker-scripts-build.py"]
+    assert "собираю".encode("utf-8") in bot.documents[2]["document"]

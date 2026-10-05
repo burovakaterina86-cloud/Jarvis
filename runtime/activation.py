@@ -6,7 +6,11 @@
 или помощник не включается сам по себе.
 
 Публично: `list_drafts(root)`, `validate(kind, name, root)`, `activate(kind, name, root)`,
-`discard(kind, name, root)`, `ensure_dirs(root)`.
+`discard(kind, name, root)`, `ensure_dirs(root)`, `code_files(kind, name, root)`.
+
+Код в навыке: исполняемые файлы Windows (`.exe`, `.bat`, …) не включаются никогда; скрипты
+(`.py`, `.ps1`, `.js`, `.sh`, …) включаются, но кнопка владелицы прямо называет их — включая
+навык, она включает и код, который JARVIS будет запускать (аудит 2026-10-05, P1.5).
 """
 from __future__ import annotations
 
@@ -28,6 +32,9 @@ BODY_LINES_LIMIT = 500
 # Строка результата прогона в TEST.md — строгий формат, а не «где-то встретилось слово».
 RESULT_RE = re.compile(r"^Результат:[ \t]*(passed|failed)[ \t]*$", re.MULTILINE)
 
+BLOCKED_EXT = {".exe", ".bat", ".cmd", ".scr", ".msi", ".com", ".dll", ".vbs"}
+CODE_EXT = {".py", ".ps1", ".psm1", ".js", ".mjs", ".cjs", ".ts", ".sh"}
+
 KINDS = {
     "skill": {"folder": "skills", "file": "SKILL.md", "word": "навык"},
     "agent": {"folder": "agents", "file": None, "word": "помощник"},
@@ -47,6 +54,7 @@ class Draft:
     when_to_use: str = ""
     test_status: str = "none"  # passed | failed | none
     problems: list[str] = field(default_factory=list)
+    code_files: list[str] = field(default_factory=list)  # скрипты внутри навыка, пути от его папки
 
     @property
     def word(self) -> str:
@@ -140,7 +148,27 @@ def list_drafts(root: Path | str = ROOT) -> list[Draft]:
 def _describe(kind: str, name: str, root: Path) -> Draft:
     draft = _read_draft(kind, name, root)
     draft.problems = validate(kind, name, root)
+    draft.code_files = code_files(kind, name, root)
     return draft
+
+
+def _skill_files(kind: str, name: str, root: Path) -> list[tuple[str, Path]]:
+    """(путь от папки навыка, файл) — без __pycache__; у помощника файлов кода нет."""
+    path = draft_path(kind, name, root)
+    if kind != "skill" or not path.is_dir():
+        return []
+    out = []
+    for item in sorted(path.rglob("*")):
+        rel = item.relative_to(path)
+        if item.is_file() and "__pycache__" not in rel.parts:
+            out.append((rel.as_posix(), item))
+    return out
+
+
+def code_files(kind: str, name: str, root: Path | str = ROOT) -> list[str]:
+    """Скрипты в черновике навыка — их владелица видит на кнопке перед включением."""
+    return [rel for rel, item in _skill_files(kind, name, Path(root))
+            if item.suffix.lower() in CODE_EXT]
 
 
 # ---------------------------------------------------------------- проверка
@@ -176,6 +204,9 @@ def validate(kind: str, name: str, root: Path | str = ROOT) -> list[str]:
         files = [path]
 
     problems += _check_tree(files, path if kind == "skill" else path.parent, root)
+    for rel, item in _skill_files(kind, name, root):
+        if item.suffix.lower() in BLOCKED_EXT:
+            problems.append(f"исполняемый файл в черновике: {rel} — такие файлы не включаются")
 
     meta, body = _frontmatter(doc.read_text(encoding="utf-8", errors="replace"))
     if meta is None:

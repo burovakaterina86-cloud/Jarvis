@@ -116,6 +116,9 @@ class Config:
 
 # --------------------------------------------------------------------- бот
 
+MAX_CODE_FILES_SHOWN = 10
+
+
 class Gateway:
     """Обработчики апдейтов. Все зависимости подменяемы — поэтому тесты идут без сети."""
 
@@ -449,6 +452,10 @@ class Gateway:
         lines = [f"{head} {draft.name}: {draft.description or '(без описания)'}", mark]
         if draft.problems:
             lines.append("Проверка не пройдена: " + "; ".join(draft.problems))
+        if getattr(draft, "code_files", None):
+            # Включая навык, она включает и код, который JARVIS будет запускать.
+            lines.append("⚠️ В навыке есть код — JARVIS будет его запускать: "
+                         + ", ".join(draft.code_files) + ". Посмотри его перед включением.")
         return "\n".join(lines)
 
     def _seen_path(self) -> Path:
@@ -628,6 +635,9 @@ class Gateway:
             # TEST.md — половина решения: по нему видно, что навык вообще проверяли.
             docs = [(path / "SKILL.md", f"{name}-SKILL.md"),
                     (path / "TEST.md", f"{name}-TEST.md")]
+            # Код навыка — тоже на просмотр: включая навык, она включает и его.
+            docs += [(path / rel, f"{name}-{rel.replace('/', '-')}")
+                     for rel in activation.code_files(kind, name, self.root)[:MAX_CODE_FILES_SHOWN]]
         else:
             docs = [(path, f"{name}.md")]
         sent = 0
