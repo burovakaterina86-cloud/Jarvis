@@ -237,22 +237,23 @@ def test_broken_policy_exit2(root, tmp_path_factory):
 
 # ---------- скрипт как хук ----------
 
-def _hook(stdin: bytes):
-    return subprocess.run([sys.executable, str(GUARD_PATH)], input=stdin, capture_output=True, timeout=60)
+def _hook(guard_path, stdin: bytes):
+    # Копия во временном корне: отказ пишет `blocked` в журнал своего корня, не в боевой.
+    return subprocess.run([sys.executable, str(guard_path)], input=stdin, capture_output=True, timeout=60)
 
 
-def test_script_allows_read_exit0():
-    r = _hook(json.dumps(ev("Read", file_path="SOUL.md")).encode("utf-8"))
+def test_script_allows_read_exit0(guard_copy):
+    r = _hook(guard_copy, json.dumps(ev("Read", file_path="SOUL.md")).encode("utf-8"))
     assert r.returncode == 0
 
 
-def test_script_denies_secret_exit2_with_reason():
-    r = _hook(json.dumps(ev("Read", file_path=".env")).encode("utf-8"))
+def test_script_denies_secret_exit2_with_reason(guard_copy):
+    r = _hook(guard_copy, json.dumps(ev("Read", file_path=".env")).encode("utf-8"))
     assert r.returncode == 2 and r.stderr.strip()
 
 
-def test_script_garbage_stdin_exit2():
-    assert _hook(b"not json{").returncode == 2
+def test_script_garbage_stdin_exit2(guard_copy):
+    assert _hook(guard_copy, b"not json{").returncode == 2
 
 
 # ---------- настройки и репозиторий ----------

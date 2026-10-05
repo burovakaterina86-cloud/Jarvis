@@ -291,7 +291,10 @@ def test_run_writes_result_folder_structure(tmp_path, monkeypatch):
     monkeypatch.setattr(transcribe_mod, "default_extract_audio", fake_extract)
 
     out_dir = tmp_path / "radar-2026-09-23"
-    code = run(config, apify_client, groq_client, out_dir)
+    # Фикстуры датированы 2026-09-23: без явного now тест зависел от реальной даты
+    # и краснел через неделю (окно свежести 7 дней).
+    code = run(config, apify_client, groq_client, out_dir,
+               now=datetime(2026, 9, 23, tzinfo=timezone.utc))
 
     assert code == EXIT_OK
     assert (out_dir / "radar.md").is_file()

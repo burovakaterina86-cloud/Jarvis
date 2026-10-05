@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from . import filter as filter_mod
@@ -44,17 +44,18 @@ def _utf8_output() -> None:
 
 
 def run(config: RadarConfig, apify_client, groq_client, out_dir: Path,
-        today: date | None = None) -> int:
-    today = today or date.today()
+        now: datetime | None = None) -> int:
+    """`now` — момент, от которого считаются окна свежести; без него — текущее время."""
     budget = RequestBudget(config.max_requests_per_run)
     try:
         raw_reels = apify.fetch_recent_reels(apify_client, budget, config.competitors,
-                                              config.window_days, config.reels_per_account)
+                                              config.window_days, config.reels_per_account, now=now)
         relevant = filter_mod.filter_relevant(raw_reels, config.keywords)
         top = rank.rank_composite(relevant, config.top_k)
         transcripts = transcribe.transcribe_top(groq_client, top, out_dir / "transcripts")
         own_top = apify.fetch_own_top(apify_client, budget, config.own_username,
-                                       config.own_window_days, config.own_fetch_limit, 10)
+                                       config.own_window_days, config.own_fetch_limit, 10,
+                                       now=now)
     except BudgetExceeded as exc:
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "STOPPED.md").write_text(

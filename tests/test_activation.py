@@ -231,23 +231,22 @@ def test_ensure_dirs_creates_agents_folder_before_first_agent(tmp_path):
 # ---------------------------------------------------------------- Guard
 
 
-GUARD = REPO / ".claude" / "hooks" / "guard.py"
-
-
-def _guard_exit(tool: str, **tool_input):
+def _guard_exit(guard_path, tool: str, **tool_input):
+    # Копия Guard во временном корне (фикстура guard_copy): отказ пишет `blocked`
+    # в журнал своего корня, а не в боевой state/events.jsonl.
     event = {"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input}
-    proc = subprocess.run([sys.executable, str(GUARD)], input=json.dumps(event).encode("utf-8"),
-                          capture_output=True, cwd=str(REPO))
+    proc = subprocess.run([sys.executable, str(guard_path)], input=json.dumps(event).encode("utf-8"),
+                          capture_output=True, cwd=str(guard_path.parents[2]))
     return proc.returncode, proc.stderr.decode("utf-8", "replace")
 
 
-def test_guard_forbids_agent_writing_into_claude_skills_and_agents():
+def test_guard_forbids_agent_writing_into_claude_skills_and_agents(guard_copy):
     """Активация — только через activation.py по кнопке; сам агент туда не пишет."""
     for path in (".claude/skills/новый/SKILL.md", ".claude/agents/researcher.md"):
-        code, reason = _guard_exit("Write", file_path=path, content="x")
+        code, reason = _guard_exit(guard_copy, "Write", file_path=path, content="x")
         assert code == 2, f"Guard пропустил запись в {path}"
         assert "JARVIS Guard" in reason
-    code, _ = _guard_exit("Write", file_path="drafts/skills/новый/SKILL.md", content="x")
+    code, _ = _guard_exit(guard_copy, "Write", file_path="drafts/skills/новый/SKILL.md", content="x")
     assert code == 0, "черновик агент писать может"
 
 

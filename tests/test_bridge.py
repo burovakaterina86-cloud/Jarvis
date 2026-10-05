@@ -272,8 +272,12 @@ async def test_stop_kills_child_process_too(fake):
     res = await asyncio.wait_for(task, 5)
     assert res.status == "stopped"
     await asyncio.sleep(0.5)
-    listing = sp.run(["tasklist", "/FI", f"PID eq {child_pid}"], capture_output=True, text=True).stdout
-    assert str(child_pid) not in listing
+    # Байты, а не text=True: когда процесса нет, tasklist пишет локализованную строку
+    # в кодировке консоли (cp866), и чтение как UTF-8 роняло поток — stdout становился None.
+    raw = sp.run(["tasklist", "/NH", "/FO", "CSV", "/FI", f"PID eq {child_pid}"],
+                 capture_output=True).stdout
+    listing = raw.decode("ascii", "replace")
+    assert f'"{child_pid}"' not in listing
 
 
 async def test_stopped_run_id_is_forgotten_after_turn(fake):
