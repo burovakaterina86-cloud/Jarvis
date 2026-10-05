@@ -13,3 +13,7 @@ inbox/
 .pytest_cache/
 
 .playwright-mcp/
+
+# готовые медиа (видео, картинки, музыка) — не в git
+outbox/*
+!outbox/.gitkeep
