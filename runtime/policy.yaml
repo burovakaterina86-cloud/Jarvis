@@ -18,6 +18,9 @@
 #   dev_mode: {deny_kinds: [<вид>, ...]}  — какие отказы действуют в сессиях разработки (guard.py --mode dev)
 #   script_allow: {modules: [<glob>], files: [<glob>]}  — запуск python/node без вопроса: `-m <модуль>`
 #                                          или файл; прочий код (свой файл, -c, stdin) → EXTERNAL run_script
+#   agents: {<роль>: {write: [<glob>], shell: bool}} — права субагента по роли (agent_type во входе хука);
+#                                          запись вне write и команды без shell: true → DENY (kind agent_scope);
+#                                          роли нет в списке — общие правила, как у главного агента
 #   allow_write_paths: [<glob>, ...]     — запись вне корня проекта, разрешённая без запроса
 #                                          (внутри корня WRITE и так автоматически)
 #   big_read: {max_kb: int, tools: {<имя>: <поле пути>}, chunk_fields: [<поле>, ...]}
@@ -149,6 +152,16 @@ allow_write_paths: []
 script_allow:
   modules: ["integrations.*", "pytest"]
   files: [".claude/skills/*.py", "integrations/*.py"]
+
+# Права ролей из .claude/agents (аудит P2.3). Каждая роль обязана быть здесь — это проверяет тест.
+# Текстовые роли пишут только в папки комплектов, остальные — только читают. Команд ни у кого нет.
+agents:
+  copywriter: {write: ["essa-ai/content/**"]}
+  reels-producer: {write: ["essa-ai/content/**"]}
+  researcher: {write: []}
+  reviewer: {write: []}
+  strategist: {write: []}
+  competitor-analyst: {write: []}
 
 dev_mode:
   deny_kinds: [secret, dangerous, secret_field, purchase, malformed]

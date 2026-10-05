@@ -411,9 +411,25 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
         if _SECRET_WILDCARD.search(cmd) or re.search(r"credentials", cmd, re.IGNORECASE):
             return Decision("DENY", "deny", "команда подбирает имя секрета шаблоном", "secret")
 
-    # 2. запись в защищённые места
     write_tools = policy.get("write_tools") or {}
     shell = tool in (policy.get("shell_tools") or [])
+
+    # 1б. права субагента по роли: `agent_type` есть во входе хука только у вызовов субагента (P2.0)
+    agent = event.get("agent_type")
+    scope = (policy.get("agents") or {}).get(agent) if isinstance(agent, str) else None
+    if isinstance(scope, dict):
+        allowed = scope.get("write") or []
+        if tool in write_tools:
+            target = tool_input.get(write_tools[tool])
+            absolute = _abs(target, base) if isinstance(target, str) and target else ""
+            if not absolute or not any(_glob_hit(absolute, pat, root) for pat in allowed):
+                where = ", ".join(allowed) if allowed else "никуда"
+                return Decision("DENY", "deny", f"помощник {agent} пишет только в: {where} ({target})",
+                                "agent_scope")
+        elif shell and not scope.get("shell"):
+            return Decision("DENY", "deny", f"помощнику {agent} команды не положены", "agent_scope")
+
+    # 2. запись в защищённые места
     level, kind, reason = "READ", "", "чтение"
     if tool in write_tools:
         target = tool_input.get(write_tools[tool])
@@ -553,8 +569,9 @@ def _log_blocked(root, event: dict, reason: str, task_id: str | None = None,
     try:
         path = Path(root) / "state" / "events.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
+        agent = event.get("agent_type") if isinstance(event.get("agent_type"), str) else "jarvis"
         line = {"ts": datetime.now(timezone.utc).isoformat(), "type": "blocked",
-                "session": event.get("session_id"), "agent": "jarvis", "task": "",
+                "session": event.get("session_id"), "agent": agent, "task": "",
                 "status": "working", "progress": None, "task_id": task_id,
                 "tool": event.get("tool_name"), "reason": _masked(reason, root), "mode": mode}
         with open(path, "a", encoding="utf-8") as f:

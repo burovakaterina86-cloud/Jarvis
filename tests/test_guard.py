@@ -787,3 +787,77 @@ def test_skill_workflow_commands_were_denied_before_p16():
     for cmd in (r".venv\Scripts\python.exe -m integrations.visuals.editorial essa-ai\content\x",
                 r".venv\Scripts\python.exe -m integrations.visuals.cover essa-ai\content\x cover.json"):
         assert decide(ev("PowerShell", command=cmd), REPO).action == "allow"
+
+
+# ---------- права субагентов по роли (P2.3; поле agent_type подтверждено в P2.0) ----------
+
+def ev_agent(agent, tool, **tool_input):
+    return {**ev(tool, **tool_input), "agent_id": "a1", "agent_type": agent}
+
+
+AGENT_DENIED = [
+    ("copywriter writes MEMORY", ev_agent("copywriter", "Write", file_path="MEMORY.md", content="x")),
+    ("copywriter edits rules", ev_agent("copywriter", "Edit", file_path="essa-ai/VOICE.md", old_string="a", new_string="b")),
+    ("reels-producer writes memory", ev_agent("reels-producer", "Write", file_path="memory/a.md", content="x")),
+    ("reviewer writes", ev_agent("reviewer", "Write", file_path="essa-ai/content/x/post.md", content="x")),
+    ("researcher writes", ev_agent("researcher", "Write", file_path="inbox/notes.md", content="x")),
+    ("strategist edits", ev_agent("strategist", "Edit", file_path="essa-ai/content/x/plan.md", old_string="a", new_string="b")),
+    ("competitor-analyst writes", ev_agent("competitor-analyst", "Write", file_path="essa-ai/x.md", content="x")),
+    ("reviewer runs shell", ev_agent("reviewer", "Bash", command="ls")),
+    ("copywriter runs shell", ev_agent("copywriter", "PowerShell", command="Get-ChildItem")),
+    ("copywriter escapes via ..", ev_agent("copywriter", "Write", file_path="essa-ai/content/../../MEMORY.md", content="x")),
+]
+
+
+@pytest.mark.parametrize("name,event", AGENT_DENIED, ids=[c[0] for c in AGENT_DENIED])
+def test_subagent_cannot_go_beyond_its_role(name, event):
+    d = decide(event, REPO)
+    assert (d.level, d.action, d.kind) == ("DENY", "deny", "agent_scope"), d
+
+
+AGENT_ALLOWED = [
+    ("copywriter writes post", ev_agent("copywriter", "Write", file_path="essa-ai/content/2026-10-05-x/post.md", content="x"), "WRITE"),
+    ("reels-producer writes reels", ev_agent("reels-producer", "Write", file_path=r"essa-ai\content\x\reels.md", content="x"), "WRITE"),
+    ("reviewer reads", ev_agent("reviewer", "Read", file_path="essa-ai/VOICE.md"), "READ"),
+    ("researcher fetches", ev_agent("researcher", "WebFetch", url="https://example.com", prompt="x"), "READ"),
+    ("unknown role keeps general rules", ev_agent("general-purpose", "Write", file_path="memory/a.md", content="x"), "WRITE"),
+    ("main agent unchanged", ev("Write", file_path="MEMORY.md", content="x"), "WRITE"),
+]
+
+
+@pytest.mark.parametrize("name,event,level", AGENT_ALLOWED, ids=[c[0] for c in AGENT_ALLOWED])
+def test_role_work_still_passes(name, event, level):
+    d = decide(event, REPO)
+    assert (d.level, d.action) == (level, "allow"), d
+
+
+def test_secrets_still_win_for_subagents():
+    d = decide(ev_agent("copywriter", "Read", file_path=".env"), REPO)
+    assert d.kind == "secret"
+
+
+def test_agent_scopes_live_in_policy_and_match_role_files():
+    import yaml
+    agents = guard.load_policy(POLICY_PATH)["agents"]
+    assert agents["copywriter"]["write"] == ["essa-ai/content/**"]
+    for role in ("researcher", "reviewer", "strategist", "competitor-analyst"):
+        assert agents[role]["write"] == [], role
+    # каждая роль из .claude/agents описана в policy — новая роль без строки здесь не пройдёт тест
+    roles = {p.stem for p in (REPO / ".claude" / "agents").glob("*.md")}
+    assert roles <= set(agents)
+    for role in roles:
+        meta = yaml.safe_load((REPO / ".claude" / "agents" / f"{role}.md").read_text(encoding="utf-8").split("---")[1])
+        if "Write" not in meta["tools"]:
+            assert agents[role]["write"] == [], role
+
+
+def test_blocked_line_names_the_subagent(root):
+    code, _ = guard.run(ev_agent("reviewer", "Write", file_path="a.md", content="x"), root=root,
+                        policy_path=POLICY_PATH, env={})
+    assert code == 2
+    line = json.loads((root / "state" / "events.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert line["agent"] == "reviewer"
+
+
+def test_dev_mode_does_not_apply_role_scopes(root):
+    assert run_dev(ev_agent("reviewer", "Write", file_path="docs/x.md", content="x"), root)[0] == 0
