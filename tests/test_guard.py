@@ -566,3 +566,31 @@ def test_self_modify_can_not_be_switched_to_auto_silently():
     policy = guard.load_policy(POLICY_PATH)
     assert policy["external"].get("self_modify") == "ask"
     assert policy.get("ask_write_paths"), "список ask_write_paths пуст"
+
+
+# ---------- журнал Guard: task_id и маскировка (P1.1, аудит 2026-10-05) ----------
+
+def _last_blocked(root):
+    return json.loads((root / "state" / "events.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+
+
+def test_blocked_line_carries_task_id_from_env(root):
+    code, _ = guard.run(ev("Read", file_path=".env"), root=root, policy_path=POLICY_PATH,
+                        env={"JARVIS_TASK_ID": "t-42"})
+    assert code == 2
+    line = _last_blocked(root)
+    assert line["type"] == "blocked" and line["task_id"] == "t-42"
+
+
+def test_blocked_reason_is_masked(root):
+    # нет Approvals API -> отказ; в причине — начало команды, в ней токен
+    cmd = "echo token=abc123secretvalue >> CLAUDE.md"
+    code, _ = guard.run(ev("Bash", command=cmd), root=root, policy_path=POLICY_PATH, env={})
+    assert code == 2
+    assert "abc123secretvalue" not in (root / "state" / "events.jsonl").read_text(encoding="utf-8")
+
+
+def test_approval_request_carries_task_id(root, approvals):
+    code, _ = guard.run(DELETE, root=root, policy_path=POLICY_PATH, env={"JARVIS_TASK_ID": "t-7"})
+    assert code == 0
+    assert approvals["requests"][0]["body"]["task_id"] == "t-7"

@@ -278,3 +278,17 @@ async def test_real_guard_hook_with_api(guard_root, decision, code):
             assert "тест" in err.decode("utf-8")
     finally:
         await srv.stop()
+
+
+async def test_task_id_and_masking_reach_journal_and_events(server, tmp_path):
+    """P1.1: запрос подписан задачей; токены в аргументах не попадают в журналы."""
+    FakeGateway(server, decision="allow", reason="да")
+    body = dict(BODY, task_id="t-9",
+                details={"kind": "x", "tool_input": {"command": "curl -H 'Authorization: Bearer abcdef123456'"}})
+    await _post(tmp_path, body=body)
+    journal = _journal(tmp_path)
+    assert [r.get("task_id") for r in journal] == ["t-9", "t-9"]
+    events = [json.loads(x) for x in (tmp_path / "state" / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [e.get("task_id") for e in events] == ["t-9", "t-9"]
+    blob = (tmp_path / "state" / "approvals.jsonl").read_text(encoding="utf-8")
+    assert "abcdef123456" not in blob

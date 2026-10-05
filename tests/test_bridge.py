@@ -179,7 +179,9 @@ def test_sessions_get_set_reset_persist(tmp_path, monkeypatch):
 def _router(fake, monkeypatch, **kw):
     from runtime import sessions, task_router
     monkeypatch.setattr(sessions, "SESSIONS_PATH", fake.tmp / "sessions.json")
+    monkeypatch.setattr(task_router, "EPISODES_DIR", fake.tmp / "episodes")
     env = {**fake.base_env, "FAKE_CLAUDE_SCENARIO": "ok", "FAKE_CLAUDE_DELAY": "0.4"}
+    kw.setdefault("git_status", lambda: set())
     return task_router.TaskRouter(env=env, claude_cmd=FAKE, budget_path=fake.tmp / "budget.json", **kw)
 
 
@@ -380,3 +382,90 @@ def test_unknown_context_is_rejected():
     from runtime import task_router
     with pytest.raises(ValueError):
         task_router.Job(prompt="x", context="fork-всё")
+
+
+
+# ---------- журнал: task_id, сводки, итог задачи, эпизод (P1.1, P1.2), аудит 2026-10-05 ----------
+
+def _events(fake):
+    return [json.loads(x) for x in (fake.tmp / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+
+
+async def _ledger_job(fake, monkeypatch, git_after=frozenset({"new.txt"})):
+    from runtime import task_router
+    states = iter([set(), set(git_after)])
+    router = _router(fake, monkeypatch, git_status=lambda: next(states))
+    router.env = {**router.env, "FAKE_CLAUDE_SCENARIO": "ledger"}
+    job = task_router.Job(prompt="сделай пост", task="пост")
+    router.submit(9, job)
+    res = await asyncio.wait_for(job.result, 15)
+    return job, res
+
+
+async def test_every_event_of_a_task_carries_its_task_id(fake, monkeypatch):
+    job, res = await _ledger_job(fake, monkeypatch)
+    assert res.status == "ok" and job.task_id
+    rows = _events(fake)
+    assert rows and all(r.get("task_id") == job.task_id for r in rows)
+    assert {"user_message", "tool_use", "result", "task_done"} <= {r["type"] for r in rows}
+    assert fake.calls()[0]["env_jarvis"]["JARVIS_TASK_ID"] == job.task_id
+
+
+async def test_tool_use_summaries_are_safe_and_name_the_subagent(fake, monkeypatch):
+    await _ledger_job(fake, monkeypatch)
+    uses = [r for r in _events(fake) if r["type"] == "tool_use"]
+    by_tool = {r["tool"]: r for r in uses}
+    assert "topSecret123" not in json.dumps(uses, ensure_ascii=False)
+    assert by_tool["Write"]["summary"] == "essa-ai/content/x/post.md"
+    assert "черновик поста" not in json.dumps(uses, ensure_ascii=False)
+    assert by_tool["WebFetch"]["summary"] == "stat.ru" and by_tool["WebFetch"]["agent"] == "researcher"
+    assert by_tool["Read"]["agent"] == "researcher"
+    assert by_tool["Agent"]["agent"] == "jarvis" and "researcher" in by_tool["Agent"]["summary"]
+
+
+async def test_task_done_says_what_happened(fake, monkeypatch):
+    job, _ = await _ledger_job(fake, monkeypatch)
+    done = [r for r in _events(fake) if r["type"] == "task_done"]
+    assert len(done) == 1
+    d = done[0]
+    assert d["status"] == "done" and d["result_status"] == "ok"
+    assert d["tools"] == 6 and d["attempts"] == 1 and d["context"] == "chat"
+    assert d["files_changed"] == ["essa-ai/content/x/post.md", "memory/a.md", "new.txt"]
+    assert d["cost"] == 0.02 and isinstance(d["duration"], float)
+
+
+async def test_episode_line_is_written_by_the_bridge(fake, monkeypatch):
+    job, _ = await _ledger_job(fake, monkeypatch)
+    files = list((fake.tmp / "episodes").glob("*.jsonl"))
+    assert len(files) == 1
+    ep = json.loads(files[0].read_text(encoding="utf-8").splitlines()[-1])
+    assert ep["task_id"] == job.task_id and ep["trigger"] == "turn_end"
+    assert ep["status"] == "ok" and ep["request"] == "сделай пост"
+    assert ep["result"].startswith("Готово") and "memory/a.md" in ep["files"]
+
+
+async def test_no_episode_when_nothing_ran(fake, monkeypatch):
+    from runtime import task_router
+    router = _router(fake, monkeypatch, budget=0)
+    job = task_router.Job(prompt="раз")
+    router.submit(11, job)
+    res = await asyncio.wait_for(job.result, 15)
+    assert res.error == "daily_budget_exceeded"
+    assert not (fake.tmp / "episodes").exists()
+    assert [r["task_id"] for r in _events(fake) if r["type"] == "error"] == [job.task_id]
+
+
+async def test_retry_without_resume_counts_two_attempts(fake):
+    res = await fake.run(session_id="old-sid", scenario="resume_fail")
+    assert res.attempts == 2
+
+
+def test_emit_masks_secrets_in_any_field(tmp_path, monkeypatch):
+    monkeypatch.setattr(events, "EVENTS_PATH", tmp_path / "e.jsonl")
+    events.emit("error", error="Bearer abcdefghijk123", nested={"x": "token=zzz999"})
+    line = (tmp_path / "e.jsonl").read_text(encoding="utf-8")
+    assert "abcdefghijk123" not in line and "zzz999" not in line
+
+
+def test_task_done_is_a_known_event_type():
+    assert "task_done" in events.TYPES

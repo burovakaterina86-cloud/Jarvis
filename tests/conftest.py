@@ -1,5 +1,6 @@
 """Общее для тестов: сторож боевых журналов и копия Guard во временном корне."""
 import shutil
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,8 @@ REPO = Path(__file__).resolve().parents[1]
 LIVE_JOURNALS = (
     REPO / "state" / "events.jsonl",
     REPO / "state" / "approvals.jsonl",
+    # эпизоды пишет и мост (task_router.EPISODES_DIR): тест с настоящим роутером подменяет путь
+    REPO / "memory" / "episodes" / f"{date.today():%Y-%m}.jsonl",
 )
 
 
@@ -38,4 +41,7 @@ def guard_copy(tmp_path):
     (tmp_path / "state" / "secrets").mkdir(parents=True)
     shutil.copy(REPO / ".claude" / "hooks" / "guard.py", tmp_path / ".claude" / "hooks" / "guard.py")
     shutil.copy(REPO / "runtime" / "policy.yaml", tmp_path / "runtime" / "policy.yaml")
+    # маскировка причин в журнале копии — тем же модулем, что и в проекте
+    shutil.copy(REPO / "runtime" / "redact.py", tmp_path / "runtime" / "redact.py")
+    (tmp_path / "runtime" / "__init__.py").write_text("", encoding="utf-8")
     return tmp_path / ".claude" / "hooks" / "guard.py"

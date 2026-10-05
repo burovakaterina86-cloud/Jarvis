@@ -19,6 +19,7 @@ import pytest
 
 from runtime import claude_bridge, events
 from runtime.approvals import ApprovalsServer
+from runtime import task_router
 from runtime.task_router import Job, TaskRouter
 from tests import codescan
 from tests.test_telegram import (OWNER, FakeBot, FakeCallback, FakeContext, FakeIncoming,
@@ -120,6 +121,7 @@ async def sandbox(tmp_path, monkeypatch):
     marker = root / "state" / "action-done.txt"
 
     monkeypatch.setattr(events, "EVENTS_PATH", root / "state" / "events.jsonl")
+    monkeypatch.setattr(task_router, "EPISODES_DIR", root / "memory" / "episodes")
     server = ApprovalsServer(timeout=20.0)
     await server.start(root)
 
@@ -127,7 +129,8 @@ async def sandbox(tmp_path, monkeypatch):
     env.update({"E2E_ROOT": str(root), "E2E_MARKER": str(marker),
                 "E2E_TOOL": json.dumps(EXTERNAL_TOOL, ensure_ascii=False)})
     router = TaskRouter(budget_path=root / "state" / "run_budget.json", env=env,
-                        claude_cmd=[sys.executable, str(script)], sessions=FakeSessions())
+                        claude_cmd=[sys.executable, str(script)], sessions=FakeSessions(),
+                        git_status=lambda: set())
     bot = FakeBot()
     gateway = make_gateway(root, router=router, sessions=router.sessions, approvals=server)
     gateway.attach(bot)

@@ -30,6 +30,8 @@ from pathlib import Path
 
 from aiohttp import web
 
+from runtime.redact import redact_obj
+
 log = logging.getLogger("jarvis.approvals")
 
 HOST = "127.0.0.1"
@@ -56,7 +58,7 @@ def emit_event(root: Path, type: str, **fields) -> None:
     """Временная замена runtime.events.emit (таск 02): одна JSON-строка в state/events.jsonl."""
     record = {"ts": _now(), "type": type, "session": None, "agent": "jarvis", "task": "",
               "status": "working", "progress": None}
-    record.update(fields)
+    record.update(redact_obj(fields))
     _append_jsonl(Path(root) / "state" / "events.jsonl", record)
 
 
@@ -64,9 +66,12 @@ JOURNAL_STR_LIMIT = 500
 
 
 def _truncate(value):
-    """Копия структуры, где каждая строка обрезана до JOURNAL_STR_LIMIT символов."""
+    """Копия структуры, где каждая строка без секретов и обрезана до JOURNAL_STR_LIMIT символов.
+
+    Владелица на кнопке видит запрос целиком; в журнал на диске значения токенов не попадают.
+    """
     if isinstance(value, str):
-        return value[:JOURNAL_STR_LIMIT]
+        return redact_obj(value)[:JOURNAL_STR_LIMIT]
     if isinstance(value, dict):
         return {k: _truncate(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -189,6 +194,7 @@ class ApprovalsServer:
             if level not in LEVELS or not isinstance(tool, str) or not isinstance(details, dict):
                 raise ValueError
             summary = str(summary)
+            task_id = body.get("task_id") if isinstance(body.get("task_id"), str) else None
         except Exception:
             return web.json_response({"decision": "deny", "reason": "bad_request"}, status=400)
 
@@ -197,9 +203,10 @@ class ApprovalsServer:
         self._pending[rid] = fut
         journal = self.root / "state" / "approvals.jsonl"
         _append_jsonl(journal, {"ts": _now(), "type": "request", "request_id": rid, "level": level,
-                                "tool": tool, "summary": _truncate(summary), "details": _truncate(details)})
+                                "tool": tool, "summary": _truncate(summary), "details": _truncate(details),
+                                "task_id": task_id})
         emit_event(self.root, "approval_request", status="waiting_approval", request_id=rid,
-                   level=level, tool=tool, summary=summary)
+                   level=level, tool=tool, summary=summary, task_id=task_id)
         decision, reason = "deny", "client_gone"
         try:
             await self._notify(rid, level, tool, summary, details)
@@ -214,9 +221,10 @@ class ApprovalsServer:
                 fut.cancel()
             self._pending.pop(rid, None)
             _append_jsonl(journal, {"ts": _now(), "type": "decision", "request_id": rid,
-                                    "decision": decision, "reason": reason, "tool": tool})
+                                    "decision": decision, "reason": reason, "tool": tool,
+                                    "task_id": task_id})
             emit_event(self.root, "approval_decision", request_id=rid, tool=tool,
-                       decision=decision, reason=reason)
+                       decision=decision, reason=reason, task_id=task_id)
 
     async def _notify(self, rid, level, tool, summary, details) -> None:
         # асинхронный подписчик запускается задачей: его ожидание не сдвигает таймаут решения

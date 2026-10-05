@@ -13,10 +13,11 @@ import shutil
 import subprocess
 import sys
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from runtime import events
+from runtime.redact import tool_summary
 
 ROOT = Path(__file__).resolve().parents[1]
 TURN_PROMPT_FILE = ROOT / "runtime" / "jarvis-turn.md"
@@ -37,8 +38,11 @@ class TurnResult:
     session_id: str | None
     new_session: bool
     cost_usd: float | None
-    status: str  # ok | stopped | rate_limited | auth_required | error
+    status: str  # ok | stopped | rate_limited | auth_required | error (| timeout — ставит task_router)
     error: str | None = None
+    tool_uses: int = 0                                 # вызовов инструментов, включая субагентов
+    files: list[str] = field(default_factory=list)     # пути из Write/Edit/MultiEdit/NotebookEdit
+    attempts: int = 1                                  # запусков claude за ход (повтор без resume — 2)
 
 
 _running: dict[str, asyncio.subprocess.Process] = {}
@@ -87,18 +91,42 @@ def _short(s, n=500):
     return s if len(s) <= n else s[:n] + "…"
 
 
-def _log_event(ev: dict, sid: str | None, task: str) -> None:
-    """Переводит событие stream-json в словарь events.jsonl."""
+_WRITE_TOOLS = {"Write": "file_path", "Edit": "file_path", "MultiEdit": "file_path",
+                "NotebookEdit": "notebook_path"}
+_SUBAGENT_TOOLS = ("Agent", "Task")
+
+
+def _rel(path: str, cwd) -> str:
+    """Путь от корня проекта с «/», если файл внутри него; иначе как есть."""
+    try:
+        p = Path(path)
+        p = p if p.is_absolute() else Path(cwd) / p
+        return Path(os.path.normpath(p)).relative_to(Path(os.path.normpath(cwd))).as_posix()
+    except (ValueError, OSError, TypeError):
+        return str(path).replace(chr(92), "/")
+
+
+def _log_event(ev: dict, sid: str | None, task: str, out: "_Outcome | None" = None,
+               task_id: str = "") -> None:
+    """Переводит событие stream-json в словарь events.jsonl.
+
+    Субагент подписывается именем роли: id его вызова Agent/Task запоминается в `out.agents`.
+    """
     t, sub = ev.get("type"), ev.get("subtype")
-    agent = "subagent" if ev.get("parent_tool_use_id") else "jarvis"
-    base = {"session": ev.get("session_id") or sid, "agent": agent, "task": task}
+    agents = out.agents if out is not None else {}
+    parent = ev.get("parent_tool_use_id")
+    agent = agents.get(parent, "subagent") if parent else "jarvis"
+    base = {"session": ev.get("session_id") or sid, "agent": agent, "task": task, "task_id": task_id}
     content = (ev.get("message") or {}).get("content") or []
     if t == "assistant":
         for block in content if isinstance(content, list) else []:
             if block.get("type") == "text":
                 events.emit("assistant_message", text=_short(block.get("text", "")), **base)
             elif block.get("type") == "tool_use":
-                events.emit("tool_use", tool=block.get("name"), **base)
+                name, inp = block.get("name"), block.get("input") or {}
+                if name in _SUBAGENT_TOOLS and block.get("id") and isinstance(inp, dict):
+                    agents[block["id"]] = str(inp.get("subagent_type") or "general-purpose")
+                events.emit("tool_use", tool=name, summary=tool_summary(str(name), inp), **base)
     elif t == "user":
         for block in content if isinstance(content, list) else []:
             if isinstance(block, dict) and block.get("type") == "tool_result":
@@ -128,9 +156,13 @@ class _Outcome:
         self.activity = False
         self.returncode = None
         self.stderr = ""
+        self.agents: dict[str, str] = {}   # id вызова Agent/Task -> имя роли
+        self.tool_uses = 0
+        self.files: list[str] = []
 
 
-async def _run_once(prompt, session_id, on_event, run_id, task, env, claude_cmd, cwd) -> _Outcome:
+async def _run_once(prompt, session_id, on_event, run_id, task, env, claude_cmd, cwd,
+                    task_id: str = "") -> _Outcome:
     cmd = list(claude_cmd) + build_args(session_id)
     kwargs = {}
     if sys.platform == "win32":
@@ -176,8 +208,8 @@ async def _run_once(prompt, session_id, on_event, run_id, task, env, claude_cmd,
                 continue
             if not isinstance(ev, dict):
                 continue
-            _absorb(out, ev)
-            _log_event(ev, out.session_id or session_id, task)
+            _absorb(out, ev, cwd)
+            _log_event(ev, out.session_id or session_id, task, out, task_id)
             await _call(on_event, ev)
         out.returncode = await proc.wait()
         await asyncio.gather(feeder, err_task, return_exceptions=True)
@@ -186,12 +218,23 @@ async def _run_once(prompt, session_id, on_event, run_id, task, env, claude_cmd,
     return out
 
 
-def _absorb(out: _Outcome, ev: dict) -> None:
+def _absorb(out: _Outcome, ev: dict, cwd=None) -> None:
     t, sub = ev.get("type"), ev.get("subtype")
     if ev.get("session_id") and (t == "result" or (t == "system" and sub == "init")):
         out.session_id = ev["session_id"]
     if t in ("assistant", "user"):
         out.activity = True
+        if t == "assistant":
+            for block in (ev.get("message") or {}).get("content") or []:
+                if not isinstance(block, dict) or block.get("type") != "tool_use":
+                    continue
+                out.tool_uses += 1
+                field_name = _WRITE_TOOLS.get(block.get("name"))
+                target = (block.get("input") or {}).get(field_name) if field_name else None
+                if isinstance(target, str) and target:
+                    rel = _rel(target, cwd or ROOT)
+                    if rel not in out.files:
+                        out.files.append(rel)
         if t == "assistant" and not ev.get("parent_tool_use_id"):
             for block in (ev.get("message") or {}).get("content") or []:
                 if isinstance(block, dict) and block.get("type") == "text":
@@ -244,6 +287,12 @@ AUTH_TEXT ="Нужно заново войти в Claude на компьютер
 
 
 def _to_result(out: _Outcome, session_id_in: str | None, run_id: str | None = None) -> TurnResult:
+    res = _to_result_core(out, session_id_in, run_id)
+    res.tool_uses, res.files = out.tool_uses, list(out.files)
+    return res
+
+
+def _to_result_core(out: _Outcome, session_id_in: str | None, run_id: str | None = None) -> TurnResult:
     sid = out.session_id or session_id_in
     new = sid is not None and sid != session_id_in
     res = out.result or {}
@@ -266,15 +315,22 @@ def _to_result(out: _Outcome, session_id_in: str | None, run_id: str | None = No
 
 async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
                    run_id: str | None = None, task: str = "", env: dict | None = None,
-                   claude_cmd: list[str] | None = None, cwd: str | Path | None = None) -> TurnResult:
-    """Выполняет один ход Claude Code. Никогда не бросает исключений — ошибка в TurnResult."""
+                   claude_cmd: list[str] | None = None, cwd: str | Path | None = None,
+                   task_id: str = "") -> TurnResult:
+    """Выполняет один ход Claude Code. Никогда не бросает исключений — ошибка в TurnResult.
+
+    `task_id` попадает во все события хода и в окружение дочернего claude (`JARVIS_TASK_ID`),
+    чтобы Guard и Approvals подписывали им свои записи.
+    """
     run_id = run_id or uuid.uuid4().hex
     child_env = build_env(env)
+    if task_id:
+        child_env["JARVIS_TASK_ID"] = task_id
     cwd = cwd or ROOT
     _stopped.discard(run_id)
     try:
         cmd = claude_cmd or default_claude_cmd()
-        out = await _run_once(prompt, session_id, on_event, run_id, task, child_env, cmd, cwd)
+        out = await _run_once(prompt, session_id, on_event, run_id, task, child_env, cmd, cwd, task_id)
         res = _to_result(out, session_id, run_id)
         if session_id and res.status == "error" and out.activity:
             # Ход уже вызывал инструменты: повтор мог бы повторить внешнее действие.
@@ -286,21 +342,23 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
             return res
         if session_id and res.status == "error" and _is_overflow(out):
             # Контекст переполнен: новая сессия со сводкой последней задачи.
-            events.emit("error", subtype="context_overflow", session=session_id, task=task)
+            events.emit("error", subtype="context_overflow", session=session_id, task=task,
+                        task_id=task_id)
             out = await _run_once(_overflow_prompt(prompt), None, on_event, run_id, task,
-                                  child_env, cmd, cwd)
+                                  child_env, cmd, cwd, task_id)
             res = _to_result(out, None, run_id)
-            res.new_session = True
+            res.new_session, res.attempts = True, 2
         elif session_id and res.status == "error" and not out.activity:
             # resume не удался (сессия повреждена/истекла) — один повтор без него.
             events.emit("error", subtype="resume_failed", session=session_id, task=task,
-                        error=_short(out.stderr.strip(), 300))
-            out = await _run_once(prompt, None, on_event, run_id, task, child_env, cmd, cwd)
+                        task_id=task_id, error=_short(out.stderr.strip(), 300))
+            out = await _run_once(prompt, None, on_event, run_id, task, child_env, cmd, cwd, task_id)
             res = _to_result(out, None, run_id)
-            res.new_session = True
+            res.new_session, res.attempts = True, 2
         return res
     except Exception as exc:  # noqa: BLE001
-        events.emit("error", error=_short(repr(exc)), task=task, session=session_id, status="failed")
+        events.emit("error", error=_short(repr(exc)), task=task, task_id=task_id, session=session_id,
+                    status="failed")
         return TurnResult("", session_id, False, None, "error", _short(repr(exc)))
     finally:
         _stopped.discard(run_id)

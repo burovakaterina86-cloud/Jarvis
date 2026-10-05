@@ -99,6 +99,29 @@ def main():
              "result": "У Claude большой context window, prompt is too long тут просто слова.",
              "total_cost_usd": 0.001, "duration_ms": 12})
         return
+    if scenario == "ledger":
+        # главный агент: команда с секретом, запись файла, запуск субагента; субагент читает и ходит в сеть
+        def call(tid, name, inp, parent=None):
+            out({"type": "assistant", "session_id": sid, "parent_tool_use_id": parent,
+                 "message": {"content": [{"type": "tool_use", "id": tid, "name": name, "input": inp}]}})
+            out({"type": "user", "session_id": sid, "parent_tool_use_id": parent,
+                 "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": "ok"}]}})
+        call("t1", "Bash", {"command": "curl -H 'Authorization: Bearer topSecret123' https://api.x.io"})
+        call("t2", "Write", {"file_path": "essa-ai/content/x/post.md", "content": "черновик поста"})
+        call("t3", "Edit", {"file_path": str(os.path.join(os.getcwd(), "memory", "a.md")),
+                            "old_string": "a", "new_string": "b"})
+        out({"type": "assistant", "session_id": sid, "parent_tool_use_id": None,
+             "message": {"content": [{"type": "tool_use", "id": "t4", "name": "Agent",
+                                      "input": {"subagent_type": "researcher",
+                                                "description": "цифры", "prompt": "найди"}}]}})
+        call("s1", "Read", {"file_path": "essa-ai/INDEX.md"}, parent="t4")
+        call("s2", "WebFetch", {"url": "https://stat.ru/x?q=личное", "prompt": "x"}, parent="t4")
+        out({"type": "user", "session_id": sid, "parent_tool_use_id": None,
+             "message": {"content": [{"type": "tool_result", "tool_use_id": "t4", "content": "ok"}]}})
+        out({"type": "result", "subtype": "success", "is_error": False, "session_id": sid,
+             "result": "Готово: пост в essa-ai/content/x/post.md", "total_cost_usd": 0.02,
+             "duration_ms": 900})
+        return
     time.sleep(float(os.environ.get("FAKE_CLAUDE_DELAY", "0")))
     tool_pair(sid)
     out({"type": "assistant", "session_id": sid, "parent_tool_use_id": None,

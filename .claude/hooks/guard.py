@@ -404,7 +404,8 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
 
 # ---------- Approvals API ----------
 
-def ask_approval(decision: Decision, event: dict, root, timeout: float) -> tuple[bool, str]:
+def ask_approval(decision: Decision, event: dict, root, timeout: float,
+                 task_id: str | None = None) -> tuple[bool, str]:
     import urllib.request
 
     root = Path(root)
@@ -419,6 +420,7 @@ def ask_approval(decision: Decision, event: dict, root, timeout: float) -> tuple
         "tool": tool,
         "summary": f"{decision.reason}: {tool}",
         "details": {"kind": decision.kind, "tool_input": event.get("tool_input") or {}},
+        "task_id": task_id,
     }, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
         f"http://127.0.0.1:{port}/approve", data=body, method="POST",
@@ -447,14 +449,29 @@ def ask_approval(decision: Decision, event: dict, root, timeout: float) -> tuple
     return False, str((data or {}).get("reason") or "отклонено владелицей")
 
 
-def _log_blocked(root, event: dict, reason: str) -> None:
+def _masked(reason: str, root) -> str:
+    """Причина для журнала без значений секретов. Нет `runtime.redact` — причину не пишем вовсе.
+
+    Импорт ленивый и вне пути решения: его сбой не должен менять решение Guard.
+    """
+    try:
+        root_str = str(Path(root))
+        if root_str not in sys.path:
+            sys.path.insert(0, root_str)
+        from runtime.redact import redact
+        return redact(reason)
+    except Exception:
+        return "причина скрыта: нет runtime/redact.py для маскировки"
+
+
+def _log_blocked(root, event: dict, reason: str, task_id: str | None = None) -> None:
     try:
         path = Path(root) / "state" / "events.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         line = {"ts": datetime.now(timezone.utc).isoformat(), "type": "blocked",
                 "session": event.get("session_id"), "agent": "jarvis", "task": "",
-                "status": "working", "progress": None,
-                "tool": event.get("tool_name"), "reason": reason}
+                "status": "working", "progress": None, "task_id": task_id,
+                "tool": event.get("tool_name"), "reason": _masked(reason, root)}
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
     except Exception:
@@ -463,13 +480,15 @@ def _log_blocked(root, event: dict, reason: str) -> None:
 
 def run(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None) -> tuple[int, str]:
     env = os.environ if env is None else env
+    task_id = (env or {}).get("JARVIS_TASK_ID")  # ставит мост — связывает запись с задачей
     try:
         policy = load_policy(policy_path)
         decision = decide(event, policy=policy, root=root, env=env)
         if decision.action == "allow":
             return 0, ""
         if decision.action == "ask":
-            ok, why = ask_approval(decision, event, root, float(policy.get("approval_timeout_sec") or 600))
+            ok, why = ask_approval(decision, event, root, float(policy.get("approval_timeout_sec") or 600),
+                                   task_id)
             if ok:
                 return 0, ""
             reason = f"JARVIS Guard: {decision.reason} — {why}"
@@ -477,7 +496,7 @@ def run(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None) -> tuple[i
             reason = f"JARVIS Guard: отказ — {decision.reason}"
     except Exception as exc:
         reason = f"JARVIS Guard: внутренняя ошибка, отказ ({type(exc).__name__})"
-    _log_blocked(root, event if isinstance(event, dict) else {}, reason)
+    _log_blocked(root, event if isinstance(event, dict) else {}, reason, task_id)
     return 2, reason
 
 
