@@ -1,0 +1,229 @@
+# JARVIS — план улучшений
+
+Основание: `docs/JARVIS_ARCHITECTURE_AUDIT.md` (2026-10-05). Ветка: `audit/architecture-2026-10-05`.
+Код пока не менялся. **Каждый этап — только после подтверждения владелицы.**
+
+## Общие правила для всех этапов
+
+- Один этап = одна небольшая ветка от `main` (`upgrade/<id>-<кратко>`), один коммит или несколько маленьких.
+- Сначала падающий тест, потом минимальная правка, потом зелёный прогон.
+- После каждого этапа:
+  ```
+  .venv\Scripts\python.exe -m pytest -q
+  .venv\Scripts\python.exe scripts\check_context_size.py
+  .venv\Scripts\python.exe scripts\check_hooks.py
+  ```
+  Ожидается: все тесты зелёные (кроме уже известных — до этапа P0.1), оба скрипта exit 0.
+- Новых зависимостей не ставим. Существующие навыки и агентов не меняем без её отдельного «да».
+- В логи не попадают значения секретов: только имена и маски.
+- Откат любого этапа — `git revert <коммит>`; данные в `state/` этапы не мигрируют.
+
+## Сводка
+
+| ID | Этап | Приоритет | Сложность | Зависит от |
+|---|---|---|---|---|
+| P0.1 | Зелёная база: два падающих теста | P0 | низкая | — |
+| P0.2 | Тесты не пишут в боевой журнал | P0 | низкая | — |
+| P0.3 | Guard в режиме разработки (только DENY) | P0 | низкая | **её решение** |
+| P0.4 | Запись в собственные правила — через кнопку | P0 | низкая | — |
+| P1.1 | `task_id` и маскировка секретов в журнале | P1 | средняя | P0.2 |
+| P1.2 | Итог задачи и эпизод пишет мост | P1 | низкая | P1.1 |
+| P1.3 | Таймаут задачи | P1 | низкая | — |
+| P1.4 | Расписание в изолированной сессии | P1 | низкая | — |
+| P1.5 | Пометка исполняемых файлов в черновиках + проверка зеркал | P1 | низкая | — |
+| P1.6 | Запуск произвольных скриптов — через кнопку | P1 | низкая-средняя | **её решение** |
+| P2.0 | Smoke-проверка возможностей CLI | P2 | низкая | вход в `claude` |
+| P2.1 | Спецификация до исполнения для крупных задач | P2 | низкая | — |
+| P2.2 | Независимый ревьюер, запускаемый мостом | P2 | средняя | P1.1, P2.0, P2.1 |
+| P2.3 | Права субагентов в Guard | P2 | низкая | P2.0 (поле агента) |
+| P2.4 | Состояния задачи в журнале и `/status` | P2 | низкая | P1.1 |
+| P3.1 | Три режима контекста явно; свежая сессия после паузы | P3 | низкая | P1.2, P1.4 |
+| P3.2 | `big_read` для `cat/type/Get-Content` | P3 | низкая | — |
+| P4.1 | Шов `WorkerRuntime` | P4 | низкая | — |
+| P4.2 | Зеркала Codex — генерировать или снять | P4 | низкая | P1.5 |
+
+---
+
+## P0 — безопасность, потеря данных, критичные ошибки
+
+### P0.1 Зелёная база
+
+- **Цель.** `pytest -q` без падений, чтобы проверки после этапов что-то значили.
+- **Файлы.** `tests/test_bridge.py`, `tests/test_radar.py`; при найденной ошибке в коде — `integrations/radar/transcribe.py` или `__main__.py`.
+- **Шаги.**
+  1. `test_stop_kills_child_process_too`: `tasklist` печатает в кодировке консоли, `text=True` даёт `stdout=None`.
+     Читать байты и декодировать с `errors="replace"` (или проверять PID через `psutil`-free способ `tasklist /FO CSV`).
+  2. `test_run_writes_result_folder_structure`: найти причину отсутствия `transcripts/c1.txt` (отладка, не подгонка теста).
+- **Проверка.** `pytest -q tests/test_bridge.py tests/test_radar.py` → 0 failed; полный прогон → 0 failed.
+- **Откат.** revert.
+
+### P0.2 Тесты не пишут в `state/events.jsonl`
+
+- **Файлы.** `tests/test_activation.py` (`_guard_exit`), `tests/test_guard.py` (подпроцессный запуск).
+- **Шаги.** Сначала тест-сторож: запомнить размер `state/events.jsonl`, прогнать модуль, размер не изменился (красный).
+  Затем подпроцессные вызовы — на копии `guard.py` + `policy.yaml` во `tmp_path` (как в `test_approvals.py`).
+- **Проверка.** `wc -l state/events.jsonl` до и после `pytest -q` совпадает.
+- **Откат.** revert. Старый шум в журнале не удаляем (удаление — только её решением).
+
+### P0.3 Guard в интерактивных сессиях (только DENY) — нужно её решение
+
+- **Цель.** Секреты, опасные команды, пароли/карты и оплата в браузере запрещены и в интерактивных сессиях Claude Code.
+- **Файлы.** `.claude/hooks/guard.py`, новый `.claude/settings.json`, `.claude/rules/safety.md`, `docs/adr/0012-guard-v-rezhime-razrabotki.md`, `tests/test_guard.py`.
+- **Шаги.**
+  1. Тесты: при `JARVIS_GUARD_MODE=dev` решение DENY остаётся DENY; EXTERNAL/MONEY → allow без Approvals API; READ/WRITE → allow.
+  2. В `run()`: если режим `dev` и действие `ask` — exit 0 (решение остаётся за штатными разрешениями Claude Code).
+  3. `.claude/settings.json`: PreToolUse `*` → `guard.py` с `JARVIS_GUARD_MODE=dev` (через `env` в настройках или обёртку).
+  4. `safety.md`: одна строка — «в Telegram-режиме Guard спрашивает кнопкой; в сессиях разработки действуют только запреты».
+  5. `scripts/check_hooks.py` дополнить проверкой dev-режима.
+- **Проверка.** pytest; вручную в новой сессии: `Read .env` → отказ Guard; обычная правка файла проходит.
+- **Риск.** Неудачное правило мешает разработке. **Откат.** удалить `.claude/settings.json`.
+
+### P0.4 Запись в собственные правила — через кнопку
+
+- **Файлы.** `runtime/policy.yaml` (новый ключ `ask_write_paths`), `.claude/hooks/guard.py`, `tests/test_guard.py`.
+- **Пути.** `CLAUDE.md`, `SOUL.md`, `GOALS.md`, `AGENTS.md`, `.claude/rules/**`, `.agents/**`, `.codex/**`.
+  (`MEMORY.md` и `memory/` — нет: туда агент пишет штатно.)
+- **Шаги.** Тесты: `Write/Edit` и shell-запись в эти пути → EXTERNAL `self_modify`, `action=ask`; запись в `memory/` → WRITE.
+  Затем реализация рядом с `protected_write_paths`. Описание ключа — в шапке `policy.yaml`.
+- **Проверка.** pytest; `check_hooks.py`.
+- **Откат.** revert.
+
+---
+
+## P1 — надёжность автономной работы
+
+### P1.1 `task_id` и маскировка секретов в журнале
+
+- **Файлы.** `runtime/task_router.py` (`Job.task_id`), `runtime/claude_bridge.py` (`_log_event`, env `JARVIS_TASK_ID`),
+  `.claude/hooks/guard.py` (`_log_blocked` берёт `JARVIS_TASK_ID`), `runtime/approvals.py`, новый `runtime/redact.py`, тесты.
+- **Шаги.**
+  1. Тесты `redact`: `Bearer abc`, `token=…`, `sk-…`, `ghp_…`, длинные base64-строки → `***`; пути и обычный текст не трогаются.
+  2. Тест: все события одного хода (фейковый claude) несут один `task_id`; `tool_use` содержит `summary` (путь/домен/начало команды ≤ 200 символов) после `redact`.
+  3. Субагент: `agent` = имя роли, если оно есть в событии stream-json (`subagent_type` во входе `Agent/Task`), иначе `subagent`.
+- **Проверка.** pytest; в журнале нет строк, совпадающих с шаблонами секретов (тест на фейковом ходе с «секретом» в команде).
+- **Откат.** revert; формат событий только расширяется — старые читатели не ломаются.
+
+### P1.2 Итог задачи и эпизод пишет мост
+
+- **Файлы.** `runtime/task_router.py`, `runtime/events.py` (тип `task_done` в `TYPES`), `memory/episodes/` (запись), тесты.
+- **Шаги.** После хода: событие `task_done` {task_id, status, duration, tools_count, files_changed, attempts, cost}
+  и строка эпизода `{date, task_id, task, status, result ≤ 500, files}`. `files_changed` — из `Write/Edit` хода
+  плюс `git status --porcelain` до/после (без чтения содержимого). `pre_compact.py` остаётся как есть.
+- **Проверка.** тест на фейковом ходе: одна строка в `episodes/<YYYY-MM>.jsonl` во временном корне.
+
+### P1.3 Таймаут задачи
+
+- **Файлы.** `runtime/task_router.py`, `runtime/claude_bridge.py` (статус `timeout`), `integrations/telegram/gateway.py` (текст владелице), тесты.
+- **Шаги.** `Job.timeout_sec` (по умолчанию 2700; env `JARVIS_TASK_TIMEOUT_SEC`); `asyncio.wait_for` вокруг `run_turn`,
+  по таймауту — `claude_bridge.stop(run_id)`, статус `timeout`, событие `error/subtype=timeout`. Бюджет за такой ход не возвращается.
+- **Проверка.** тест со сценарием `sleep` фейкового claude и таймаутом 1 с → статус `timeout`, процесс убит, очередь идёт дальше.
+
+### P1.4 Расписание в изолированной сессии
+
+- **Файлы.** `runtime/task_router.py` (`Job.context: "chat" | "isolated"`), `integrations/telegram/gateway.py` (`check_schedule`), тесты `test_schedule.py`/`test_telegram.py`.
+- **Шаги.** Тест: задача по расписанию не передаёт `--resume` и не меняет `sessions.json`; чат после неё продолжает свою сессию.
+- **Проверка.** pytest.
+
+### P1.5 Исполняемые файлы в черновиках; проверка зеркал
+
+- **Файлы.** `runtime/activation.py`, `integrations/telegram/gateway.py` (`_draft_text`), новый `scripts/sync_mirrors.py`, тесты.
+- **Шаги.**
+  1. `validate`: `.exe .bat .cmd .scr .msi` — замечание (блокирует); `.py .ps1 .js .sh` — предупреждение, показывается на кнопке «в навыке есть код: …».
+  2. `scripts/sync_mirrors.py --check`: печатает расхождения `.claude/skills` ↔ `.agents/skills`, `.claude/agents` ↔ `.codex/agents`, exit 1 при расхождении. Сам ничего не копирует без `--write`.
+  3. Существующие расхождения не чиним автоматически — список владелице, решение за ней (см. P4.2).
+- **Проверка.** pytest; `scripts/sync_mirrors.py --check` выводит текущий список.
+
+### P1.6 Запуск произвольных скриптов — через кнопку (её решение)
+
+- **Файлы.** `runtime/policy.yaml` (`script_allow: [...]`), `.claude/hooks/guard.py`, тесты.
+- **Шаги.** Тесты: `python -m integrations.visuals.build …`, `python -m pytest`, `python scripts/x.py`, `.claude/skills/*/scripts/*.py` → WRITE;
+  `python tmp/x.py`, `node x.js`, `python -c "…"` с сетевым/удаляющим кодом → EXTERNAL `run_script`.
+- **Проверка.** pytest; прогон обычных сценариев (карусель, радар) не даёт лишних кнопок.
+
+---
+
+## P2 — orchestration и subagents
+
+### P2.0 Smoke-проверка возможностей CLI (ворота для P2.2 и P2.3)
+
+- **Требует.** Рабочий вход `claude` → `/login`.
+- **Файлы.** новый `tests/smoke_cli_capabilities.py` (маркер `smoke`).
+- **Проверить.** В `claude -p` по подписке: `--allowedTools Read,Grep,Glob` реально не даёт писать; `--json-schema` возвращает валидный JSON;
+  `--no-session-persistence` не создаёт сессию; во входе PreToolUse-хука при вызове из субагента есть поле с его именем
+  (временный хук, который пишет **только имена ключей** входа во временный файл).
+- **Итог.** Таблица «есть / нет» дописывается в раздел 4 аудита. Чего нет — не используем, план корректируется.
+
+### P2.1 Спецификация до исполнения
+
+- **Файлы.** `runtime/jarvis-turn.md`, `CLAUDE.md` (одна строка), тест бюджета контекста.
+- **Текст правила (черновик).** «Если задача неоднозначна и крупная — несколько артефактов, внешние действия или больше ~20 минут
+  работы — сначала ответь четырьмя блоками: *Сделаю / Готово, когда / Не делаю / Вопросы* — и жди её „да“.
+  Простое делай сразу. Согласованное сохрани в `state/tasks/<task_id>/spec.md`.»
+- **Проверка.** `check_context_size.py` ok; ручной прогон: «сделай контент на неделю» → спецификация; «переименуй файл» → сразу делает.
+
+### P2.2 Независимый ревьюер
+
+- **Файлы.** новый `runtime/review.py`, `runtime/prompts/review.md`, `runtime/claude_bridge.py` (параметры `allowed_tools`, `json_schema`, `persist=False`),
+  `runtime/task_router.py`, `integrations/telegram/gateway.py` (итог с вердиктом), `docs/adr/0013-nezavisimyj-reviewer.md`, тесты на фейковом claude.
+- **Схема.** Ход исполнителя → если есть `spec.md`, новый комплект в `essa-ai/content/` или изменённый код →
+  отдельный `claude -p` без `--resume`, инструменты только чтение, вход: запрос, `spec.md`, список файлов/дифф, вывод тестов →
+  JSON `{verdict: pass|fix|fail, problems: [...], checked: [...]}` → `fix`: одно сообщение исполнителю в его сессию с замечаниями,
+  повторная проверка; не больше 2 кругов → владелице итог + вердикт. Всё пишется в журнал (`review_started/review_verdict`).
+- **Проверка.** тесты: pass с первого раза; fix → исправление → pass; два fix → владелице с вердиктом; ревьюер не получает истории исполнителя (проверка аргументов запуска).
+- **Риск.** Расход лимита. Включатель `JARVIS_REVIEW=on|off`, по умолчанию `on` только для комплектов и кода.
+
+### P2.3 Права субагентов в Guard (только если P2.0 нашёл поле агента)
+
+- **Файлы.** `runtime/policy.yaml` (раздел `agents`), `.claude/hooks/guard.py`, тесты.
+- **Шаги.** `copywriter`, `reels-producer` → запись только `essa-ai/content/**`; `reviewer`, `researcher`, `strategist`, `competitor-analyst` → запись запрещена.
+- **Проверка.** pytest. Если поля нет — этап закрывается записью «невозможно в 2.1.280».
+
+### P2.4 Состояния задачи
+
+- **Файлы.** `runtime/events.py`, `runtime/task_router.py`, `integrations/telegram/status.py`, тесты.
+- **Шаги.** Явные статусы в событиях: `queued → running → waiting_approval → review → done | failed | timeout | stopped`;
+  `/status` показывает текущую задачу, её статус и сколько ждёт в очереди. Хранение — тот же журнал, без БД.
+
+---
+
+## P3 — memory и context
+
+### P3.1 Режимы контекста; свежая сессия после паузы
+
+- **Файлы.** `runtime/task_router.py`, `runtime/sessions.py` (время последнего хода), `docs/REFERENCE.md`, тесты.
+- **Шаги.** Режимы `chat` (fork, `--resume`), `isolated` (без истории), `brief` (новая сессия + сводка 3 последних эпизодов).
+  Если чат молчал > `JARVIS_SESSION_IDLE_HOURS` (по умолчанию 8) — следующий ход идёт в `brief`.
+- **Проверка.** тест с подменой времени.
+
+### P3.2 `big_read` для чтения через shell
+
+- **Файлы.** `.claude/hooks/guard.py`, `runtime/policy.yaml`, тесты.
+- **Шаги.** `cat/type/Get-Content/gc <один файл>` без `head/tail/-TotalCount` и файл > `max_kb` → EXTERNAL `big_read`.
+- **Проверка.** pytest.
+
+(Правило про точечные снимки страниц в `browser-use` — только после её согласия: навыки сами не меняем.)
+
+---
+
+## P4 — экспериментальное
+
+### P4.1 Шов `WorkerRuntime`
+
+- **Файлы.** новый `runtime/worker.py` (Protocol: `run_turn`, `stop`), `runtime/task_router.py` (зависимость от протокола), тесты.
+- **Правило в ADR.** Второй runtime подключается только вместе со своим адаптером Guard.
+
+### P4.2 Зеркала для Codex
+
+- По итогам `sync_mirrors.py --check` (P1.5) — её выбор: генерировать `.agents/skills` и `.codex/agents` из `.claude/` или снять зеркала
+  как неподдерживаемые (Codex без Guard).
+
+---
+
+## Предлагаемый порядок
+
+1. **P0.1 → P0.2** (база и чистый журнал) — без решений владелицы, безопасно.
+2. **P0.4**, затем **P0.3** — после её ответа про режим разработки.
+3. **P1.3 + P1.4** — маленькие, сразу дают надёжность фоновых задач.
+4. **P1.1 → P1.2** — наблюдаемость.
+5. **P2.0** (нужен вход в `claude`) → **P2.1** → **P2.2**.
+6. Остальное — по результатам.
