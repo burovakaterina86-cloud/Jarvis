@@ -124,10 +124,11 @@ def main():
         return
     time.sleep(float(os.environ.get("FAKE_CLAUDE_DELAY", "0")))
     tool_pair(sid)
+    text = os.environ.get("FAKE_CLAUDE_TEXT") or "Привет, Катерина!"
     out({"type": "assistant", "session_id": sid, "parent_tool_use_id": None,
-         "message": {"content": [{"type": "text", "text": "Привет, Катерина!"}]}})
+         "message": {"content": [{"type": "text", "text": text}]}})
     out({"type": "result", "subtype": "success", "is_error": False, "session_id": sid,
-         "result": "Привет, Катерина!", "total_cost_usd": 0.0123, "duration_ms": 1500})
+         "result": text, "total_cost_usd": 0.0123, "duration_ms": 1500})
     if log:
         with open(log, "a", encoding="utf-8") as fh:
             fh.write(json.dumps({"t_end": time.time(), "stdin_tail": stdin_data[-200:]},

@@ -180,6 +180,8 @@ def _router(fake, monkeypatch, **kw):
     from runtime import sessions, task_router
     monkeypatch.setattr(sessions, "SESSIONS_PATH", fake.tmp / "sessions.json")
     monkeypatch.setattr(task_router, "EPISODES_DIR", fake.tmp / "episodes")
+    from runtime import spec
+    monkeypatch.setattr(spec, "SPECS_DIR", fake.tmp / "specs")
     env = {**fake.base_env, "FAKE_CLAUDE_SCENARIO": "ok", "FAKE_CLAUDE_DELAY": "0.4"}
     kw.setdefault("git_status", lambda: set())
     return task_router.TaskRouter(env=env, claude_cmd=FAKE, budget_path=fake.tmp / "budget.json", **kw)

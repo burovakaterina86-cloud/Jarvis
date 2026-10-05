@@ -19,7 +19,7 @@ import pytest
 
 from runtime import claude_bridge, events
 from runtime.approvals import ApprovalsServer
-from runtime import task_router
+from runtime import spec, task_router
 from runtime.task_router import Job, TaskRouter
 from tests import codescan
 from tests.test_telegram import (OWNER, FakeBot, FakeCallback, FakeContext, FakeIncoming,
@@ -122,6 +122,7 @@ async def sandbox(tmp_path, monkeypatch):
 
     monkeypatch.setattr(events, "EVENTS_PATH", root / "state" / "events.jsonl")
     monkeypatch.setattr(task_router, "EPISODES_DIR", root / "memory" / "episodes")
+    monkeypatch.setattr(spec, "SPECS_DIR", root / "state" / "specs")
     server = ApprovalsServer(timeout=20.0)
     await server.start(root)
 

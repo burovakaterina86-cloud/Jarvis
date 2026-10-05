@@ -9,6 +9,9 @@
 Журнал: у каждой задачи свой `task_id` во всех событиях; по концу — событие `task_done`
 (статус, длительность, вызовы, изменённые файлы, попытки) и строка эпизода в `memory/episodes/`.
 Эпизод пишет мост, а не модель: он не зависит от того, сработал ли хук PreCompact.
+
+План крупной задачи (P2.1, `runtime/spec.py`): ответ-план сохраняется для чата, следующий ход чата
+получает его в `Job.spec` и закрывает; задачи по расписанию планов не видят.
 """
 from __future__ import annotations
 
@@ -24,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from runtime import claude_bridge, events
+from runtime import claude_bridge, events, spec
 from runtime import sessions as sessions_mod
 from runtime.redact import redact
 
@@ -52,6 +55,7 @@ class Job:
     context: str = "chat"             # chat | isolated
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     started: float | None = field(default=None, init=False, repr=False)  # ставит роутер
+    spec: dict | None = field(default=None, init=False, repr=False)      # план, который исполняет ход
 
     def __post_init__(self):
         if self.context not in CONTEXTS:
@@ -171,6 +175,8 @@ class TaskRouter:
                 self.sessions.get(key), False, None, "error", "daily_budget_exceeded", attempts=0)
         isolated = job.context == "isolated"
         sid = None if isolated else self.sessions.get(key)
+        if not isolated:
+            job.spec = spec.load(key)
         limit = job.timeout_sec or self.default_timeout
         run_id = run_id_for(key)
         before = await asyncio.to_thread(self.git_status)
@@ -199,7 +205,21 @@ class TaskRouter:
         # Файлы хода: записи Write/Edit плюс то, что git увидел нового (запись командами shell).
         after = await asyncio.to_thread(self.git_status)
         res.files = sorted(set(res.files) | (set(after) - set(before)))
+        if not isolated and res.status == "ok":
+            self._track_spec(key, job, res)
         return res
+
+    def _track_spec(self, key: str, job: Job, res) -> None:
+        """Ответ-план — сохранить для чата; иначе ход исполнил прежний план — закрыть его."""
+        try:
+            if spec.is_spec(res.text):
+                spec.save(key, job.task_id, res.text)
+                job.spec = None   # этот ход предложил план, а не исполнял прежний
+                events.emit("spec_proposed", task=job.task, task_id=job.task_id, status="waiting_owner")
+            elif job.spec:
+                spec.close(key, job.task_id)
+        except Exception:  # noqa: BLE001 — план не должен ронять очередь
+            pass
 
     def _record(self, job: Job, res) -> None:
         """Итог задачи в журнал и, если ход работал, строка эпизода. Не бросает исключений."""
@@ -211,7 +231,7 @@ class TaskRouter:
                         result_status=res.status, error=res.error, duration=float(duration),
                         tools=res.tool_uses, files_changed=list(res.files), attempts=res.attempts,
                         cost=res.cost_usd, context=job.context, session=res.session_id,
-                        progress=1.0)
+                        spec_task_id=(job.spec or {}).get("task_id"), progress=1.0)
             if res.status in WORKED and res.attempts > 0:
                 self._write_episode(job, res)
         except Exception:  # noqa: BLE001 — журнал не должен ронять очередь
