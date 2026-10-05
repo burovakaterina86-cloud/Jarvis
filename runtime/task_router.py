@@ -75,6 +75,9 @@ class Job:
     session_mode: str = field(default="", init=False, repr=False)        # resume | new | brief | isolated
     runtime: str | None = None        # явно: "codex" после её кнопки; None — кто активен в чате
     runtime_used: str = field(default="claude", init=False, repr=False)
+    queue: str | None = None          # своя очередь: "schedule" — фон не задерживает её сообщения
+    chat: str = field(default="", init=False, repr=False)      # чат владелицы (ставит submit)
+    run_key: str = field(default="", init=False, repr=False)   # ключ очереди и запуска
 
     def __post_init__(self):
         if self.context not in CONTEXTS:
@@ -168,18 +171,20 @@ class TaskRouter:
         """Ставит job в очередь чата. Возвращает число задач впереди (0 — начнёт сразу).
         Вызывать из работающего event loop; итог — в job.result и job.on_done."""
         key = str(chat_id)
+        qkey = f"{key}:{job.queue}" if job.queue else key   # фон — своя очередь, параллельно с чатом
+        job.chat, job.run_key = key, qkey
         loop = asyncio.get_running_loop()
         if job.result is None:
             job.result = loop.create_future()
-        q = self._queues.setdefault(key, deque())
-        position = len(q) + (1 if key in self._active else 0)
+        q = self._queues.setdefault(qkey, deque())
+        position = len(q) + (1 if qkey in self._active else 0)
         q.append(job)
         task_state.emit(job.task_id, job.task, "queued", chat=key)
         events.emit("user_message", task=job.task, task_id=job.task_id, status="queued",
                     chat=key, position=position, session=self.sessions.get(key))
-        worker = self._workers.get(key)
+        worker = self._workers.get(qkey)
         if worker is None or worker.done():
-            self._workers[key] = loop.create_task(self._worker(key))
+            self._workers[qkey] = loop.create_task(self._worker(qkey))
         return position
 
     def pending(self, chat_id) -> int:
@@ -234,18 +239,19 @@ class TaskRouter:
                   for r in self._recent_episodes(5)] or ["- (записей нет)"]
         return "\n".join(lines) + "\n\nСообщение владелицы:\n"
 
-    async def _worker(self, key: str) -> None:
-        q = self._queues[key]
+    async def _worker(self, qkey: str) -> None:
+        q = self._queues[qkey]
         while q:
             job = q.popleft()
-            self._active[key] = job
+            key = job.chat or qkey
+            self._active[qkey] = job
             try:
                 res = await self._run(key, job)
             except Exception as exc:  # noqa: BLE001
                 res = claude_bridge.TurnResult("Внутренняя ошибка моста.", None, False, None,
                                                "error", repr(exc)[:500], attempts=0)
             finally:
-                self._active.pop(key, None)
+                self._active.pop(qkey, None)
             self._record(job, res, key)
             if not job.result.done():
                 job.result.set_result(res)
@@ -327,7 +333,7 @@ class TaskRouter:
     async def _timed(self, key: str, job: Job, prompt: str, sid, limit: float,
                      options=claude_bridge.DEFAULT_OPTIONS, on_event=None, runtime: str = "claude"):
         """Один запуск исполнителя с пределом времени: по истечении — стоп дерева процесса, статус timeout."""
-        run_id = run_id_for(key)
+        run_id = run_id_for(job.run_key or key)   # у фоновой очереди свой run_id: /stop её не задевает
         bridge = self.runtimes[runtime]
         cmd = {"claude_cmd": self.claude_cmd} if runtime == "claude" else {"codex_cmd": self.codex_cmd}
         turn = asyncio.ensure_future(bridge.run_turn(

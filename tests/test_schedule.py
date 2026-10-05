@@ -117,3 +117,17 @@ def test_final_line_for_timeout_is_human():
     reporter = SimpleNamespace(clock=lambda: 100.0, started=40.0)
     line = _final_line(SimpleNamespace(status="timeout"), reporter)
     assert "времени" in line and "timeout" not in line
+
+
+async def test_scheduled_tasks_go_to_their_own_queue(tmp_path):
+    prompts = tmp_path / "runtime" / "prompts"
+    prompts.mkdir(parents=True)
+    (prompts / "morning.md").write_text("Собери утреннее сообщение.", encoding="utf-8")
+    (tmp_path / "runtime" / "schedule.json").write_text(json.dumps(
+        [{**DAILY, "prompt": "runtime/prompts/morning.md"}]), encoding="utf-8")
+    router = FakeRouter(answer="Доброе утро!")
+    g = make_gateway(tmp_path, router=router)
+    g.attach(FakeBot())
+    await g.check_schedule(now=at(MON, "08:01"))
+    await g.schedule_tasks_done()
+    assert router.jobs[0][1].queue == "schedule"

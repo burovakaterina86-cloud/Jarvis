@@ -648,7 +648,8 @@ class Gateway:
             # Фон идёт без её истории (isolated): не растит и не путает разговор в чате.
             job = Job(prompt=header + prompt, task=f"по расписанию: {task['id']}", uses_browser=False,
                       on_event=_ignore_event,   # статус-карточку для фоновой задачи не показываем
-                      context="isolated", timeout_sec=float(minutes) * 60 if minutes else None)
+                      context="isolated", timeout_sec=float(minutes) * 60 if minutes else None,
+                      queue="schedule")   # своя очередь: долгий радар не задерживает её сообщения
             if not hasattr(self, "_schedule_runs"):
                 self._schedule_runs = []
             self._schedule_runs.append(asyncio.ensure_future(self._run_scheduled(job)))

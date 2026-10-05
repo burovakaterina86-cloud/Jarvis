@@ -471,3 +471,43 @@ def test_emit_masks_secrets_in_any_field(tmp_path, monkeypatch):
 
 def test_task_done_is_a_known_event_type():
     assert "task_done" in events.TYPES
+
+
+# ---------- отдельная очередь для задач по расписанию (2026-10-05) ----------
+
+async def test_scheduled_job_does_not_block_the_chat(fake, monkeypatch):
+    """Долгий радар по расписанию не задерживает её сообщение: у фона своя очередь."""
+    from runtime import task_router
+    router = _router(fake, monkeypatch)
+    router.env = {**router.env, "FAKE_CLAUDE_DELAY": "1.5"}
+    background = task_router.Job(prompt="радар", task="по расписанию: reel-radar", context="isolated",
+                                 queue="schedule")
+    chat = task_router.Job(prompt="привет")
+    assert router.submit(1, background) == 0
+    assert router.submit(1, chat) == 0                  # не «в очереди: 1» — начнёт сразу
+    assert router.pending(1) == 1                       # её очередь — только её задача
+    await asyncio.wait_for(asyncio.gather(background.result, chat.result), 20)
+    starts = {c["stdin_tail"]: c["t_start"] for c in fake.calls()}
+    ends = {c["stdin_tail"]: c["t_end"] for c in fake.ends()}
+    assert starts["привет"] < ends["радар"]             # шли одновременно
+
+
+async def test_stop_stops_only_her_task(fake, monkeypatch):
+    from runtime import task_router
+    router = _router(fake, monkeypatch)
+    router.env = {**router.env, "FAKE_CLAUDE_SCENARIO": "sleep"}
+    background = task_router.Job(prompt="фон", context="isolated", queue="schedule", timeout_sec=30)
+    chat = task_router.Job(prompt="её задача", timeout_sec=30)
+    router.submit(1, background)
+    router.submit(1, chat)
+    for _ in range(100):
+        await asyncio.sleep(0.05)
+        if len(fake.calls()) == 2:
+            break
+    assert router.stop(1) is True
+    res = await asyncio.wait_for(chat.result, 10)
+    assert res.status == "stopped"
+    assert not background.result.done()
+    from runtime import claude_bridge as cb
+    cb.stop(task_router.run_id_for("1:schedule"))       # уборка: фон тоже гасим
+    await asyncio.wait_for(background.result, 10)
