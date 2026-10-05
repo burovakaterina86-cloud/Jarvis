@@ -285,7 +285,11 @@ def preflight_hook(root: Path | str = ROOT) -> tuple[bool, str]:
     env = build_env()
     env["JARVIS_TASK_ID"] = "preflight"
     try:
-        proc = subprocess.run(command.split(), input=json.dumps(event).encode("utf-8"), capture_output=True,
+        argv = command.split()
+        exe = Path(argv[0])
+        if not exe.is_absolute() and (root / exe).exists():   # Windows не ищет относительную программу в cwd
+            argv[0] = str(root / exe)
+        proc = subprocess.run(argv, input=json.dumps(event).encode("utf-8"), capture_output=True,
                               cwd=str(root), env=env, timeout=30,
                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         answer = json.loads(proc.stdout.decode("utf-8", "replace").strip().splitlines()[-1])

@@ -202,3 +202,27 @@ def test_read_limits_from_rollout(tmp_path):
     got = codex_bridge.read_limits("thread-abc", home=tmp_path)
     assert got["primary"]["used_percent"] == 46.0 and got["secondary"]["used_percent"] == 61.0   # последнее
     assert codex_bridge.read_limits("нет-такого", home=tmp_path) is None
+
+
+def test_preflight_resolves_relative_program_against_project(tmp_path, monkeypatch):
+    """В .codex/hooks.json путь к Python относительный; Windows не ищет такую программу в cwd —
+    проверка сама приводит его к папке проекта (найдено живой проверкой 2026-10-05)."""
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".venv" / "Scripts").mkdir(parents=True)
+    (tmp_path / ".venv" / "Scripts" / "python.exe").write_bytes(b"")
+    (tmp_path / ".codex" / "hooks.json").write_text(json.dumps({"hooks": {"PreToolUse": [{"matcher": ".*", "hooks": [
+        {"type": "command", "command": ".venv/Scripts/python.exe .claude/hooks/guard.py --runtime codex"}]}]}}),
+        encoding="utf-8")
+    seen = {}
+
+    class Done:
+        stdout = json.dumps({"hookSpecificOutput": {"permissionDecision": "deny",
+                                                    "permissionDecisionReason": "JARVIS Guard: canary"}}).encode()
+
+    def fake_run(argv, **kw):
+        seen["argv"] = argv
+        return Done()
+
+    monkeypatch.setattr(codex_bridge.subprocess, "run", fake_run)
+    assert codex_bridge.preflight_hook(tmp_path) == (True, "")
+    assert seen["argv"][0] == str(tmp_path / ".venv" / "Scripts" / "python.exe")
