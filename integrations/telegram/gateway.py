@@ -543,8 +543,11 @@ class Gateway:
             schedule_mod.save_state(state, self.root)
             header = (f"Это задача по расписанию «{task['id']}» ({slot:%Y-%m-%d %H:%M}), владелица сейчас "
                       "ничего не писала. Твой ответ уйдёт ей в Telegram как есть.\n\n")
+            minutes = task.get("timeout_min")
+            # Фон идёт без её истории (isolated): не растит и не путает разговор в чате.
             job = Job(prompt=header + prompt, task=f"по расписанию: {task['id']}", uses_browser=False,
-                      on_event=_ignore_event)   # статус-карточку для фоновой задачи не показываем
+                      on_event=_ignore_event,   # статус-карточку для фоновой задачи не показываем
+                      context="isolated", timeout_sec=float(minutes) * 60 if minutes else None)
             if not hasattr(self, "_schedule_runs"):
                 self._schedule_runs = []
             self._schedule_runs.append(asyncio.ensure_future(self._run_scheduled(job)))
@@ -738,6 +741,8 @@ def _final_line(result, reporter) -> str:
     status = getattr(result, "status", "ok")
     if status == "stopped":
         return f"⏹ Остановлено ({elapsed})."
+    if status == "timeout":
+        return f"⏱ Остановлено по пределу времени ({elapsed})."
     if status == "ok":
         return f"✅ Готово за {elapsed}."
     return f"⚠️ Ход завершился со статусом {status} ({elapsed})."

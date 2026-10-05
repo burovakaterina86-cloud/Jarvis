@@ -11,7 +11,9 @@
 
 Формат задачи в `runtime/schedule.json`:
 `{"id", "kind": "daily"|"weekly", "at": "HH:MM", "weekday": 0-6 (пн=0, для weekly),
-  "catch_up_hours": N (необязательно), "prompt": "путь к .md от корня"}`.
+  "catch_up_hours": N (необязательно), "timeout_min": N (необязательно; иначе
+  JARVIS_TASK_TIMEOUT_SEC), "prompt": "путь к .md от корня"}`.
+Задача идёт в изолированном контексте: без истории её чата и не меняя его сессию.
 """
 from __future__ import annotations
 

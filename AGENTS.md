@@ -81,7 +81,7 @@ Approvals отдаёт запрос в `Gateway.on_approval_request` → кно�
 
 ## Окружение
 
-`.env` в корне (gitignore), пример — `.env.example`. Только имена: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, `JARVIS_DAILY_RUN_BUDGET` (по умолчанию 100), `JARVIS_PURCHASE_LIMIT_RUB` (не задан → MONEY уходит на подтверждение), `JARVIS_WHISPER_MODEL` (по умолчанию `small`), `JARVIS_OWNER_NAME` (имя в приветствии `gateway.greeting()`; пусто → `DEFAULT_OWNER_NAME = "Катерина"`). Значения не читать, не печатать, не логировать. `gateway.load_env()` возвращает только ключи, без значений. Токен Approvals живёт в `state/secrets/approvals.token` и создаётся при старте.
+`.env` в корне (gitignore), пример — `.env.example`. Только имена: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, `JARVIS_DAILY_RUN_BUDGET` (по умолчанию 100), `JARVIS_TASK_TIMEOUT_SEC` (предел времени задачи, по умолчанию 2700 = 45 мин; у задачи расписания — `timeout_min` в `runtime/schedule.json`; задачи расписания идут в `Job.context="isolated"` — без сессии чата), `JARVIS_PURCHASE_LIMIT_RUB` (не задан → MONEY уходит на подтверждение), `JARVIS_WHISPER_MODEL` (по умолчанию `small`), `JARVIS_OWNER_NAME` (имя в приветствии `gateway.greeting()`; пусто → `DEFAULT_OWNER_NAME = "Катерина"`). Значения не читать, не печатать, не логировать. `gateway.load_env()` возвращает только ключи, без значений. Токен Approvals живёт в `state/secrets/approvals.token` и создаётся при старте.
 
 ## Тесты
 

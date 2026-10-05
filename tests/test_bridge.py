@@ -314,3 +314,69 @@ async def test_host_claude_session_vars_are_stripped(fake):
     keys = fake.calls()[-1]["env_keys"]
     left = [k for k in keys if k.upper().startswith(("CLAUDE", "ANTHROPIC", "TELEGRAM"))]
     assert left == ["CLAUDE_CODE_GIT_BASH_PATH"]
+
+
+# ---------- таймаут задачи (P1.3) и изолированный контекст (P1.4), аудит 2026-10-05 ----------
+
+async def test_job_timeout_kills_turn_and_queue_moves_on(fake, monkeypatch):
+    import time
+    from runtime import task_router
+    router = _router(fake, monkeypatch)
+    router.env = {**router.env, "FAKE_CLAUDE_SCENARIO": "sleep"}
+    slow = task_router.Job(prompt="долгая", timeout_sec=1)
+    t0 = time.monotonic()
+    router.submit(3, slow)
+    res = await asyncio.wait_for(slow.result, 15)
+    assert time.monotonic() - t0 < 10
+    assert res.status == "timeout" and res.error == "timeout"
+    assert "1 с" in res.text or "мин" in res.text
+    router.env = {**router.env, "FAKE_CLAUDE_SCENARIO": "ok"}
+    nxt = task_router.Job(prompt="следующая")
+    router.submit(3, nxt)
+    assert (await asyncio.wait_for(nxt.result, 15)).status == "ok"
+    rows = [json.loads(x) for x in (fake.tmp / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert any(r["type"] == "error" and r.get("subtype") == "timeout" for r in rows)
+
+
+async def test_timed_out_turn_still_spends_daily_budget(fake, monkeypatch):
+    from runtime import task_router
+    router = _router(fake, monkeypatch, budget=5)
+    router.env = {**router.env, "FAKE_CLAUDE_SCENARIO": "sleep"}
+    job = task_router.Job(prompt="долгая", timeout_sec=1)
+    router.submit(4, job)
+    await asyncio.wait_for(job.result, 15)
+    data = json.loads((fake.tmp / "budget.json").read_text(encoding="utf-8"))
+    assert data["count"] == 1
+
+
+def test_default_timeout_from_env(monkeypatch):
+    from runtime import task_router
+    monkeypatch.setenv("JARVIS_TASK_TIMEOUT_SEC", "120")
+    assert task_router.TaskRouter().default_timeout == 120
+    monkeypatch.setenv("JARVIS_TASK_TIMEOUT_SEC", "мусор")
+    assert task_router.TaskRouter().default_timeout == task_router.DEFAULT_TASK_TIMEOUT_SEC
+    monkeypatch.delenv("JARVIS_TASK_TIMEOUT_SEC")
+    assert task_router.TaskRouter().default_timeout == 2700
+
+
+async def test_isolated_job_neither_resumes_nor_touches_chat_session(fake, monkeypatch):
+    from runtime import sessions, task_router
+    router = _router(fake, monkeypatch)
+    sessions.set(7, "sid-chat")
+    job = task_router.Job(prompt="по расписанию", context="isolated")
+    router.submit(7, job)
+    res = await asyncio.wait_for(job.result, 15)
+    assert res.status == "ok"
+    assert "--resume" not in fake.calls()[0]["argv"]
+    assert sessions.get(7) == "sid-chat"
+    chat = task_router.Job(prompt="она пишет")
+    router.submit(7, chat)
+    await asyncio.wait_for(chat.result, 15)
+    argv = fake.calls()[1]["argv"]
+    assert argv[argv.index("--resume") + 1] == "sid-chat"
+
+
+def test_unknown_context_is_rejected():
+    from runtime import task_router
+    with pytest.raises(ValueError):
+        task_router.Job(prompt="x", context="fork-всё")

@@ -77,3 +77,43 @@ async def test_no_owner_no_runs(tmp_path):
     g = make_gateway(tmp_path, owner_id=None)
     g.attach(FakeBot())
     assert await g.check_schedule(now=at(MON, "08:01")) == []
+
+
+async def test_scheduled_task_runs_isolated_with_its_own_timeout(tmp_path):
+    """P1.4: фон не продолжает её разговор; P1.3: предел времени задаётся в schedule.json."""
+    prompts = tmp_path / "runtime" / "prompts"
+    prompts.mkdir(parents=True)
+    (prompts / "morning.md").write_text("Собери утреннее сообщение.", encoding="utf-8")
+    (tmp_path / "runtime" / "schedule.json").write_text(json.dumps(
+        [{**DAILY, "prompt": "runtime/prompts/morning.md", "timeout_min": 20}]), encoding="utf-8")
+    router = FakeRouter(answer="Доброе утро!")
+    g = make_gateway(tmp_path, router=router)
+    g.attach(FakeBot())
+    await g.check_schedule(now=at(MON, "08:01"))
+    await g.schedule_tasks_done()
+    job = router.jobs[0][1]
+    assert job.context == "isolated"
+    assert job.timeout_sec == 20 * 60
+
+
+async def test_scheduled_task_without_timeout_uses_router_default(tmp_path):
+    prompts = tmp_path / "runtime" / "prompts"
+    prompts.mkdir(parents=True)
+    (prompts / "morning.md").write_text("Собери утреннее сообщение.", encoding="utf-8")
+    (tmp_path / "runtime" / "schedule.json").write_text(json.dumps(
+        [{**DAILY, "prompt": "runtime/prompts/morning.md"}]), encoding="utf-8")
+    router = FakeRouter(answer="Доброе утро!")
+    g = make_gateway(tmp_path, router=router)
+    g.attach(FakeBot())
+    await g.check_schedule(now=at(MON, "08:01"))
+    await g.schedule_tasks_done()
+    assert router.jobs[0][1].timeout_sec is None
+
+
+def test_final_line_for_timeout_is_human():
+    from types import SimpleNamespace
+
+    from integrations.telegram.gateway import _final_line
+    reporter = SimpleNamespace(clock=lambda: 100.0, started=40.0)
+    line = _final_line(SimpleNamespace(status="timeout"), reporter)
+    assert "времени" in line and "timeout" not in line

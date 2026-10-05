@@ -1,5 +1,10 @@
 """Очередь ходов: FIFO на чат, одна активная задача на чат, одна браузерная глобально,
 дневной бюджет запусков (JARVIS_DAILY_RUN_BUDGET, по умолчанию 100).
+
+Предел времени на задачу — `Job.timeout_sec` или JARVIS_TASK_TIMEOUT_SEC (по умолчанию 45 мин):
+по истечении ход останавливается, статус `timeout`, очередь идёт дальше.
+Контекст задачи — `Job.context`: `chat` продолжает сессию чата, `isolated` идёт без истории
+и сессию чата не трогает (задачи по расписанию).
 """
 from __future__ import annotations
 
@@ -18,6 +23,8 @@ from runtime import sessions as sessions_mod
 ROOT = Path(__file__).resolve().parents[1]
 BUDGET_PATH = ROOT / "state" / "run_budget.json"
 DEFAULT_DAILY_BUDGET = 100
+DEFAULT_TASK_TIMEOUT_SEC = 2700
+CONTEXTS = ("chat", "isolated")
 
 
 @dataclass
@@ -28,6 +35,12 @@ class Job:
     on_event: object = None   # callable(event: dict), sync или async
     on_done: object = None    # callable(TurnResult), sync или async
     result: asyncio.Future | None = field(default=None, repr=False)  # ставит submit
+    timeout_sec: float | None = None  # None — TaskRouter.default_timeout
+    context: str = "chat"             # chat | isolated
+
+    def __post_init__(self):
+        if self.context not in CONTEXTS:
+            raise ValueError(f"неизвестный контекст задачи: {self.context!r}")
 
 
 def _budget_from_env() -> int:
@@ -35,6 +48,18 @@ def _budget_from_env() -> int:
         return max(0, int(os.environ.get("JARVIS_DAILY_RUN_BUDGET", DEFAULT_DAILY_BUDGET)))
     except ValueError:
         return DEFAULT_DAILY_BUDGET
+
+
+def _timeout_from_env() -> float:
+    try:
+        value = float(os.environ.get("JARVIS_TASK_TIMEOUT_SEC", DEFAULT_TASK_TIMEOUT_SEC))
+    except ValueError:
+        return DEFAULT_TASK_TIMEOUT_SEC
+    return value if value > 0 else DEFAULT_TASK_TIMEOUT_SEC
+
+
+def _human_duration(sec: float) -> str:
+    return f"{sec:g} с" if sec < 60 else f"{sec / 60:g} мин"
 
 
 def run_id_for(chat_id) -> str:
@@ -49,6 +74,7 @@ class TaskRouter:
         self.env = env
         self.claude_cmd = claude_cmd
         self.sessions = sessions or sessions_mod
+        self.default_timeout = _timeout_from_env()
         self._queues: dict[str, deque] = {}
         self._active: dict[str, Job] = {}
         self._workers: dict[str, asyncio.Task] = {}
@@ -109,12 +135,30 @@ class TaskRouter:
                 f"Дневной лимит запусков ({limit}) исчерпан — продолжу завтра "
                 "или владелица может поднять JARVIS_DAILY_RUN_BUDGET.",
                 self.sessions.get(key), False, None, "error", "daily_budget_exceeded")
-        sid = self.sessions.get(key)
-        res = await claude_bridge.run_turn(job.prompt, sid, job.on_event, run_id=run_id_for(key),
-                                           task=job.task, env=self.env, claude_cmd=self.claude_cmd)
+        isolated = job.context == "isolated"
+        sid = None if isolated else self.sessions.get(key)
+        limit = job.timeout_sec or self.default_timeout
+        run_id = run_id_for(key)
+        turn = asyncio.ensure_future(claude_bridge.run_turn(
+            job.prompt, sid, job.on_event, run_id=run_id, task=job.task, env=self.env,
+            claude_cmd=self.claude_cmd))
+        done, _ = await asyncio.wait({turn}, timeout=limit)
+        if not done:
+            # Останавливаем тем же путём, что /stop: дерево процесса, ход возвращает «stopped».
+            claude_bridge.stop(run_id)
+            res = await turn
+        else:
+            res = turn.result()
+        # Ход, успевший закончиться сам в момент таймаута, сохраняет свой итог.
+        if not done and res.status == "stopped":
+            events.emit("error", subtype="timeout", task=job.task, status="failed",
+                        timeout_sec=limit, session=res.session_id or sid)
+            res.status, res.error = "timeout", "timeout"
+            res.text = (f"Остановил задачу: она шла дольше {_human_duration(limit)}. "
+                        "Часть действий могла выполниться — скажи, продолжать ли и с чего.")
         if res.status in ("rate_limited", "auth_required", "error"):
-            self._refund_budget()  # неуспешный ход не тратит дневной лимит
-        if res.session_id and res.session_id != sid:
+            self._refund_budget()  # неуспешный ход не тратит дневной лимит; таймаут — тратит
+        if not isolated and res.session_id and res.session_id != sid:
             self.sessions.set(key, res.session_id)
         return res
 
