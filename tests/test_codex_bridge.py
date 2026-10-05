@@ -133,3 +133,72 @@ def test_default_command_avoids_the_cmd_shim(monkeypatch, tmp_path):
 
 def test_turn_result_has_runtime_field():
     assert claude_bridge.TurnResult("", None, False, None, "ok").runtime == "claude"
+
+
+# ---------- P4.1c: готовность Codex — Guard отвечает и Codex ему доверяет ----------
+
+def _root_with_hooks(guard_copy, command=None):
+    root = guard_copy.parents[2]
+    (root / ".codex").mkdir(exist_ok=True)
+    cmd = command or f"{Path(sys.executable).as_posix()} .claude/hooks/guard.py --runtime codex"
+    (root / ".codex" / "hooks.json").write_text(json.dumps(
+        {"hooks": {"PreToolUse": [{"matcher": ".*", "hooks": [{"type": "command", "command": cmd}]}]}}),
+        encoding="utf-8")
+    return root
+
+
+def test_preflight_passes_when_guard_answers(guard_copy):
+    ok, why = codex_bridge.preflight_hook(_root_with_hooks(guard_copy))
+    assert ok, why
+
+
+def test_preflight_fails_on_broken_or_missing_hook(guard_copy, tmp_path):
+    root = _root_with_hooks(guard_copy, command="python-нет-такого .claude/hooks/guard.py --runtime codex")
+    ok, why = codex_bridge.preflight_hook(root)
+    assert not ok and why
+    ok, why = codex_bridge.preflight_hook(tmp_path / "пусто")
+    assert not ok and "hooks.json" in why
+
+
+async def test_ready_runs_trust_canary_once_and_caches(guard_copy, monkeypatch):
+    root = _root_with_hooks(guard_copy)
+    runs = []
+
+    async def fake_trust(root_, env, codex_cmd):
+        runs.append(1)
+        (root_ / "state" / "codex_canary.json").write_text(json.dumps({"ts": "now"}), encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(codex_bridge, "_trust_canary", fake_trust)
+    assert (await codex_bridge.ensure_ready(root=root, now=1000.0)) == (True, "")
+    assert (await codex_bridge.ensure_ready(root=root, now=1000.0 + 3600)) == (True, "")
+    assert len(runs) == 1                                         # доверие проверено один раз за 6 ч
+    await codex_bridge.ensure_ready(root=root, now=1000.0 + 7 * 3600)
+    assert len(runs) == 2
+
+
+async def test_not_trusted_gives_instructions(guard_copy, monkeypatch):
+    root = _root_with_hooks(guard_copy)
+
+    async def fake_trust(root_, env, codex_cmd):
+        return False
+
+    monkeypatch.setattr(codex_bridge, "_trust_canary", fake_trust)
+    ok, why = await codex_bridge.ensure_ready(root=root, now=5.0)
+    assert not ok and "/hooks" in why and "JARVIS Guard" in why
+
+
+def test_read_limits_from_rollout(tmp_path):
+    day = tmp_path / "sessions" / "2026" / "10" / "05"
+    day.mkdir(parents=True)
+    rows = [{"type": "event_msg", "payload": {"type": "token_count", "rate_limits": {
+                "primary": {"used_percent": 10.0, "window_minutes": 300, "resets_at": 1},
+                "secondary": {"used_percent": 20.0, "window_minutes": 10080, "resets_at": 2}}}},
+            {"type": "event_msg", "payload": {"type": "token_count", "rate_limits": {
+                "primary": {"used_percent": 46.0, "window_minutes": 300, "resets_at": 3},
+                "secondary": {"used_percent": 61.0, "window_minutes": 10080, "resets_at": 4}}}}]
+    (day / "rollout-2026-10-05T10-00-00-thread-abc.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    got = codex_bridge.read_limits("thread-abc", home=tmp_path)
+    assert got["primary"]["used_percent"] == 46.0 and got["secondary"]["used_percent"] == 61.0   # последнее
+    assert codex_bridge.read_limits("нет-такого", home=tmp_path) is None

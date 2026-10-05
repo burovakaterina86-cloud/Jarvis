@@ -30,7 +30,7 @@ from integrations.telegram.status import STATUS_DELAY, StatusReporter, too_long
 from runtime import activation
 from runtime import schedule as schedule_mod
 from runtime import sessions as sessions_mod
-from runtime import task_router, task_state
+from runtime import task_router, task_state, worker
 from runtime.approvals import ApprovalsServer
 from runtime.task_router import Job
 
@@ -61,6 +61,7 @@ HELP = ("Пиши задачу текстом или голосом, присы�
 APPROVE_PREFIX = "ap"
 CONTENT_PREFIX = "ct"
 DRAFT_PREFIX = "df"
+SWITCH_PREFIX = "rt"   # «Продолжить в Codex / Подождать» (P4.1e)
 DRAFT_POLL_INTERVAL = 10.0   # черновик замечаем в течение десяти секунд после появления
 TOKEN_TTL = 24 * 3600.0   # столько живёт кнопка, если её так и не нажали
 MAX_TOKENS = 200
@@ -184,6 +185,9 @@ class Gateway:
     def draft_callback_data(self, kind: str, name: str, decision: str) -> str:
         return f"{self._token_for(DRAFT_PREFIX, f'{kind}:{name}')}:{decision}"
 
+    def switch_callback_data(self, chat_id, decision: str) -> str:
+        return f"{self._token_for(SWITCH_PREFIX, str(chat_id))}:{decision}"
+
     @staticmethod
     async def _send(context, chat_id, text, **kw):
         return await context.bot.send_message(chat_id, text, **kw)
@@ -227,7 +231,31 @@ class Gateway:
         pending = self.router.pending(chat_id)
         if not snap["active"] and not snap["queued"] and pending:
             text = f"В работе и в очереди: {pending}.\n" + text
+        current = worker.current(str(chat_id))
+        if current.get("runtime") == "codex":
+            until = current.get("until")
+            text += "\n\nРаботает: 🟢 Codex" + (f" до {_hhmm(until)}, потом вернусь к Claude" if until else
+                                                 " (вернуться к Claude — /claude)")
+        else:
+            text += "\n\nРаботает: Claude"
+        limits = worker.describe_limits()
+        if limits:
+            text += "\n" + limits
         await self._send(context, chat_id, text)
+
+    async def cmd_codex(self, update, context) -> None:
+        """Ручное переключение на Codex — до команды /claude."""
+        if not self._allowed(update):
+            return
+        self.router.set_runtime(update.effective_chat.id, "codex")
+        await self._send(context, update.effective_chat.id,
+                         "🟢 Дальше работаю в Codex — с теми же проверками и кнопками. Вернуться к Claude — /claude.")
+
+    async def cmd_claude(self, update, context) -> None:
+        if not self._allowed(update):
+            return
+        self.router.set_runtime(update.effective_chat.id, "claude")
+        await self._send(context, update.effective_chat.id, "Дальше работаю в Claude.")
 
     async def cmd_browser_login(self, update, context) -> None:
         if not self._allowed(update):
@@ -312,10 +340,12 @@ class Gateway:
 
     # ---- ход агента
 
-    async def _run(self, update, context, prompt: str, task: str = "") -> None:
+    async def _run(self, update, context, prompt: str, task: str = "", runtime: str | None = None) -> None:
         chat_id = update.effective_chat.id
         task = task or _task_name(prompt)
-        reporter = StatusReporter(context.bot, chat_id, task=task,
+        runtime_for = getattr(self.router, "runtime_for", None)
+        codex = (runtime or (runtime_for(chat_id) if runtime_for else "claude")) == "codex"
+        reporter = StatusReporter(context.bot, chat_id, task=("🟢 Codex · " + task) if codex else task,
                                   min_interval=self.min_status_interval,
                                   start_after=self.status_delay)
 
@@ -325,7 +355,7 @@ class Gateway:
 
         # uses_browser не угадывается по словам: угадав, ход занял бы глобальный браузерный
         # замок и заблокировал чужие задачи. Факт использования браузера виден только по ходу.
-        job = Job(prompt=prompt, task=task, uses_browser=False, on_event=on_event)
+        job = Job(prompt=prompt, task=task, uses_browser=False, on_event=on_event, runtime=runtime)
         position = self.router.submit(chat_id, job)
         if position:
             # Статус-сообщение не создаём: оно появится, когда ход реально начнётся.
@@ -349,7 +379,63 @@ class Gateway:
             except Exception:  # noqa: BLE001 — молчание лучше падения бота
                 log.warning("не удалось сообщить о неудачной отправке")
 
+    def _offer_text(self, offer: dict) -> str:
+        reset = offer.get("resets_at")
+        lines = ["⏳ Лимит Claude закончился" + (f", обновится в {_hhmm(reset)}." if reset else ".")]
+        files = offer.get("files") or []
+        lines.append(f"Задача «{offer.get('task') or 'задача'}» не доделана"
+                     + (": уже изменены " + ", ".join(files[:5]) + ("…" if len(files) > 5 else "") + "." if files else "."))
+        lines.append("Могу продолжить в Codex: он получит сводку и доделает — с теми же проверками и кнопками.")
+        return "\n".join(lines)
+
+    def _switch_keyboard(self, chat_id, offer: dict) -> InlineKeyboardMarkup:
+        reset = offer.get("resets_at")
+        wait = f"Подождать до {_hhmm(reset)}" if reset else "Подождать час"
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("Продолжить в Codex", callback_data=self.switch_callback_data(chat_id, "codex")),
+            InlineKeyboardButton(wait, callback_data=self.switch_callback_data(chat_id, "wait")),
+        ]])
+
+    async def _switch_action(self, update, context, query, chat: str, decision: str) -> None:
+        if decision == "codex":
+            job = self.router.offer_job(chat)
+            if job is None:
+                await query.edit_message_text(text="Это предложение устарело.", reply_markup=None)
+                return
+            await query.edit_message_text(text="🟢 Продолжаю в Codex.", reply_markup=None)
+            await self._run(update, context, job.prompt, task=job.task, runtime="codex")
+            return
+        offer = worker.load_offer(chat)
+        if not offer:
+            await query.edit_message_text(text="Это предложение устарело.", reply_markup=None)
+            return
+        at = offer.get("resets_at") or (time.time() + 3600)
+        worker.defer(chat, at=at, prompt=offer.get("prompt", ""), task=offer.get("task") or "задача")
+        worker.drop_offer(chat)
+        await query.edit_message_text(text=f"Хорошо, жду. Начну в Claude в {_hhmm(at)} и напишу.", reply_markup=None)
+
+    async def check_deferred(self, now: float | None = None) -> list[str]:
+        """«Подождать»: задачи, чьё время пришло, — в Claude, ответ придёт как обычный."""
+        if self.bot is None or self.owner_id is None:
+            return []
+        started = []
+        for item in worker.due_deferred(now):
+            job = Job(prompt=item["prompt"], task=item["task"], uses_browser=False, on_event=_ignore_event,
+                      runtime="claude")
+            if not hasattr(self, "_schedule_runs"):
+                self._schedule_runs = []
+            self._schedule_runs.append(asyncio.ensure_future(self._run_scheduled(job)))
+            started.append(item["task"])
+        return started
+
     async def _deliver_inner(self, context, chat_id, result) -> None:
+        if getattr(result, "switched_back", False) is True:
+            await self._send(context, chat_id, "Лимит Claude восстановился — дальше снова работаю в Claude.")
+        offer = getattr(result, "switch_offer", None)
+        if isinstance(offer, dict):
+            await self._send(context, chat_id, self._offer_text(offer),
+                             reply_markup=self._switch_keyboard(chat_id, offer))
+            return
         if getattr(result, "brief", False) is True:
             await self._send(context, chat_id,
                              "Начал новый разговор после паузы — что было раньше, взял из журнала задач.")
@@ -602,6 +688,10 @@ class Gateway:
                 await self.check_schedule()
             except Exception as exc:  # noqa: BLE001
                 log.warning("проверка расписания не удалась: %s", type(exc).__name__)
+            try:
+                await self.check_deferred()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("отложенные задачи не запустились: %s", type(exc).__name__)
 
     async def _draft_action(self, query, token: str, value: str, decision: str) -> None:
         kind, _, name = value.partition(":")
@@ -690,6 +780,9 @@ class Gateway:
             await self._mark_content(query, value, decision)
         elif prefix == DRAFT_PREFIX:
             await self._draft_action(query, token, value, decision)
+        elif prefix == SWITCH_PREFIX:
+            self._tokens.pop(token, None)   # выбор одноразовый
+            await self._switch_action(update, context, query, value, decision)
         self._prune_tokens()
 
     async def _resolve_approval(self, query, request_id: str, decision: str) -> None:
@@ -720,6 +813,8 @@ class Gateway:
         app.add_handler(CommandHandler("new", self.cmd_new))
         app.add_handler(CommandHandler("stop", self.cmd_stop))
         app.add_handler(CommandHandler("status", self.cmd_status))
+        app.add_handler(CommandHandler("codex", self.cmd_codex))
+        app.add_handler(CommandHandler("claude", self.cmd_claude))
         app.add_handler(CommandHandler("browser_login", self.cmd_browser_login))
         app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, self.on_voice))
         app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, self.on_file))
@@ -746,6 +841,13 @@ async def _ignore_event(ev) -> None:
 class _BotContext:
     """То же, что telegram `context`, для отправки вне хода: `_send_attachments` берёт из него `.bot`."""
     bot: object
+
+
+def _hhmm(epoch) -> str:
+    try:
+        return dt.datetime.fromtimestamp(float(epoch)).strftime("%H:%M")
+    except (TypeError, ValueError, OSError, OverflowError):
+        return "?"
 
 
 def _task_name(prompt: str) -> str:
@@ -792,7 +894,9 @@ def run(config: Config | None = None) -> int:
             watcher.cancel()
         await approvals.stop()
 
-    app = (Application.builder().token(config.token)
+    # concurrent_updates: пока ход ждёт её кнопку «Подтвердить», /stop или /status, эти апдейты должны
+    # обрабатываться, а не стоять в очереди за ходом. Порядок задач чата держит очередь task_router.
+    app = (Application.builder().token(config.token).concurrent_updates(True)
            .post_init(post_init).post_shutdown(post_shutdown).build())
     gw.register(app)
     log.info("JARVIS запущен, режим настройки: %s", gw.setup_mode)

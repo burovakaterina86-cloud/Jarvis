@@ -48,6 +48,8 @@ class TurnResult:
     brief: bool = False                                # свежая сессия после паузы со сводкой (P3.1)
     runtime: str = "claude"                            # кто выполнял ход: claude | codex (P4.1)
     resets_at: float | None = None                     # когда снимется лимит (epoch), если известно
+    switch_offer: dict | None = None                   # лимит Claude: предложить Codex кнопкой (P4.1e)
+    switched_back: bool = False                        # лимит Claude восстановился — вернулись к нему
 
 
 @dataclass(frozen=True)
@@ -272,6 +274,11 @@ def _absorb(out: _Outcome, ev: dict, cwd=None) -> None:
         out.api_error = ev["error"]
     elif t == "rate_limit_event":
         info = ev.get("rate_limit_info") or {}
+        try:   # для /status: последний известный лимит Claude (P4.1f)
+            from runtime import worker
+            worker.save_limits("claude", {"status": info.get("status"), "resets_at": info.get("resetsAt")})
+        except Exception:  # noqa: BLE001 — запись лимита не должна ронять ход
+            pass
         if info.get("status") == "rejected":
             out.api_error = "rate_limit"
             out.resets_at = info.get("resetsAt")

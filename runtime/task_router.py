@@ -17,6 +17,11 @@
 процесс-проверяющий без истории исполнителя; `fix` → замечания исполнителю → повторная проверка.
 Каждый запуск проверяющего и исправления тратит дневной лимит запусков, как обычный ход.
 
+Исполнители (P4.1e, `runtime/worker.py`): по умолчанию Claude; лимит Claude кончился → в результате
+`switch_offer` (бот показывает кнопки «Продолжить в Codex / Подождать»); `offer_job` собирает задачу для
+Codex со сводкой; дальше чат работает в Codex до сброса лимита Claude и сам возвращается к нему
+(`switched_back`). Codex запускается, только если `codex_check` подтвердил, что Guard в нём жив.
+
 Режимы контекста хода (P3.1): `chat` — продолжение сессии чата (`--resume`); `isolated` — без истории
 (расписание, проверяющий); `brief` — чат молчал дольше JARVIS_SESSION_IDLE_HOURS (8 ч, 0 — выключено):
 новая сессия, в начале промпта — сводка трёх последних задач чата из `memory/episodes/` и ждущий план.
@@ -35,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from runtime import claude_bridge, events, review, spec, task_state
+from runtime import claude_bridge, codex_bridge, events, review, spec, task_state, worker
 from runtime import sessions as sessions_mod
 from runtime.redact import redact
 
@@ -68,6 +73,8 @@ class Job:
     started: float | None = field(default=None, init=False, repr=False)  # ставит роутер
     spec: dict | None = field(default=None, init=False, repr=False)      # план, который исполняет ход
     session_mode: str = field(default="", init=False, repr=False)        # resume | new | brief | isolated
+    runtime: str | None = None        # явно: "codex" после её кнопки; None — кто активен в чате
+    runtime_used: str = field(default="claude", init=False, repr=False)
 
     def __post_init__(self):
         if self.context not in CONTEXTS:
@@ -136,7 +143,8 @@ def run_id_for(chat_id) -> str:
 class TaskRouter:
     def __init__(self, *, budget: int | None = None, budget_path: str | Path | None = None,
                  env: dict | None = None, claude_cmd: list[str] | None = None, sessions=None,
-                 git_status=None, tests_runner=None, clock=None):
+                 git_status=None, tests_runner=None, clock=None, codex_cmd: list[str] | None = None,
+                 codex_check=None, limits_reader=None):
         self.budget = budget
         self.budget_path = Path(budget_path) if budget_path else BUDGET_PATH
         self.env = env
@@ -147,6 +155,10 @@ class TaskRouter:
         self.tests_runner = tests_runner or run_tests
         self.clock = clock or time.time
         self.idle_hours = _idle_from_env()
+        self.codex_cmd = codex_cmd
+        self.codex_check = codex_check or (lambda: codex_bridge.ensure_ready(env=self.env, codex_cmd=self.codex_cmd))
+        self.limits_reader = limits_reader or codex_bridge.read_limits
+        self.runtimes = {"claude": claude_bridge, "codex": codex_bridge}
         self._queues: dict[str, deque] = {}
         self._active: dict[str, Job] = {}
         self._workers: dict[str, asyncio.Task] = {}
@@ -175,8 +187,52 @@ class TaskRouter:
         return len(self._queues.get(key, ())) + (1 if key in self._active else 0)
 
     def stop(self, chat_id) -> bool:
-        """Останавливает активную задачу чата (очередь не трогает)."""
-        return claude_bridge.stop(run_id_for(chat_id))
+        """Останавливает активную задачу чата (очередь не трогает) — у любого исполнителя."""
+        run_id = run_id_for(chat_id)
+        return any([claude_bridge.stop(run_id), codex_bridge.stop(run_id)])
+
+    # ---- исполнители (P4.1e)
+
+    def runtime_for(self, chat_id) -> str:
+        return worker.current(str(chat_id)).get("runtime", "claude")
+
+    def set_runtime(self, chat_id, runtime: str, until: float | None = None) -> None:
+        worker.switch(str(chat_id), runtime, until=until, now=self.clock())
+
+    def _codex_enabled(self) -> bool:
+        env = self.env if self.env is not None else os.environ
+        return str(env.get("JARVIS_CODEX", "on")).lower() not in ("off", "0", "no")
+
+    def offer_job(self, chat_id, until: float | None = None) -> Job | None:
+        """Её кнопка «Продолжить в Codex»: задача из сохранённого предложения + сводка для Codex."""
+        key = str(chat_id)
+        offer = worker.load_offer(key)
+        if not offer:
+            return None
+        self.set_runtime(key, "codex", until=until if until is not None else offer.get("resets_at"))
+        worker.drop_offer(key)
+        lines = ["[JARVIS] Ты продолжаешь задачу, которую начал Claude: у него кончился лимит подписки. "
+                 "Его разговор тебе не виден — вот что известно.", "", "Запрос владелицы:", offer.get("prompt", "")]
+        if offer.get("spec"):
+            lines += ["", "Согласованный план:", str(offer["spec"])[:3000]]
+        if offer.get("files"):
+            lines += ["", "Claude уже менял эти файлы — проверь их и не делай работу заново:"]
+            lines += [f"- {f}" for f in offer["files"][:40]]
+        lines += ["", "Доведи задачу до конца и ответь владелице итогом: что сделано и где лежит."]
+        return Job(prompt="\n".join(lines), task=offer.get("task") or "продолжение в Codex", runtime="codex")
+
+    def _pick_runtime(self, key: str, job: Job) -> tuple[str, bool]:
+        if job.runtime:
+            return job.runtime, False
+        return worker.active(key, now=self.clock())
+
+    def _handoff_back(self) -> str:
+        cut = lambda text: " ".join(str(text or "").split())[:BRIEF_TEXT_LIMIT]  # noqa: E731
+        lines = ["[JARVIS] Пока у тебя был исчерпан лимит, работал Codex. Его последние задачи "
+                 "(подробности — в файлах и memory/episodes/):"]
+        lines += [f"- {cut(r.get('request'))} → {cut(r.get('result'))} [{r.get('status', '?')}]"
+                  for r in self._recent_episodes(5)] or ["- (записей нет)"]
+        return "\n".join(lines) + "\n\nСообщение владелицы:\n"
 
     async def _worker(self, key: str) -> None:
         q = self._queues[key]
@@ -212,7 +268,10 @@ class TaskRouter:
                 self.sessions.get(key), False, None, "error", "daily_budget_exceeded", attempts=0)
         task_state.emit(job.task_id, job.task, "running", chat=key)
         isolated = job.context == "isolated"
-        sid = None if isolated else self.sessions.get(key)
+        runtime, back = self._pick_runtime(key, job)
+        job.runtime_used = runtime
+        skey = worker.session_key(key, runtime)
+        sid = None if isolated else self.sessions.get(skey)
         prompt = job.prompt
         job.session_mode = "isolated" if isolated else ("resume" if sid else "new")
         if not isolated:
@@ -223,36 +282,61 @@ class TaskRouter:
             touch = getattr(self.sessions, "touch", None)   # хранилище без учёта активности — без brief
             if touch:
                 touch(key, self.clock())
+        if back and job.session_mode != "brief":
+            prompt = self._handoff_back() + prompt
+        if runtime == "codex":
+            ok, why = await self.codex_check()
+            if not ok:
+                self._refund_budget()
+                events.emit("error", subtype="codex_not_ready", task=job.task, task_id=job.task_id, status="failed")
+                return claude_bridge.TurnResult(why, sid, False, None, "error", "codex_not_ready",
+                                                runtime="codex", attempts=0)
         limit = job.timeout_sec or self.default_timeout
         before = await asyncio.to_thread(self.git_status)
         job.started = time.monotonic()
-        res = await self._timed(key, job, prompt, sid, limit, on_event=job.on_event)
+        res = await self._timed(key, job, prompt, sid, limit, on_event=job.on_event, runtime=runtime)
+        res.switched_back = back
         if job.session_mode == "brief":
             res.brief, res.new_session = True, False   # новая сессия запланирована, контекст не «потерян»
         if res.status in ("rate_limited", "auth_required", "error"):
             self._refund_budget()  # неуспешный ход не тратит дневной лимит; таймаут — тратит
         if not isolated and res.session_id and res.session_id != sid:
-            self.sessions.set(key, res.session_id)
+            self.sessions.set(skey, res.session_id)
+        if runtime == "codex" and res.session_id:
+            limits = self.limits_reader(res.session_id)
+            if limits:
+                worker.save_limits("codex", limits)
+        if runtime == "claude" and res.status == "rate_limited" and self._codex_enabled():
+            res.switch_offer = {"task": job.task, "prompt": job.prompt, "spec": (job.spec or {}).get("text"),
+                                "files": [], "resets_at": res.resets_at}
+            worker.save_offer(key, res.switch_offer)
         # Файлы хода: записи Write/Edit плюс то, что git увидел нового (запись командами shell).
         after = await asyncio.to_thread(self.git_status)
         res.files = sorted(set(res.files) | (set(after) - set(before)))
+        if res.switch_offer is not None:   # Codex должен знать, что Claude уже успел изменить
+            res.switch_offer["files"] = list(res.files)
+            worker.save_offer(key, res.switch_offer)
         if not isolated and res.status == "ok":
             self._track_spec(key, job, res)
         if review.needs_review(job, res, env=self.env if self.env is not None else os.environ):
             res = await self._review(key, job, res, limit)
+        if runtime == "codex" and res.status == "ok":
+            res.text = (res.text or "").rstrip() + "\n\n🟢 Сделано в Codex"
         return res
 
     async def _timed(self, key: str, job: Job, prompt: str, sid, limit: float,
-                     options=claude_bridge.DEFAULT_OPTIONS, on_event=None):
-        """Один запуск claude с пределом времени: по истечении — стоп дерева процесса, статус timeout."""
+                     options=claude_bridge.DEFAULT_OPTIONS, on_event=None, runtime: str = "claude"):
+        """Один запуск исполнителя с пределом времени: по истечении — стоп дерева процесса, статус timeout."""
         run_id = run_id_for(key)
-        turn = asyncio.ensure_future(claude_bridge.run_turn(
+        bridge = self.runtimes[runtime]
+        cmd = {"claude_cmd": self.claude_cmd} if runtime == "claude" else {"codex_cmd": self.codex_cmd}
+        turn = asyncio.ensure_future(bridge.run_turn(
             prompt, sid, on_event, run_id=run_id, task=job.task, env=self.env,
-            claude_cmd=self.claude_cmd, task_id=job.task_id, options=options))
+            task_id=job.task_id, options=options, **cmd))
         done, _ = await asyncio.wait({turn}, timeout=limit)
         if not done:
             # Останавливаем тем же путём, что /stop: дерево процесса, ход возвращает «stopped».
-            claude_bridge.stop(run_id)
+            bridge.stop(run_id)
             res = await turn
         else:
             res = turn.result()
@@ -275,7 +359,7 @@ class TaskRouter:
                 break
             task_state.emit(job.task_id, job.task, "review", chat=key, round=round_no)
             checked = await self._timed(key, job, review.build_prompt(job, res, tests), None, limit,
-                                        options=review.OPTIONS)
+                                        options=review.OPTIONS, runtime=job.runtime_used)
             verdict = review.parse(checked)
             if verdict is None:
                 if checked.status in ("rate_limited", "auth_required", "error"):
@@ -290,7 +374,7 @@ class TaskRouter:
             task_state.emit(job.task_id, job.task, "running", chat=key, fixing=True)
             before = await asyncio.to_thread(self.git_status)
             fixed = await self._timed(key, job, review.fix_prompt(verdict), res.session_id, limit,
-                                      on_event=job.on_event)
+                                      on_event=job.on_event, runtime=job.runtime_used)
             if fixed.status != "ok":
                 break
             after = await asyncio.to_thread(self.git_status)
@@ -299,12 +383,12 @@ class TaskRouter:
             fixed.tool_uses += res.tool_uses
             fixed.cost_usd = (fixed.cost_usd or 0) + (res.cost_usd or 0)
             if fixed.session_id and fixed.session_id != res.session_id:
-                self.sessions.set(key, fixed.session_id)
+                self.sessions.set(worker.session_key(key, job.runtime_used), fixed.session_id)
             res = fixed
             if review.code_changed(res.files):
                 tests = await asyncio.to_thread(self.tests_runner)
         res.review = result
-        res.text = review.annotate(res.text, result)
+        res.text = review.annotate(res.text, result, by="Codex" if job.runtime_used == "codex" else None)
         return res
 
     def _idle(self, key: str) -> float | None:
@@ -369,7 +453,7 @@ class TaskRouter:
                         spec_task_id=(job.spec or {}).get("task_id"),
                         review_verdict=(res.review or {}).get("verdict"),
                         review_rounds=(res.review or {}).get("rounds"),
-                        session_mode=job.session_mode, progress=1.0)
+                        session_mode=job.session_mode, runtime=job.runtime_used, progress=1.0)
             if res.status in WORKED and res.attempts > 0:
                 self._write_episode(job, res)
         except Exception:  # noqa: BLE001 — журнал не должен ронять очередь
@@ -380,7 +464,7 @@ class TaskRouter:
         cut = lambda text: redact((text or "").strip())[:EPISODE_TEXT_LIMIT]  # noqa: E731
         record = {"date": now.isoformat(timespec="seconds"), "session": res.session_id,
                   "trigger": "turn_end", "task_id": job.task_id, "task": job.task,
-                  "status": res.status, "context": job.context,
+                  "status": res.status, "context": job.context, "runtime": job.runtime_used,
                   "request": cut(job.prompt), "result": cut(res.text),
                   "files": list(res.files)[:EPISODE_FILES_LIMIT]}
         path = Path(EPISODES_DIR) / f"{now:%Y-%m}.jsonl"

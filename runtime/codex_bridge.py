@@ -88,8 +88,7 @@ def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS,
                    "-c", 'approval_policy="never"',
                    "-c", "sandbox_workspace_write.network_access=true",
                    "-c", "developer_instructions=" + json.dumps(brain(options.prompt_file), ensure_ascii=False)]
-    if not session_id:
-        args.append("--skip-git-repo-check")
+    args.append("--skip-git-repo-check")   # есть и у exec, и у exec resume
     if not options.persist:
         args.append("--ephemeral")
     if schema_path is not None:
@@ -250,3 +249,134 @@ def stop(run_id: str) -> bool:
         except (ProcessLookupError, OSError):
             pass
     return True
+
+
+# ---------- готовность: Guard отвечает и Codex ему доверяет (P4.1c) ----------
+
+CANARY = "JARVIS_HOOK_CANARY"
+TRUST_TTL_SEC = 6 * 3600
+HOOK_BROKEN_TEXT = ("Codex не запускаю: Guard для Codex не отвечает ({why}). "
+                    "Без проверки разрешений Codex подключать нельзя.")
+TRUST_TEXT = ("Codex не запускаю: он ещё не доверяет хукам Jarvis, значит Guard в нём не работает.\n"
+              "Как включить (один раз):\n"
+              "1. Открой терминал в папке Jarvis.\n"
+              "2. Запусти: codex\n"
+              "3. Введи /hooks и подтверди хук «JARVIS Guard».\n"
+              "4. Выйди из Codex и нажми «Продолжить в Codex» ещё раз.")
+
+
+def _hook_command(root: Path) -> str | None:
+    try:
+        data = json.loads((root / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+        return data["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        return None
+
+
+def preflight_hook(root: Path | str = ROOT) -> tuple[bool, str]:
+    """Канарейка без Codex: команда хука из .codex/hooks.json на заведомо запрещённом вызове обязана
+    ответить JSON-запретом. Хук Codex fail-open — поэтому мост не запускает Codex, пока хук молчит."""
+    root = Path(root)
+    command = _hook_command(root)
+    if not command:
+        return False, "нет .codex/hooks.json с командой PreToolUse"
+    event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "cwd": str(root),
+             "tool_input": {"command": f"Get-Content {CANARY}"}}
+    env = build_env()
+    env["JARVIS_TASK_ID"] = "preflight"
+    try:
+        proc = subprocess.run(command.split(), input=json.dumps(event).encode("utf-8"), capture_output=True,
+                              cwd=str(root), env=env, timeout=30,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        answer = json.loads(proc.stdout.decode("utf-8", "replace").strip().splitlines()[-1])
+        out = answer["hookSpecificOutput"]
+        if out.get("permissionDecision") == "deny" and "canary" in str(out.get("permissionDecisionReason")):
+            return True, ""
+        return False, f"хук ответил не так: {out}"
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError) as exc:
+        return False, f"хук не запустился: {type(exc).__name__}"
+
+
+async def _trust_canary(root: Path, env: dict | None, codex_cmd: list[str] | None) -> bool:
+    """Короткий ход Codex с командой-канарейкой: если Guard её увидел (оставил отметку) — хукам доверяют."""
+    mark = root / "state" / "codex_canary.json"
+    before = mark.stat().st_mtime if mark.exists() else 0.0
+    child_env = build_env(env)
+    child_env["JARVIS_TASK_ID"] = "trust-check"
+    cmd = list(codex_cmd or default_codex_cmd()) + [
+        "exec", "--json", "--ephemeral", "--disable", "plugins", "--skip-git-repo-check",
+        "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"',
+        f"Выполни в PowerShell ровно одну команду: Get-Content {CANARY} . Ответь одним словом."]
+    try:
+        proc = await asyncio.create_subprocess_exec(*cmd, stdin=asyncio.subprocess.DEVNULL,
+                                                    stdout=asyncio.subprocess.DEVNULL,
+                                                    stderr=asyncio.subprocess.DEVNULL, cwd=str(root), env=child_env)
+        await asyncio.wait_for(proc.wait(), 300)
+    except (OSError, asyncio.TimeoutError):
+        return False
+    return mark.exists() and mark.stat().st_mtime > before
+
+
+async def ensure_ready(root: Path | str = ROOT, env: dict | None = None, codex_cmd: list[str] | None = None,
+                       now: float | None = None) -> tuple[bool, str]:
+    """(можно запускать Codex, причина отказа для владелицы)."""
+    import time as _time
+    root = Path(root)
+    now = _time.time() if now is None else now
+    ok, why = await asyncio.to_thread(preflight_hook, root)
+    if not ok:
+        return False, HOOK_BROKEN_TEXT.format(why=why)
+    trust_file = root / "state" / "codex_trust.json"
+    try:
+        last = float(json.loads(trust_file.read_text(encoding="utf-8")).get("ts", 0))
+    except (OSError, ValueError, AttributeError):
+        last = 0.0
+    if last and now - last < TRUST_TTL_SEC:   # нет записи — доверие ещё не проверяли
+        return True, ""
+    if not await _trust_canary(root, env, codex_cmd):
+        return False, TRUST_TEXT
+    trust_file.parent.mkdir(parents=True, exist_ok=True)
+    trust_file.write_text(json.dumps({"ts": now}), encoding="utf-8")
+    return True, ""
+
+
+# ---------- лимиты Codex из файла сессии (P4.1f) ----------
+
+def _find_key(obj, key):
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for value in obj.values():
+            found = _find_key(value, key)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for value in obj:
+            found = _find_key(value, key)
+            if found is not None:
+                return found
+    return None
+
+
+def read_limits(thread_id: str, home: Path | str | None = None) -> dict | None:
+    """Последние `rate_limits` из файла сессии Codex (`~/.codex/sessions/**/rollout-*<thread>.jsonl`)."""
+    if not thread_id:
+        return None
+    base = Path(home or os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "sessions"
+    files = sorted(base.rglob(f"*{thread_id}*.jsonl")) if base.is_dir() else []
+    if not files:
+        return None
+    try:
+        lines = files[-1].read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if '"rate_limits"' not in line:
+            continue
+        try:
+            found = _find_key(json.loads(line), "rate_limits")
+        except ValueError:
+            continue
+        if isinstance(found, dict):
+            return {k: found[k] for k in ("primary", "secondary") if isinstance(found.get(k), dict)}
+    return None

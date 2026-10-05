@@ -14,6 +14,10 @@ LIVE_JOURNALS = (
     REPO / "state" / "approvals.jsonl",
     REPO / "state" / "sessions.json",
     REPO / "state" / "session_activity.json",   # время её последнего хода (P3.1)
+    REPO / "state" / "runtime.json",            # кто работает: Claude или Codex (P4.1)
+    REPO / "state" / "limits.json",
+    REPO / "state" / "deferred.json",
+    REPO / "state" / "codex_canary.json",
     # эпизоды пишет и мост (task_router.EPISODES_DIR): тест с настоящим роутером подменяет путь
     REPO / "memory" / "episodes" / f"{date.today():%Y-%m}.jsonl",
 )
@@ -32,6 +36,13 @@ def live_journals_untouched():
         f"тесты дописали в боевые журналы: {changed}. Подпроцессный Guard запускай через "
         "фикстуру guard_copy (копия во временном корне). Если в это время работал бот — "
         "запись могла быть его, перезапусти тесты при остановленном боте.")
+
+
+@pytest.fixture(autouse=True)
+def isolated_worker_state(tmp_path, monkeypatch):
+    """Кто работает (Claude/Codex), лимиты, предложения и отложенные задачи — во временной папке."""
+    from runtime import worker
+    monkeypatch.setattr(worker, "STATE_DIR", tmp_path / "worker-state")
 
 
 @pytest.fixture

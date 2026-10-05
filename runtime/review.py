@@ -101,8 +101,8 @@ def parse(res) -> dict | None:
             "checked": [str(c) for c in data.get("checked") or []]}
 
 
-def annotate(text: str, review: dict) -> str:
-    """Строка для владелицы под ответом исполнителя."""
+def annotate(text: str, review: dict, by: str | None = None) -> str:
+    """Строка для владелицы под ответом исполнителя (`by` — кто проверял, если не Claude)."""
     verdict, rounds = review.get("verdict"), review.get("rounds", 1)
     if verdict == "pass":
         tail = "✅ Независимая проверка: пройдена" + (" после исправлений." if rounds > 1 else ".")
@@ -112,4 +112,6 @@ def annotate(text: str, review: dict) -> str:
         tail = f"⚠️ Независимая проверка: {head}:\n" + "\n".join(f"- {p}" for p in problems[:5])
     else:
         tail = f"⚠️ Независимая проверка не выполнилась: {review.get('error') or 'нет вердикта'}."
+    if by:
+        tail = tail.replace("Независимая проверка", f"Независимая проверка (проверял {by})", 1)
     return ((text or "").rstrip() + "\n\n" + tail).strip()
