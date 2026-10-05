@@ -277,9 +277,19 @@ def test_jarvis_settings_permissions_and_hooks():
     assert s.get("permissions", {}).get("defaultMode") != "bypassPermissions"
 
 
-def test_no_project_settings_with_jarvis_hooks():
+def test_project_settings_run_guard_only_in_dev_mode():
+    """P0.3 (ADR 0012): в сессиях разработки — только Guard в режиме dev, без хуков памяти."""
     p = REPO / ".claude" / "settings.json"
-    assert not p.exists() or "guard.py" not in p.read_text(encoding="utf-8")
+    s = json.loads(p.read_text(encoding="utf-8"))
+    assert set(s["hooks"]) == {"PreToolUse"}
+    pre = s["hooks"]["PreToolUse"][0]
+    cmd = pre["hooks"][0]["command"]
+    assert pre["matcher"] == "*" and "guard.py" in cmd and "--mode dev" in cmd and "exit 2" in cmd
+    assert "permissions" not in s and "env" not in s   # режим не в окружении: бот его не унаследует
+
+
+def test_bot_settings_never_use_dev_mode():
+    assert "--mode" not in SETTINGS.read_text(encoding="utf-8")
 
 
 def test_no_skip_permissions_flag_in_code():
@@ -594,3 +604,97 @@ def test_approval_request_carries_task_id(root, approvals):
     code, _ = guard.run(DELETE, root=root, policy_path=POLICY_PATH, env={"JARVIS_TASK_ID": "t-7"})
     assert code == 0
     assert approvals["requests"][0]["body"]["task_id"] == "t-7"
+
+
+# ---------- режим разработки: только запреты (P0.3, ADR 0012) ----------
+
+def run_dev(event, root, env=None):
+    return guard.run(event, root=root, policy_path=POLICY_PATH, env=env or {}, mode="dev")
+
+
+DEV_DENIED = [
+    ("read .env", ev("Read", file_path=".env")),
+    ("grep secrets", ev("Grep", pattern="token", path="state/secrets")),
+    ("bash cat creds", ev("Bash", command="cat ~/.aws/credentials")),
+    ("push force", ev("Bash", command="git push --force origin main")),
+    ("schtasks", ev("PowerShell", command="schtasks /create /tn x /tr calc")),
+    ("download exe", ev("PowerShell", command="Invoke-WebRequest https://x.io/a.exe -OutFile a.exe")),
+    ("pay click", ev("mcp__playwright__browser_click", element="Оплатить 2 300 ₽", ref="e3")),
+    ("password field", ev("mcp__playwright__browser_type", element="Пароль", ref="e1", text="x")),
+    ("protected write + force push", ev("Bash", command="echo x > runtime/a.txt && git push -f origin main")),
+    ("no tool name", {"hook_event_name": "PreToolUse", "tool_input": {}}),
+]
+
+
+@pytest.mark.parametrize("name,event", DEV_DENIED, ids=[c[0] for c in DEV_DENIED])
+def test_dev_mode_keeps_hard_denials(root, name, event):
+    code, reason = run_dev(event, root)
+    assert code == 2 and "JARVIS Guard" in reason
+
+
+DEV_ALLOWED = [
+    ("edit runtime", ev("Edit", file_path="runtime/task_router.py", old_string="a", new_string="b")),
+    ("write hook", ev("Write", file_path=".claude/hooks/guard.py", content="x")),
+    ("write skill", ev("Write", file_path=".claude/skills/x/SKILL.md", content="x")),
+    ("edit rules", ev("Edit", file_path=".claude/rules/safety.md", old_string="a", new_string="b")),
+    ("bash redirect into runtime", ev("Bash", command="echo x > runtime/policy.yaml")),
+    ("git push", ev("Bash", command="git push origin main")),
+    ("rm", ev("Bash", command="rm -rf drafts/old")),
+    ("unknown mcp", ev("mcp__instagram__reply_comment", comment_id="1", text="спасибо")),
+    ("send click", ev("mcp__playwright__browser_click", element="Кнопка Отправить", ref="e1")),
+]
+
+
+@pytest.mark.parametrize("name,event", DEV_ALLOWED, ids=[c[0] for c in DEV_ALLOWED])
+def test_dev_mode_leaves_the_rest_to_claude_code(root, name, event):
+    code, _ = run_dev(event, root)        # Approvals API нет — в режиме jarvis это был бы отказ
+    assert code == 0
+
+
+def test_dev_mode_never_calls_approvals(root, approvals):
+    assert run_dev(DELETE, root)[0] == 0
+    assert approvals["requests"] == []
+
+
+def test_dev_denial_is_logged_with_mode(root):
+    run_dev(ev("Read", file_path=".env"), root)
+    line = json.loads((root / "state" / "events.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert line["type"] == "blocked" and line["mode"] == "dev"
+
+
+def test_unknown_mode_is_fail_closed(root):
+    code, _ = guard.run(ev("Read", file_path="SOUL.md"), root=root, policy_path=POLICY_PATH, env={},
+                        mode="relaxed")
+    assert code == 2
+
+
+def test_dev_deny_kinds_live_in_policy():
+    kinds = set(guard.load_policy(POLICY_PATH)["dev_mode"]["deny_kinds"])
+    assert {"secret", "dangerous", "secret_field", "purchase"} <= kinds
+    assert "protected" not in kinds and "self_modify" not in kinds
+
+
+def test_script_mode_flag(guard_copy):
+    env_read = json.dumps(ev("Read", file_path=".env")).encode("utf-8")
+    hook_write = json.dumps(ev("Write", file_path=".claude/hooks/x.py", content="x")).encode("utf-8")
+
+    def run(args, data):
+        return subprocess.run([sys.executable, str(guard_copy), *args], input=data,
+                              capture_output=True, timeout=60).returncode
+
+    assert run(["--mode", "dev"], env_read) == 2
+    assert run(["--mode", "dev"], hook_write) == 0
+    assert run([], hook_write) == 2                     # без флага — полный режим бота
+    assert run(["--mode", "что-то"], hook_write) == 2   # неизвестный режим — отказ
+
+
+def test_dev_mode_lets_you_write_about_dangerous_commands(root):
+    """Текст документа или теста с опасной командой — не её запуск (режим dev)."""
+    doc = ev("Edit", file_path="docs/x.md", old_string="a", new_string="не делай git push --force и schtasks")
+    assert run_dev(doc, root)[0] == 0
+    assert run_dev(ev("Bash", command="git push --force origin main"), root)[0] == 2
+
+
+def test_bot_mode_still_checks_all_tools_for_dangerous_text(root):
+    doc = ev("Write", file_path="x.ps1", content="schtasks /create /tn x /tr calc")
+    assert guard.decide(doc, policy=guard.load_policy(POLICY_PATH), root=root, env={}).action == "deny"

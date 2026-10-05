@@ -15,6 +15,7 @@
 #   protected_write_paths: [<glob>, ...] — запись → DENY
 #   ask_write_paths: [<glob>, ...]       — собственные правила JARVIS: запись → EXTERNAL (kind self_modify),
 #                                          на кнопке путь и начало правки (её решение 2026-10-05, аудит P0.4)
+#   dev_mode: {deny_kinds: [<вид>, ...]}  — какие отказы действуют в сессиях разработки (guard.py --mode dev)
 #   allow_write_paths: [<glob>, ...]     — запись вне корня проекта, разрешённая без запроса
 #                                          (внутри корня WRITE и так автоматически)
 #   big_read: {max_kb: int, tools: {<имя>: <поле пути>}, chunk_fields: [<поле>, ...]}
@@ -136,6 +137,11 @@ ask_write_paths:
   - ".codex/**"
 
 allow_write_paths: []
+
+# Режим разработки (guard.py --mode dev из .claude/settings.json, ADR 0012): действуют только
+# отказы этих видов; защищённые пути сняты, остальное спрашивает сам Claude Code.
+dev_mode:
+  deny_kinds: [secret, dangerous, secret_field, purchase, malformed]
 
 rules:
   # --- опасные команды: отказ ---

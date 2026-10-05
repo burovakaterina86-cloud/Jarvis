@@ -6,7 +6,14 @@
 Публичное:
     load_policy(path) -> dict
     decide(event, policy, root, env) -> Decision(level, action, reason, kind)   # чистая функция
-    run(event, root, policy_path, env) -> (exit_code, reason)                   # с запросом к Approvals API
+    run(event, root, policy_path, env, mode) -> (exit_code, reason)             # с запросом к Approvals API
+
+Режимы (аргумент `--mode`, не переменная окружения — бот не должен его унаследовать):
+    jarvis (по умолчанию) — бот: всё по policy.yaml, EXTERNAL/MONEY — кнопка в Telegram;
+    dev — сессии разработки Claude Code (`.claude/settings.json`): действуют только жёсткие
+          запреты из `policy.yaml: dev_mode.deny_kinds` (секреты, опасные команды, пароли/карты,
+          оплата); защищённые пути сняты, остальное решают штатные разрешения Claude Code.
+Неизвестный режим — отказ (ADR 0012).
 """
 from __future__ import annotations
 
@@ -20,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 LEVELS = ["READ", "WRITE", "EXTERNAL", "MONEY", "DENY"]
+MODES = ("jarvis", "dev")
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_POLICY = ROOT / "runtime" / "policy.yaml"
 
@@ -464,25 +472,47 @@ def _masked(reason: str, root) -> str:
         return "причина скрыта: нет runtime/redact.py для маскировки"
 
 
-def _log_blocked(root, event: dict, reason: str, task_id: str | None = None) -> None:
+def _log_blocked(root, event: dict, reason: str, task_id: str | None = None,
+                 mode: str = "jarvis") -> None:
     try:
         path = Path(root) / "state" / "events.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         line = {"ts": datetime.now(timezone.utc).isoformat(), "type": "blocked",
                 "session": event.get("session_id"), "agent": "jarvis", "task": "",
                 "status": "working", "progress": None, "task_id": task_id,
-                "tool": event.get("tool_name"), "reason": _masked(reason, root)}
+                "tool": event.get("tool_name"), "reason": _masked(reason, root), "mode": mode}
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
     except Exception:
         pass
 
 
-def run(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None) -> tuple[int, str]:
+def _dev_policy(policy: dict) -> dict:
+    """Политика для режима dev: без защищённых путей и правки собственных правил —
+    разработчик правит код JARVIS; секреты и правила-запреты остаются."""
+    # Правила «на любой инструмент» здесь смотрят только на то, что исполняется (shell, MCP):
+    # текст документа или теста, где упомянута опасная команда, — не её запуск.
+    executing = "|".join([*(policy.get("shell_tools") or []), "mcp__.*"])
+    rules = [{**r, "tool": executing} if r.get("tool", "*") in ("*", None, "") else r
+             for r in policy.get("rules") or []]
+    return {**policy, "protected_write_paths": [], "ask_write_paths": [], "rules": rules}
+
+
+def run(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None, mode: str = "jarvis") -> tuple[int, str]:
     env = os.environ if env is None else env
     task_id = (env or {}).get("JARVIS_TASK_ID")  # ставит мост — связывает запись с задачей
     try:
+        if mode not in MODES:
+            raise ValueError(f"неизвестный режим Guard: {mode!r}")
         policy = load_policy(policy_path)
+        if mode == "dev":
+            decision = decide(event, policy=_dev_policy(policy), root=root, env=env)
+            deny_kinds = set((policy.get("dev_mode") or {}).get("deny_kinds") or [])
+            if decision.action == "deny" and decision.kind in deny_kinds:
+                reason = f"JARVIS Guard: отказ — {decision.reason}"
+                _log_blocked(root, event if isinstance(event, dict) else {}, reason, task_id, mode)
+                return 2, reason
+            return 0, ""
         decision = decide(event, policy=policy, root=root, env=env)
         if decision.action == "allow":
             return 0, ""
@@ -500,13 +530,23 @@ def run(event: dict, root=ROOT, policy_path=DEFAULT_POLICY, env=None) -> tuple[i
     return 2, reason
 
 
-def main() -> int:
+def _mode_from_argv(argv: list[str]) -> str:
+    """`--mode <режим>` или ничего (режим бота). Любые другие аргументы — ошибка, то есть отказ."""
+    if not argv:
+        return "jarvis"
+    if len(argv) == 2 and argv[0] == "--mode":
+        return argv[1]
+    raise ValueError("неизвестные аргументы Guard")
+
+
+def main(argv: list[str] | None = None) -> int:
     try:
+        mode = _mode_from_argv(sys.argv[1:] if argv is None else argv)
         raw = sys.stdin.buffer.read().decode("utf-8")
         event = json.loads(raw)
         if not isinstance(event, dict):
             raise ValueError("event is not an object")
-        code, reason = run(event)
+        code, reason = run(event, mode=mode)
     except Exception as exc:
         code, reason = 2, f"JARVIS Guard: внутренняя ошибка, отказ ({type(exc).__name__})"
     if code != 0:

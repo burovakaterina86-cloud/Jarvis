@@ -57,6 +57,26 @@ CASES: list[tuple[str, str, dict, int]] = [
 ]
 
 
+DEV_SETTINGS = ROOT / ".claude" / "settings.json"
+
+# режим разработки (guard.py --mode dev из .claude/settings.json, ADR 0012): только жёсткие запреты
+DEV_CASES: list[tuple[str, dict, int]] = [
+    ("чтение .env — отказ",
+     {"hook_event_name": "PreToolUse", "session_id": SELFCHECK_SESSION,
+      "tool_name": "Read", "tool_input": {"file_path": ".env"}}, 2),
+    ("git push --force — отказ",
+     {"hook_event_name": "PreToolUse", "session_id": SELFCHECK_SESSION,
+      "tool_name": "Bash", "tool_input": {"command": "git push --force origin main"}}, 2),
+    ("правка runtime/policy.yaml — пропуск (разработка)",
+     {"hook_event_name": "PreToolUse", "session_id": SELFCHECK_SESSION,
+      "tool_name": "Edit", "tool_input": {"file_path": "runtime/policy.yaml",
+                                          "old_string": "a", "new_string": "b"}}, 0),
+    ("git push — пропуск (спросит сам Claude Code)",
+     {"hook_event_name": "PreToolUse", "session_id": SELFCHECK_SESSION,
+      "tool_name": "Bash", "tool_input": {"command": "git push origin main"}}, 0),
+]
+
+
 BIG_READ_KB = 150  # больше порога big_read.max_kb (100) в runtime/policy.yaml
 
 
@@ -205,6 +225,19 @@ def main() -> int:
                         print(f"    {label}: {text[:300]}")
                 if code != expected:
                     bad += 1
+        dev_cmds = commands(json.loads(DEV_SETTINGS.read_text(encoding="utf-8")), "PreToolUse")
+        if not dev_cmds:
+            print(f"[dev] НЕТ КОМАНДЫ PreToolUse в {DEV_SETTINGS.name}")
+            bad += 1
+        for title, payload, expected in DEV_CASES:
+            for command in dev_cmds:
+                code, _, err = run_hook(bash, command, payload, sandbox)
+                mark = "ok" if code == expected else f"НЕ ТО (ждали {expected})"
+                print(f"[dev] {title}: exit {code} — {mark}")
+                if code != expected:
+                    bad += 1
+                    if err:
+                        print(f"    stderr: {err[:300]}")
         for title, expected, actual in big_read_results(sandbox):
             mark = "ok" if actual == expected else f"НЕ ТО (ждали {expected})"
             print(f"[decide] {title}: {actual} — {mark}")

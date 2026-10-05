@@ -109,7 +109,7 @@ Approvals отдаёт запрос в `Gateway.on_approval_request` → кно�
 - Снимки слайдов — только Python-пакетом `playwright` (`render_image`). Playwright MCP теряет открытую страницу между вызовами, серия снимков через него разваливается; `mcp_plan` — лишь запасной путь, когда пакета нет. Docstring `render.py` («пакета в `.venv` нет») устарел — пакет есть.
 - Сессии исполнителей автопилота обрываются на лимите посреди правки: перед продолжением прогони `pytest -q` — дерево может остаться красным.
 - `state/` и `inbox/` в .gitignore: удалять `state/*.json` на живом боте нельзя, там сессии и бюджет.
-- `runtime/`, `integrations/`, `.claude/hooks|skills|agents`, `.env`, `.mcp.json` закрыты на запись для самого JARVIS через deny в `runtime/jarvis-settings.json` — это его правила, разработчика они не ограничивают.
+- `runtime/`, `integrations/`, `.claude/hooks|skills|agents`, `.env`, `.mcp.json` закрыты на запись для самого JARVIS через deny в `runtime/jarvis-settings.json` — это его правила, разработчика они не ограничивают. Но в сессиях разработки работает `.claude/settings.json` → `guard.py --mode dev` (ADR 0012): нельзя читать `.env*`, искать по слову `credentials`, запускать опасные команды (в т.ч. heredoc в Bash, где они упомянуты — пиши такие тексты через Write/Edit), нажимать «оплатить»; виды отказов — `policy.yaml: dev_mode.deny_kinds`.
 
 ## Как здесь работает Autopilot
 
