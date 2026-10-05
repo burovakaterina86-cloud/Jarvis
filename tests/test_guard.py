@@ -867,3 +867,57 @@ def test_structured_output_tool_is_harmless_read():
     """--json-schema сдаёт ответ инструментом StructuredOutput; найдено живым прогоном ревьюера (P2.2)."""
     d = decide(ev("StructuredOutput", verdict="pass", problems=[], checked=[]), REPO)
     assert (d.level, d.action) == ("READ", "allow")
+
+
+# ---------- большой файл целиком через shell (P3.2, аудит 2026-10-05) ----------
+
+def _shell(command, cwd):
+    event = ev("Bash", command=command)
+    event["cwd"] = str(cwd)
+    return guard.decide(event, policy=guard.load_policy(POLICY_PATH), root=REPO, env={})
+
+
+@pytest.mark.parametrize("cmd", [
+    "cat big.md",
+    "type big.md",
+    "Get-Content big.md",
+    "gc big.md -Encoding utf8",
+    "cat small.md big.md",
+    "cat big.md | grep-not-a-limiter",
+    "cat big.md && echo done",
+])
+def test_whole_big_file_through_shell_asks(cmd, big_file, small_file):
+    d = _shell(cmd, big_file.parent)
+    assert (d.level, d.action, d.kind) == ("EXTERNAL", "ask", "big_read"), d
+    assert "big.md" in d.reason and "КБ" in d.reason
+
+
+@pytest.mark.parametrize("cmd", [
+    "cat small.md",
+    "cat big.md | head -50",
+    "cat big.md | tail -n 20",
+    "Get-Content big.md -TotalCount 40",
+    "Get-Content big.md -Tail 10",
+    "gc big.md | Select-Object -First 30",
+    "cat big.md | grep Guard",
+    "type big.md | findstr Guard",
+    "Get-Content big.md | Select-String Guard",
+    "cat big.md | wc -l",
+    "sed -n 1,40p big.md",
+    "cat missing.md",
+    "head -100 big.md",
+])
+def test_chunks_searches_and_small_files_pass(cmd, big_file, small_file):
+    d = _shell(cmd, big_file.parent)
+    assert d.kind != "big_read", d
+
+
+def test_shell_big_read_lives_in_policy():
+    cfg = guard.load_policy(POLICY_PATH)["big_read"]
+    assert {"cat", "type", "get-content", "gc"} <= set(cfg["shell_readers"])
+    assert {"head", "tail", "select-object", "grep", "-totalcount", "-tail"} <= set(cfg["shell_limiters"])
+
+
+def test_dev_mode_does_not_ask_for_big_reads(root, big_file):
+    event = ev("Bash", command=f"cat {big_file.as_posix()}")
+    assert run_dev(event, root)[0] == 0

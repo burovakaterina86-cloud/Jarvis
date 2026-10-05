@@ -25,6 +25,7 @@
 #                                          (внутри корня WRITE и так автоматически)
 #   big_read: {max_kb: int, tools: {<имя>: <поле пути>}, chunk_fields: [<поле>, ...]}
 #                                        — чтение файла целиком больше max_kb → EXTERNAL (kind big_read).
+#                                          То же для shell: shell_readers без shell_limiters в цепочке.
 #                                          Поиск (Grep/Glob) и чтение куска (указано любое из chunk_fields)
 #                                          не считаются чтением целиком и проходят свободно.
 #   rules: [{tool: <regex имени, полное совпадение; "*" — любой>, match: <regex по JSON аргументов, без учёта регистра>,
@@ -57,6 +58,9 @@ big_read:
     Read: file_path
     NotebookRead: notebook_path
   chunk_fields: [offset, limit]
+  # то же для shell (аудит P3.2): чтение файла целиком этими командами, если в цепочке нет ограничителя
+  shell_readers: [cat, type, get-content, gc]
+  shell_limiters: [head, tail, select-object, select-string, grep, findstr, sed, wc, -totalcount, -head, -tail, -first, -last]
 
 money_kinds:
   - purchase

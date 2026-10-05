@@ -265,9 +265,9 @@ def _big_read(tool: str, tool_input: dict, policy: dict, base: Path) -> str | No
     Поиск (Grep/Glob) сюда не попадает: в big_read.tools только инструменты чтения.
     Кусок проходит, если укладывается в порог по объёму, а не просто назван куском.
 
-    Граница: заслон стоит на инструментах чтения. `Bash: cat <большой файл>` он не ловит —
-    размер в произвольной командной строке надёжно не определить; shell идёт своим путём
-    (WRITE-команда). Заслон не полный, и это сознательное решение, а не пробел.
+    Shell — отдельно, `_big_shell_read`: простые `cat|type|Get-Content <файл>` без ограничителя
+    в цепочке. Произвольные программы, читающие файл сами (python, node), он не ловит — размер
+    в такой командной строке не определить; заслон не полный сознательно.
     """
     cfg = policy.get("big_read") or {}
     field = (cfg.get("tools") or {}).get(tool)
@@ -301,6 +301,46 @@ def _big_read(tool: str, tool_input: dict, policy: dict, base: Path) -> str | No
     return (f"файл {os.path.basename(path)} — {size / 1024:.0f} КБ, это больше {max_kb:g} КБ. "
             f"Целиком такой файл читать дорого: найди нужное через Grep "
             f"или прочитай кусок поменьше, указав offset и limit")
+
+
+_CHAIN_SPLIT = re.compile(r"&&|\|\||;|\n")
+
+
+def _big_shell_read(command: str, policy: dict, base: Path) -> str | None:
+    """`cat|type|Get-Content <файл>` целиком, файл больше порога → причина для EXTERNAL big_read.
+
+    Кусок или поиск — в той же цепочке есть ограничитель (`head`, `tail`, `-TotalCount`, `grep`, …) —
+    проходит. Размер известен только у существующего файла; путь из переменной не угадываем.
+    """
+    cfg = policy.get("big_read") or {}
+    readers = {r.lower() for r in cfg.get("shell_readers") or []}
+    limiters = {lim.lower() for lim in cfg.get("shell_limiters") or []}
+    if not readers:
+        return None
+    max_kb = float(cfg.get("max_kb"))
+    for element in _CHAIN_SPLIT.split(_dequote(command)):
+        first = element.split("|")[0].split()
+        while first and first[0] in ("&", "."):
+            first = first[1:]
+        if not first or re.sub(r"\.exe$", "", re.split(r"[\\/]", first[0])[-1].lower()) not in readers:
+            continue
+        if limiters & {t.lower() for t in element.replace("|", " ").split()}:
+            continue
+        for token in first[1:]:
+            if token.startswith("-"):
+                continue
+            path = os.path.expanduser(token)
+            if not os.path.isabs(path):
+                path = os.path.join(str(base), path)
+            try:
+                if os.path.isfile(path) and os.path.getsize(path) > max_kb * 1024:
+                    size = os.path.getsize(path) / 1024
+                    return (f"файл {os.path.basename(path)} — {size:.0f} КБ, это больше {max_kb:g} КБ. "
+                            "Целиком такой файл читать дорого: найди нужное поиском (grep, Select-String) "
+                            "или возьми кусок (head, tail, -TotalCount)")
+            except OSError:
+                continue
+    return None
 
 
 # ---------- суммы ----------
@@ -464,6 +504,10 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
             outside = _outside_targets(command, root, base, policy.get("allow_write_paths") or [])
             if outside:
                 level, kind, reason = "EXTERNAL", "write_outside_root", f"запись вне папки JARVIS: {outside[0]}"
+        if kind == "shell":
+            big = _big_shell_read(command, policy, base)
+            if big:
+                level, kind, reason = "EXTERNAL", "big_read", big
     elif tool.startswith("mcp__"):
         if any(_tool_matches(t, tool) for t in policy.get("read_tools") or []):
             level, kind, reason = "READ", "", "чтение"
