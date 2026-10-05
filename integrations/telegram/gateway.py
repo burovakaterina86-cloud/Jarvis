@@ -359,8 +359,7 @@ class Gateway:
         position = self.router.submit(chat_id, job)
         if position:
             # Статус-сообщение не создаём: оно появится, когда ход реально начнётся.
-            await self._send(context, chat_id,
-                             f"Принял, возьму после текущей задачи (в очереди: {position}).")
+            await self._send(context, chat_id, self._queued_text(chat_id, position))
         result = await job.result
         # Статус-карточка уходит из чата вместе с концом хода; итоговая строка нужна только
         # репортёру с выключенным удалением (`delete_on_finish=False`).
@@ -378,6 +377,18 @@ class Gateway:
                                  "Повтори задачу или посмотри state/events.jsonl.")
             except Exception:  # noqa: BLE001 — молчание лучше падения бота
                 log.warning("не удалось сообщить о неудачной отправке")
+
+    def _queued_text(self, chat_id, position: int) -> str:
+        """Её поправка 2026-10-05: не «в очереди: 4», а чем занят и что можно сделать."""
+        try:
+            active = task_state.snapshot(self.root / "state" / "events.jsonl", chat=chat_id)["active"]
+        except Exception:  # noqa: BLE001
+            active = None
+        busy = f"задачей «{active['task']}»" if active and active.get("task") else "другой задачей"
+        if position <= 1:
+            return f"Сейчас занят {busy} — твоё сообщение возьму сразу после неё."
+        return (f"Сейчас занят {busy}, перед твоим сообщением ещё {position - 1}. Отвечу, как дойду. "
+                "Посмотреть — /status, прервать текущую — /stop.")
 
     def _offer_text(self, offer: dict) -> str:
         reset = offer.get("resets_at")

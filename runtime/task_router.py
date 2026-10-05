@@ -231,6 +231,14 @@ class TaskRouter:
             return job.runtime, False
         return worker.active(key, now=self.clock())
 
+    def _switch_brief(self) -> str:
+        cut = lambda text: " ".join(str(text or "").split())[:BRIEF_TEXT_LIMIT]  # noqa: E731
+        lines = ["[JARVIS] Разговор продолжается в Codex — переписку с Claude ты не видишь. "
+                 "Последние задачи (подробности — в файлах и memory/episodes/):"]
+        lines += [f"- {cut(r.get('request'))} → {cut(r.get('result'))} [{r.get('status', '?')}]"
+                  for r in self._recent_episodes(5)] or ["- (записей нет)"]
+        return "\n".join(lines) + "\n\nСообщение владелицы:\n"
+
     def _handoff_back(self) -> str:
         cut = lambda text: " ".join(str(text or "").split())[:BRIEF_TEXT_LIMIT]  # noqa: E731
         lines = ["[JARVIS] Пока у тебя был исчерпан лимит, работал Codex. Его последние задачи "
@@ -290,6 +298,9 @@ class TaskRouter:
                 touch(key, self.clock())
         if back and job.session_mode != "brief":
             prompt = self._handoff_back() + prompt
+        elif runtime == "codex" and not sid and not isolated and job.runtime is None:
+            # /codex: у Codex своя сессия — без сводки он начал бы разговор с нуля (её поправка 2026-10-05)
+            prompt = self._switch_brief() + prompt
         if runtime == "codex":
             ok, why = await self.codex_check()
             if not ok:
@@ -302,6 +313,8 @@ class TaskRouter:
         job.started = time.monotonic()
         res = await self._timed(key, job, prompt, sid, limit, on_event=job.on_event, runtime=runtime)
         res.switched_back = back
+        if isolated or not sid:
+            res.new_session = False   # терять было нечего: «контекст потерялся» — только при сбое resume
         if job.session_mode == "brief":
             res.brief, res.new_session = True, False   # новая сессия запланирована, контекст не «потерян»
         if res.status in ("rate_limited", "auth_required", "error"):

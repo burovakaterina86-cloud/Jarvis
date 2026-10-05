@@ -180,3 +180,29 @@ async def test_offer_lists_files_claude_already_changed(router):
     assert res.switch_offer["files"] == ["essa-ai/content/x/post.md"]
     job = router.offer_job(1)
     assert "essa-ai/content/x/post.md" in job.prompt
+
+
+# ---------- её поправка 2026-10-05: «он теряет контекст», ложное «контекст потерялся» ----------
+
+async def test_first_turn_is_not_reported_as_lost_context(router):
+    from runtime import task_router
+    res = await submit(router, task_router.Job(prompt="привет"))
+    assert res.new_session is False                       # терять было нечего
+    res = await submit(router, task_router.Job(prompt="утро", context="isolated"))
+    assert res.new_session is False
+
+
+async def test_manual_switch_to_codex_carries_a_summary(router):
+    from runtime import task_router
+    (router.tmp / "episodes").mkdir(parents=True)
+    (router.tmp / "episodes" / "2026-10.jsonl").write_text(json.dumps(
+        {"date": "2026-10-05T20:00:00+03:00", "context": "chat", "status": "ok",
+         "request": "сделай карусель про промпты", "result": "Готово: 9 слайдов"}, ensure_ascii=False) + "\n",
+        encoding="utf-8")
+    router.set_runtime(1, "codex")
+    res = await submit(router, task_router.Job(prompt="что мы делали?"))
+    tail = calls(router, "codex")[0]["stdin_tail"]
+    assert "сделай карусель про промпты" in tail and "что мы делали?" in tail
+    assert res.new_session is False
+    await submit(router, task_router.Job(prompt="ещё"))
+    assert "сделай карусель" not in calls(router, "codex")[1]["stdin_tail"]   # дальше — своя сессия

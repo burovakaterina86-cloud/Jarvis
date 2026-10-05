@@ -811,8 +811,10 @@ async def test_queued_turn_says_position_and_waits_with_status(tmp_path):
     g = make_gateway(tmp_path, router=FakeRouter(position=2))
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="ещё задача")), ctx)
-    assert "в очереди: 2" in ctx.bot.sent[0]["text"]
-    assert not ctx.bot.sent[0]["text"].startswith("⚙️")  # тикающий статус — только когда ход пошёл
+    text = ctx.bot.sent[0]["text"]
+    assert "Сейчас занят" in text and "ещё 1" in text and "/status" in text and "/stop" in text
+    assert "в очереди:" not in text                      # её поправка 2026-10-05: без голого номера
+    assert not text.startswith("⚙️")  # тикающий статус — только когда ход пошёл
 
     # ход без единого события статус вообще не заводит — владелице нечего смотреть
     g2 = make_gateway(tmp_path, router=FakeRouter(events=[]))
@@ -960,3 +962,18 @@ def test_env_values_are_never_printed_or_logged(tmp_path, capsys, caplog, monkey
     assert cfg.token == secret and cfg.owner_id == 4242
     blob = capsys.readouterr().out + caplog.text + repr(cfg) + str(cfg)
     assert secret not in blob and "4242" not in repr(cfg)
+
+
+
+async def test_queue_message_names_the_current_task(tmp_path):
+    """Её поправка 2026-10-05: бот говорит, чем занят, а не «в очереди: 4»."""
+    import json as _json
+    p = tmp_path / "state" / "events.jsonl"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(_json.dumps({"type": "task_state", "ts": "2026-10-05T10:00:00+00:00", "task_id": "a",
+                              "task": "пост про ИИ", "state": "running", "chat": str(OWNER)}) + "\n",
+                 encoding="utf-8")
+    g = make_gateway(tmp_path, router=FakeRouter(position=1))
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="ещё")), ctx)
+    assert ctx.bot.sent[0]["text"] == "Сейчас занят задачей «пост про ИИ» — твоё сообщение возьму сразу после неё."

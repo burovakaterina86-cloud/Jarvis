@@ -29,6 +29,10 @@ def _sizes():
 
 @pytest.fixture(scope="session", autouse=True)
 def live_journals_untouched():
+    if (REPO / "state" / "approvals.port").exists():
+        # Бот запущен и сам пишет в журналы — сравнение размеров ничего не докажет.
+        yield
+        return
     before = _sizes()
     yield
     changed = [str(p.relative_to(REPO)) for p, size in _sizes().items() if size != before[p]]
