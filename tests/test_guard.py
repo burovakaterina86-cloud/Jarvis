@@ -698,3 +698,92 @@ def test_dev_mode_lets_you_write_about_dangerous_commands(root):
 def test_bot_mode_still_checks_all_tools_for_dangerous_text(root):
     doc = ev("Write", file_path="x.ps1", content="schtasks /create /tn x /tr calc")
     assert guard.decide(doc, policy=guard.load_policy(POLICY_PATH), root=root, env={}).action == "deny"
+
+
+# ---------- запуск произвольного кода — через кнопку (P1.6, аудит 2026-10-05) ----------
+
+TRUSTED_RUNS = [
+    ("visuals build", r".venv\Scripts\python.exe -m integrations.visuals.build essa-ai\content\x"),
+    ("imagegen posix", ".venv/Scripts/python -m integrations.visuals.imagegen \"сцена\" out.png --ratio 4:5"),
+    ("radar", r".venv\Scripts\python.exe -m integrations.radar essa-ai\radar\config.json"),
+    ("pytest", r".venv\Scripts\python.exe -m pytest -q tests/test_guard.py"),
+    ("python flags then module", "python -X utf8 -u -m integrations.visuals.cover essa-ai/content/x"),
+    ("skill script", "python .claude/skills/lead-magnet-agent/scripts/make.py essa-ai/x"),
+    ("integration file", r"python integrations\visuals\render.py"),
+    ("ps call operator", r"& .venv\Scripts\python.exe -m integrations.visuals.build essa-ai\content\x"),
+    ("chained trusted", "cd essa-ai && python -m integrations.radar cfg.json"),
+    ("not an interpreter", "git status && ls -la"),
+    ("word python in args", "git log --grep python"),
+    ("pip show", "python -m pytest --version"),
+]
+
+
+@pytest.mark.parametrize("name,command", TRUSTED_RUNS, ids=[c[0] for c in TRUSTED_RUNS])
+def test_trusted_runs_need_no_button(name, command):
+    d = decide(ev("Bash", command=command), REPO)
+    assert d.kind != "run_script" and d.action == "allow", d
+
+
+ASK_RUNS = [
+    ("own script in root", "python tmp/x.py"),
+    ("script in scripts/", "python scripts/new_tool.py"),
+    ("inline -c", "python -c \"import shutil; shutil.copy('a', 'b')\""),
+    ("heredoc stdin", "python - <<'EOF'\nprint(1)\nEOF"),
+    ("bare python", "python"),
+    ("py launcher", "py -3.12 job.py"),
+    ("venv python file", r".venv\Scripts\python.exe drafts\run.py"),
+    ("other module", "python -m http.server 8000"),
+    ("pip install", "python -m pip install requests"),
+    ("node file", "node build.js"),
+    ("node inline", "node -e \"require('fs')\""),
+    ("chained untrusted", "python -m integrations.radar cfg.json && python x.py"),
+    ("ps call untrusted", r"& python C:\Temp\x.py"),
+    ("powershell interp", "powershell -Command \"python x.py\""),
+]
+
+
+@pytest.mark.parametrize("name,command", ASK_RUNS, ids=[c[0] for c in ASK_RUNS])
+def test_other_code_runs_ask_owner(name, command):
+    d = decide(ev("Bash", command=command), REPO)
+    assert (d.level, d.action, d.kind) == ("EXTERNAL", "ask", "run_script"), d
+
+
+def test_run_script_button_shows_the_command():
+    d = decide(ev("PowerShell", command="python tmp/cleanup.py --all"), REPO)
+    assert "tmp/cleanup.py --all" in d.reason
+
+
+def test_stricter_rules_still_win_over_run_script():
+    d = decide(ev("Bash", command="python x.py && rm -rf drafts/old"), REPO)
+    assert (d.level, d.kind) == ("MONEY", "delete")
+    d = decide(ev("Bash", command="python x.py; git push --force origin main"), REPO)
+    assert d.action == "deny"
+
+
+def test_run_script_lists_live_in_policy():
+    policy = guard.load_policy(POLICY_PATH)
+    assert policy["external"]["run_script"] == "ask"
+    allow = policy["script_allow"]
+    assert "integrations.*" in allow["modules"] and "pytest" in allow["modules"]
+    # только места, куда агент писать не может: иначе «записал и запустил» обходит кнопку
+    protected = policy["protected_write_paths"]
+    for pattern in allow["files"]:
+        assert any(pattern.startswith(p.rstrip("*")) for p in protected), pattern
+
+
+def test_dev_mode_does_not_ask_for_scripts(root):
+    assert run_dev(ev("Bash", command="python tmp/x.py"), root)[0] == 0
+
+
+def test_trusted_run_does_not_launder_a_protected_write():
+    d = decide(ev("Bash", command="python -m integrations.radar cfg.json && echo x > runtime/policy.yaml"), REPO)
+    assert (d.level, d.kind) == ("DENY", "protected")
+    d = decide(ev("Bash", command="python -c \"open('integrations/x.py','w').write('')\""), REPO)
+    assert (d.level, d.kind) == ("DENY", "protected")
+
+
+def test_skill_workflow_commands_were_denied_before_p16():
+    """Регрессия: до 2026-10-05 бот отказывал на `python -m integrations.*` («меняет защищённые файлы»)."""
+    for cmd in (r".venv\Scripts\python.exe -m integrations.visuals.editorial essa-ai\content\x",
+                r".venv\Scripts\python.exe -m integrations.visuals.cover essa-ai\content\x cover.json"):
+        assert decide(ev("PowerShell", command=cmd), REPO).action == "allow"

@@ -157,6 +157,79 @@ def _outside_targets(command: str, root: Path, base: Path, allow) -> list[str]:
     return found
 
 
+# ---------- запуск кода ----------
+
+_SEGMENT_SPLIT = re.compile(r"&&|\|\||;|\||\n")
+_PY_OR_NODE = re.compile(r"^(python(\d+(\.\d+)?)?|pythonw|py|node)(\.exe)?$", re.IGNORECASE)
+_SHELLS = re.compile(r"^(powershell|pwsh|cmd)(\.exe)?$", re.IGNORECASE)
+_FLAGS_WITH_VALUE = {"-X", "-W", "-Q"}
+_INLINE = {"-c", "-", "-e", "-p", "--eval", "--print"}
+
+
+def _rel_target(path: str, root: Path) -> str:
+    t = path.replace("\\", "/")
+    if t.startswith("./"):
+        t = t[2:]
+    if os.path.isabs(t) or re.match(r"^[a-z]:/", t, re.IGNORECASE):
+        absolute = _abs(t, root)
+        root_n = _norm(os.path.normpath(str(root)))
+        if absolute.startswith(root_n + "/"):
+            t = absolute[len(root_n) + 1:]
+    return t.lower()
+
+
+def _script_runs(command: str, policy: dict, root: Path) -> list[tuple[str, bool]]:
+    """Запуски интерпретатора в команде: [(сегмент, доверенный ли)].
+
+    Доверенный — `-m <модуль>` из `script_allow.modules` или файл из `script_allow.files`
+    (только места, куда агент писать не может). Код в строке (`-c`, `-e`, stdin) — недоверенный.
+    """
+    allow = policy.get("script_allow") or {}
+    modules = [m.lower() for m in allow.get("modules") or []]
+    files = [f.lower() for f in allow.get("files") or []]
+    runs = []
+    for segment in _SEGMENT_SPLIT.split(_dequote(command)):
+        tokens = segment.split()
+        while tokens and tokens[0] in ("&", "."):
+            tokens = tokens[1:]
+        if not tokens:
+            continue
+        exe = re.split(r"[\\/]", tokens[0])[-1]
+        if _SHELLS.match(exe):
+            if _INTERPRETERS.search(" ".join(tokens[1:])):
+                runs.append((segment, False))
+            continue
+        if not _PY_OR_NODE.match(exe):
+            continue
+        trusted, args, i = False, tokens[1:], 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "-m" and i + 1 < len(args):
+                trusted = any(fnmatch.fnmatchcase(args[i + 1].lower(), m) for m in modules)
+                break
+            if arg in _INLINE:
+                break
+            if arg in _FLAGS_WITH_VALUE:
+                i += 2
+                continue
+            if arg.startswith("-"):
+                i += 1
+                continue
+            target = _rel_target(arg, root)
+            trusted = any(fnmatch.fnmatchcase(target, f) for f in files)
+            break
+        runs.append((segment, trusted))
+    return runs
+
+
+def _without_trusted_runs(command: str, runs) -> str:
+    """Команда без доверенных запусков, где нет записи: упоминание `integrations` в
+    `python -m integrations.visuals.build` — это запуск, а не правка защищённой папки."""
+    keep = [seg for seg in _SEGMENT_SPLIT.split(_dequote(command))
+            if not any(seg == r_seg and ok and not _WRITE_VERBS.search(seg) for r_seg, ok in runs)]
+    return "\n".join(keep)
+
+
 # ---------- большие файлы ----------
 
 def _int(value) -> int:
@@ -358,16 +431,19 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
             level, kind, reason = "EXTERNAL", "write_outside_root", f"запись вне папки JARVIS: {target}"
     elif shell:
         command = str(tool_input.get("command") or "")
-        if (_text_mentions(command, protected, root) or _text_mentions(_dequote(command), protected, root)) \
-                and (_WRITE_VERBS.search(command) or _INTERPRETERS.search(command)):
+        runs = _script_runs(command, policy, root)
+        checked = _without_trusted_runs(command, runs)
+        if _text_mentions(checked, protected, root) \
+                and (_WRITE_VERBS.search(checked) or _INTERPRETERS.search(checked)):
             return Decision("DENY", "deny", "команда меняет защищённые файлы", "protected")
         level, kind, reason = "WRITE", "shell", "команда"
-        changes_files = _WRITE_VERBS.search(command) or _INTERPRETERS.search(command)
-        if changes_files and (_text_mentions(command, ask_paths, root)
-                              or _text_mentions(_dequote(command), ask_paths, root)):
-            short = " ".join(command.split())
-            short = short if len(short) <= _PREVIEW_LIMIT else short[:_PREVIEW_LIMIT] + "…"
+        changes_files = _WRITE_VERBS.search(checked) or _INTERPRETERS.search(checked)
+        short = " ".join(command.split())
+        short = short if len(short) <= _PREVIEW_LIMIT else short[:_PREVIEW_LIMIT] + "…"
+        if changes_files and _text_mentions(checked, ask_paths, root):
             level, kind, reason = "EXTERNAL", "self_modify", f"правка собственных правил JARVIS командой: {short}"
+        elif any(not ok for _, ok in runs):
+            level, kind, reason = "EXTERNAL", "run_script", f"запуск кода вне доверенных мест: {short}"
         elif _WRITE_VERBS.search(command):
             outside = _outside_targets(command, root, base, policy.get("allow_write_paths") or [])
             if outside:

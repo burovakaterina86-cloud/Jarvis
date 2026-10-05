@@ -16,6 +16,8 @@
 #   ask_write_paths: [<glob>, ...]       — собственные правила JARVIS: запись → EXTERNAL (kind self_modify),
 #                                          на кнопке путь и начало правки (её решение 2026-10-05, аудит P0.4)
 #   dev_mode: {deny_kinds: [<вид>, ...]}  — какие отказы действуют в сессиях разработки (guard.py --mode dev)
+#   script_allow: {modules: [<glob>], files: [<glob>]}  — запуск python/node без вопроса: `-m <модуль>`
+#                                          или файл; прочий код (свой файл, -c, stdin) → EXTERNAL run_script
 #   allow_write_paths: [<glob>, ...]     — запись вне корня проекта, разрешённая без запроса
 #                                          (внутри корня WRITE и так автоматически)
 #   big_read: {max_kb: int, tools: {<имя>: <поле пути>}, chunk_fields: [<поле>, ...]}
@@ -42,6 +44,7 @@ external:
   unknown_tool: ask
   big_read: ask
   self_modify: ask
+  run_script: ask
 
 # Порог чтения целиком. Самый большой живой текстовый файл проекта — 59 КБ,
 # так что ложных срабатываний на обычной работе нет.
@@ -140,6 +143,13 @@ allow_write_paths: []
 
 # Режим разработки (guard.py --mode dev из .claude/settings.json, ADR 0012): действуют только
 # отказы этих видов; защищённые пути сняты, остальное спрашивает сам Claude Code.
+# Запуск кода без вопроса (аудит P1.6). Файлы — только из мест, куда агент писать не может
+# (protected_write_paths): иначе «записал свой скрипт и запустил» обходит кнопку. «*» захватывает
+# и подпапки. Всё остальное — python <свой файл>, python -c, python - <<EOF, node … — кнопка с командой.
+script_allow:
+  modules: ["integrations.*", "pytest"]
+  files: [".claude/skills/*.py", "integrations/*.py"]
+
 dev_mode:
   deny_kinds: [secret, dangerous, secret_field, purchase, malformed]
 
