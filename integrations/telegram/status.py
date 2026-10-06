@@ -15,6 +15,7 @@ import time
 TELEGRAM_LIMIT = 4096
 MAX_MESSAGES = 3          # больше — отправляем документом
 FENCE = "```"
+LONG_AFTER = 60.0         # после минуты честно говорим, что задача большая
 STATUS_DELAY = 6.0        # короче — ход кончится раньше, чем владелица успеет заглянуть в статус
 
 
@@ -132,7 +133,10 @@ class StatusReporter:
         else:
             line = "минутку, думаю — скоро дам ответ 🙂"
         line = line[0].upper() + line[1:]
-        return f"💭 {mark}{line}"
+        text = f"💭 {mark}{line}"
+        if self.clock() - self.started >= LONG_AFTER:
+            text += "\nЗадача большая, это займёт несколько минут — я на связи ☕"
+        return text
 
     # ---- приём событий stream-json
 

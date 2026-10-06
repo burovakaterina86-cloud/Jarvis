@@ -1010,3 +1010,12 @@ async def test_today_command_answers_without_agent(tmp_path):
     ctx = FakeContext()
     await g.cmd_today(FakeUpdate(OWNER, message=FakeIncoming(text="/today")), ctx)
     assert g.router.jobs == [] and any("Доброе утро" in m["text"] for m in ctx.bot.sent)
+
+
+async def test_status_admits_long_task_after_a_minute():
+    clock = Clock()
+    rep = status.StatusReporter(FakeBot(), OWNER, task="x", clock=clock)
+    rep.note({"type": "system", "subtype": "init"})
+    assert "несколько минут" not in rep.text()
+    clock.now += 61
+    assert "несколько минут" in rep.text()
