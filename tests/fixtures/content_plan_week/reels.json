@@ -1,0 +1,127 @@
+{
+ "week": "2026-10-12",
+ "days": [
+  {
+   "date": "2026-10-12",
+   "weekday": "Понедельник",
+   "reels": [
+    {
+     "code": "AAAAAAAAAA1",
+     "url": "https://www.instagram.com/reel/AAAAAAAAAA1/",
+     "author": "nocodealex",
+     "recommended": true,
+     "why_recommended": "Свежая тема и сильная подача.",
+     "slot": "воронка",
+     "format": "польза/инструкция",
+     "title_ru": "Суд над идеей: 12 копий Claude спорят: честный ответ вместо поддакивания",
+     "metric_ru": "12,5 тыс. комментариев за 1 день",
+     "comments": 12531,
+     "views": 392036,
+     "age_days": 1,
+     "x_author": 4.2,
+     "hook_ru": "Я построил суд, где 12 Claude судят твою идею.",
+     "script_ru": "Я построил суд…\n\nОдин Claude доказывает, что идея провалится.\nДругой — что получится.",
+     "cta_word_ru": "суд",
+     "original_hook_en": "I built a courtroom where 12 Claudes put your idea on trial.",
+     "duration_sec": 29,
+     "lead_magnet_potential": "Навык-суд для проверки идей",
+     "shoot_notes": "Показать экран с навыком."
+    },
+    {
+     "code": "AAAAAAAAAA2",
+     "url": "https://www.instagram.com/reel/AAAAAAAAAA2/",
+     "author": "mavgpt",
+     "recommended": false,
+     "why_recommended": "Свежая тема и сильная подача.",
+     "slot": "сильный",
+     "format": "польза/инструкция",
+     "title_ru": "Суд над идеей: 12 копий Claude спорят: честный ответ вместо поддакивания",
+     "metric_ru": "12,5 тыс. комментариев за 1 день",
+     "comments": 12531,
+     "views": 392036,
+     "age_days": 1,
+     "x_author": null,
+     "hook_ru": "Я построил суд, где 12 Claude судят твою идею.",
+     "script_ru": "Я построил суд…\n\nОдин Claude доказывает, что идея провалится.\nДругой — что получится.",
+     "cta_word_ru": "суд",
+     "original_hook_en": "I built a courtroom where 12 Claudes put your idea on trial.",
+     "duration_sec": 29,
+     "lead_magnet_potential": "Навык-суд для проверки идей",
+     "shoot_notes": "Показать экран с навыком."
+    },
+    {
+     "code": "AAAAAAAAAA3",
+     "url": "https://www.instagram.com/reel/AAAAAAAAAA3/",
+     "author": "lakeer.ai",
+     "recommended": false,
+     "why_recommended": "Свежая тема и сильная подача.",
+     "slot": "аутлаер",
+     "format": "польза/инструкция",
+     "title_ru": "Суд над идеей: 12 копий Claude спорят: честный ответ вместо поддакивания",
+     "metric_ru": "12,5 тыс. комментариев за 1 день",
+     "comments": 12531,
+     "views": 392036,
+     "age_days": 1,
+     "x_author": 4.2,
+     "hook_ru": "Я построил суд, где 12 Claude судят твою идею.",
+     "script_ru": "Я построил суд…\n\nОдин Claude доказывает, что идея провалится.\nДругой — что получится.",
+     "cta_word_ru": "суд",
+     "original_hook_en": "I built a courtroom where 12 Claudes put your idea on trial.",
+     "duration_sec": 29,
+     "lead_magnet_potential": "Навык-суд для проверки идей",
+     "shoot_notes": "Показать экран с навыком."
+    }
+   ]
+  },
+  {
+   "date": "2026-10-13",
+   "weekday": "Вторник",
+   "reels": [
+    {
+     "code": "AAAAAAAAAA4",
+     "url": "https://www.instagram.com/reel/AAAAAAAAAA4/",
+     "author": "lemelson_a",
+     "recommended": true,
+     "why_recommended": "Свежая тема и сильная подача.",
+     "slot": "воронка",
+     "format": "польза/инструкция",
+     "title_ru": "Суд над идеей: 12 копий Claude спорят: честный ответ вместо поддакивания",
+     "metric_ru": "12,5 тыс. комментариев за 1 день",
+     "comments": 12531,
+     "views": 392036,
+     "age_days": 1,
+     "x_author": 4.2,
+     "hook_ru": "Я построил суд, где 12 Claude судят твою идею.",
+     "script_ru": "Я построил суд…\n\nОдин Claude доказывает, что идея провалится.\nДругой — что получится.",
+     "cta_word_ru": "суд",
+     "original_hook_en": "I built a courtroom where 12 Claudes put your idea on trial.",
+     "duration_sec": 29,
+     "lead_magnet_potential": "Навык-суд для проверки идей",
+     "shoot_notes": "Показать экран с навыком."
+    }
+   ]
+  }
+ ],
+ "no_speech": [
+  {
+   "code": "AAAAAAAAAA9",
+   "url": "https://www.instagram.com/reel/AAAAAAAAAA9/",
+   "author": "x",
+   "comments": 1500,
+   "views": 1200000,
+   "topic_ru": "Титры под музыку про ИИ",
+   "wow": "1,2 млн просмотров"
+  }
+ ],
+ "stats": {
+  "collected": 300,
+  "fresh": 77,
+  "transcribed": 40,
+  "no_speech": 1,
+  "rejected_total": 20,
+  "rejected_by_reason": {
+   "не ниша": 12,
+   "дубль темы": 8
+  }
+ }
+}

@@ -50,7 +50,10 @@ def test_config_in_repo_has_her_three_tasks():
     for t in tasks.values():
         assert t.get("handler") or sch.prompt_for(t).strip(), t["id"]
     assert {t["id"]: t["handler"] for t in tasks.values()} == {
-        "morning": "morning", "reel-radar": "radar", "corrections-review": "corrections"}
+        "morning": "morning", "reel-radar": "radar", "corrections-review": "corrections",
+        "content-plan": "content_plan"}
+    assert tasks["content-plan"]["kind"] == "weekly" and tasks["content-plan"]["weekday"] == 6
+    assert tasks["content-plan"]["at"] == "19:00"          # воскресенье вечером — её решение 2026-10-06
 
 
 async def test_gateway_runs_due_task_once_and_delivers_to_owner(tmp_path):

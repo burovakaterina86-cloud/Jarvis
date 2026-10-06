@@ -1,0 +1,182 @@
+{
+  "name": "Катерина",
+  "niche": "AI-автоматизация контента для экспертов-одиночек: как убрать ручную работу (монтаж, сценарии, карусели, SMM-рутина) с помощью Claude, ChatGPT и агентов",
+  "type": "expert",
+  "audience": "Эксперты-одиночки (психолог, коуч, консультант, бухгалтер, юрист, нутрициолог и др.), сами ведут соцсети и тратят слишком много времени на рутину; гипотеза — женщины 28–45; не технари, ChatGPT на базовом уровне (essa-ai/02_AUDIENCE.md)",
+  "product": "Воронка: контент → маленький бесплатный результат → AI-аудит → AI-Мастерская 990 ₽ (essa-ai/05_FUNNEL.md, 04_PRODUCTS_AND_AI_WORKSHOP.md)",
+  "not_niche": [
+    "код и разработка как суть (для программистов)",
+    "эзотерика, гороскопы, нумерология",
+    "инвестиции, крипта, трейдинг",
+    "AI-фото ради красоты без пользы для эксперта",
+    "новости про ИИ без прикладной пользы для эксперта",
+    "розыгрыши и накрутка"
+  ],
+  "networks": [
+    "instagram",
+    "telegram"
+  ],
+  "market_langs": [
+    "ru",
+    "en"
+  ],
+  "audience_country": "русскоязычная аудитория (предположение, не подтверждено — уточнить)",
+  "tags": {
+    "level1": [
+      "ИИ-агенты",
+      "Claude",
+      "ChatGPT",
+      "автоматизация контента",
+      "личный бренд эксперта"
+    ],
+    "level2": [
+      "claude skills",
+      "claude code для не программистов",
+      "claude cowork",
+      "коннекторы claude",
+      "автомонтаж нейросеть",
+      "нейросеть для рилсов",
+      "сценарий рилса нейросеть",
+      "карусель нейросеть",
+      "промпты для эксперта",
+      "ai agent for creators",
+      "ai video editing",
+      "content automation ai",
+      "personal brand ai",
+      "chatgpt agents",
+      "codex для не программистов",
+      "чат gpt агенты",
+      "gpt монтаж",
+      "chatgpt для экспертов"
+    ],
+    "level3": [
+      "чат gpt команды",
+      "claude скиллы",
+      "пиши слово промпт",
+      "цифровой клон аватар",
+      "ии агент для блога",
+      "автомонтаж субтитры",
+      "remotion",
+      "claude connectors instagram",
+      "grill me skill",
+      "chatgpt prompts for creators",
+      "claude code for beginners",
+      "ai agent automation",
+      "metricool mcp",
+      "ai content calendar",
+      "рутина эксперта нейросеть",
+      "монтаж рилс chatgpt",
+      "идеи для рилсов нейросеть",
+      "как сэкономить токены",
+      "voice dna claude",
+      "deep research claude",
+      "chatgpt automation workflow",
+      "codex remotion",
+      "чат gpt для контента",
+      "gpt-агент для блога"
+    ]
+  },
+  "stop_words": [
+    "розыгрыш",
+    "giveaway",
+    "гороскоп",
+    "астролог",
+    "нумерология",
+    "forex",
+    "крипто",
+    "airdrop",
+    "похудение",
+    "weight loss"
+  ],
+  "memo23_queries": [
+    "(claude OR клод) AND (skills OR скиллы OR скилл OR навыки)",
+    "\"claude code\" OR \"клод код\" OR codex OR кодекс",
+    "\"ai agent\" OR \"ai agents\" OR \"ии агент\" OR \"ии агенты\" OR \"ai агент\"",
+    "(chatgpt OR \"чат gpt\" OR \"чат гпт\") AND (prompts OR prompt OR промпты OR промпт OR команды)",
+    "(нейросеть OR нейросети OR ai OR claude OR клод) AND (монтаж OR монтирует OR автомонтаж OR \"video editing\" OR рилсы OR reels)",
+    "(claude OR клод OR chatgpt OR нейросеть) AND (instagram OR инстаграм OR \"контент план\" OR \"content calendar\")",
+    "\"content automation\" OR \"автоматизация контента\" OR \"ai content\"",
+    "(claude OR клод OR chatgpt OR нейросеть) AND (эксперт OR \"личный бренд\" OR \"personal brand\" OR creator OR блогер)",
+    "(chatgpt OR \"чат gpt\" OR \"чат гпт\" OR gpt OR codex OR кодекс) AND (агент OR агенты OR agent OR agents)",
+    "(chatgpt OR \"чат гпт\" OR codex OR кодекс) AND (монтаж OR \"video editing\" OR remotion OR рилсы)",
+    "(gpt OR chatgpt OR \"чат гпт\") AND (автоматизация OR automation OR workflow OR \"для бизнеса\")"
+  ],
+  "memo23_cta_queries": [
+    "(comment OR drop) AND (claude OR chatgpt OR agent OR prompt)",
+    "(пиши OR напиши OR комментируй) AND (клод OR агент OR промпт OR нейросеть OR chatgpt)"
+  ],
+  "boolean_query_en": "claude OR chatgpt OR \"ai agent\" OR \"ai automation\" OR \"claude code\" OR \"ai video editing\" OR нейросеть OR \"ии агент\" OR автомонтаж",
+  "style_profile": {
+    "formats_liked": [
+      "инструкция «как настроить»",
+      "мой агент делает X с показом экрана",
+      "список 3–6 команд/навыков/агентов",
+      "новость «X заменил Y»",
+      "объяснялка простыми словами",
+      "демо: ИИ сам сделал ролик по моей теме, без моего лица (не реклама продукта)",
+      "рейтинг ИИ-инструментов и агентов",
+      "«ИИ-суд» и другие навыки-эксперименты"
+    ],
+    "formats_avoid": [
+      "юмор",
+      "личные драмы",
+      "чистая психология",
+      "мотивация без инструмента",
+      "реклама чужого приложения как суть ролика",
+      "чистая разработка для программистов"
+    ],
+    "length_sec": "28–60, длинные разборы 90–190",
+    "hooks": [
+      "громкое заявление",
+      "число и список",
+      "а что, если…",
+      "хватит делать X"
+    ],
+    "tone": "разговорный, практичный, «короче», без терминов"
+  },
+  "seed_authors": [
+    "zuhra.marketing",
+    "oireels",
+    "mama_mozg",
+    "mcdenil",
+    "egorkuzminxr",
+    "andremass.ai",
+    "krudd.jr",
+    "claudeai",
+    "zhenya_pro_dvizhenie",
+    "charliehills",
+    "shedoesai",
+    "dayanamaksim",
+    "dashi_eshiev",
+    "ol.mindflow",
+    "chase.h.ai",
+    "victoria.nartdinova",
+    "alexmerzliakov",
+    "kossolapov_igor",
+    "helen.cherepnina"
+  ],
+  "comments_threshold": 1000,
+  "comments_fallback": 600,
+  "carousel_threshold": 1000,
+  "carousel_fallback": 300,
+  "window_days": 14,
+  "reels_per_week": 2,
+  "plan_reels": 6,
+  "reserve_topics": 10,
+  "carousels_per_week": 2,
+  "youtube_per_week": 0,
+  "podcast_per_week": 1,
+  "lead_magnets_per_week": 2,
+  "stories_warmup_day": "среда",
+  "no_speech_reels": false,
+  "mode": "эконом",
+  "outputs": [
+    "html"
+  ],
+  "accent": "#FFD84D",
+  "budget_usd": 6,
+  "week_start": "",
+  "_why": "её решения 2026-10-06: Apify платный, выдача только HTML (адаптивная, дизайн агента), YouTube не берём, 2–3 рилса и 2 карусели в неделю; 4 эталона — обязательный слой авторов; её примеры на 18/21 русские, поэтому рынок ru+en (2026-10-06); все 15 тем пробной выдачи ей подошли, акцент и на ChatGPT/GPT, не только на Claude; 2 рилса в неделю, в плане 2 дня по 3 варианта, в каждом дне оба инструмента, рекомендуемые разные (её решение 2026-10-06); сторисы обязательны в дни рилсов и дублируют их суть (её решение 2026-10-06)",
+  "tool_balance": "Claude и ChatGPT/GPT/Codex — оба; не больше 60% плана про один инструмент (её решение 2026-10-06)",
+  "stories_on_reel_days": true
+}

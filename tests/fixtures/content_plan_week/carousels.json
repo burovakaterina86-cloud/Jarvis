@@ -1,0 +1,37 @@
+{
+ "carousels": [
+  {
+   "code": "BBBBBBBBBB1",
+   "url": "https://www.instagram.com/p/BBBBBBBBBB1/",
+   "author": "ai.carousel",
+   "age_days": 3,
+   "comments": 1200,
+   "likes": 5000,
+   "slides_count": 3,
+   "x_author": null,
+   "format": "список",
+   "title_ru": "5 промптов для ChatGPT, которые экономят вечер",
+   "hook_ru": "Хватит писать посты руками.",
+   "why": "Тема совпадает с рилсом недели.",
+   "cta_word_ru": "промпты",
+   "slides_ru": [
+    "Хватит писать посты руками",
+    "Промпт 1: структура",
+    "Забери остальные: слово «промпты»"
+   ],
+   "visual_notes": "Тёмный фон, крупный шрифт.",
+   "lead_magnet_link": "Гайд по промптам"
+  }
+ ],
+ "stats": {
+  "threshold_used": 1000
+ },
+ "rejected": [
+  {
+   "code": "BBBBBBBBBB2",
+   "author": "z",
+   "comments": 10,
+   "reason": "мало комментариев"
+  }
+ ]
+}

@@ -1,0 +1,128 @@
+{
+ "client": "Катерина",
+ "week": "12–18 октября 2026",
+ "summary_ru": [
+  "Неделя про навыки Claude и команды ChatGPT.",
+  "Подтверждено 12 тыс. комментариев за день.",
+  "Всё ведёт к лид-магниту «Суд над идеей»."
+ ],
+ "numbers": {
+  "reels_unique": 300,
+  "reels_fresh": 77,
+  "reels_transcribed": 40,
+  "reels_selected": 4,
+  "carousels_found": 5,
+  "carousels_posts_collected": 200,
+  "carousels_passed_threshold": 2,
+  "carousels_selected": 1,
+  "comments_15_reels": 30000,
+  "views_15_reels": 900000
+ },
+ "lead_magnets": {
+  "main": [
+   {
+    "title_ru": "Навык «Суд над идеей»",
+    "format": "гайд",
+    "promise_ru": "Проверь любую идею за 5 минут.",
+    "contents_ru": [
+     "Как установить",
+     "Три готовых промпта"
+    ],
+    "code_word_ru": "суд",
+    "reels": [
+     "AAAAAAAAAA1"
+    ],
+    "carousel_code": "BBBBBBBBBB1",
+    "effort": "2 часа",
+    "why_ru": "12,5 тыс. комментариев у исходного рилса."
+   }
+  ],
+  "reserve": [],
+  "note_ru": ""
+ },
+ "podcast": {
+  "title_ru": "Почему Claude с тобой соглашается",
+  "why_ru": "Лучше голосом.",
+  "outline_ru": [
+   "Проблема",
+   "Решение"
+  ],
+  "duration_hint": "15 минут",
+  "lead_in_reel": "AAAAAAAAAA1",
+  "cta_line_ru": "Разобрала в подкасте",
+  "code_word_ru": "подкаст"
+ },
+ "stories_warmup": {
+  "date": "2026-10-14",
+  "weekday": "Среда",
+  "topic_ru": "Нейросеть, которая спорит с тобой",
+  "angle_ru": "Хороший ответ рождается в споре.",
+  "what_to_reveal_ru": [
+   "Показать поддакивание",
+   "Показать суд"
+  ],
+  "why_ru": "Тема повторяется в двух рилсах.",
+  "connects_to": [
+   "AAAAAAAAAA1"
+  ],
+  "check_log": [
+   "итерация 1: банально",
+   "итерация 2: ок"
+  ]
+ },
+ "calendar": [
+  {
+   "date": "2026-10-12",
+   "weekday": "Понедельник",
+   "items": [
+    {
+     "platform": "instagram",
+     "type": "Рилс",
+     "title_ru": "Суд над идеей",
+     "emoji": "🎬"
+    }
+   ]
+  },
+  {
+   "date": "2026-10-14",
+   "weekday": "Среда",
+   "items": [
+    {
+     "platform": "instagram",
+     "type": "Сторис-прогрев",
+     "title_ru": "Нейросеть, которая спорит",
+     "emoji": "🔥"
+    },
+    {
+     "platform": "telegram",
+     "type": "Подкаст",
+     "title_ru": "Почему Claude соглашается",
+     "emoji": "🎙"
+    }
+   ]
+  }
+ ],
+ "stories_days": [
+  {
+   "date": "2026-10-12",
+   "reel": "AAAAAAAAAA1",
+   "title_ru": "Сторис к рилсу",
+   "cta_word_ru": "суд",
+   "note_ru": "Тот же день, что и рилс.",
+   "frames": [
+    {
+     "n": 1,
+     "kind": "Тизер",
+     "text_ru": "Нейросеть со всем соглашается.",
+     "visual_ru": "ты в кадре"
+    },
+    {
+     "n": 2,
+     "kind": "Призыв",
+     "text_ru": "Пиши «суд».",
+     "sticker_ru": "ссылка на рилс"
+    }
+   ]
+  }
+ ]
+}

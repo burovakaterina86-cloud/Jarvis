@@ -33,6 +33,7 @@
 | Метрики, что менять | `10_METRICS_AND_TESTS.md` | `11_DECISION_LOG.md` |
 | «Это уже решено?» | `11_DECISION_LOG.md` | профильный файл |
 | Визуал, обложки, стиль | `VISUAL_REFERENCES.md` | `DESIGN.md` через `Grep` |
+| Что снимать на этой неделе (принятый план: рилсы по дням, сторис, карусели, лид-магниты) | `content-plan/weeks/<понедельник>/strategy.json` и `reels.json` | `content-plan/README.md` (данные агента, паспорт, история) |
 | Что уже публиковалось | `content/PUBLISHED.md` | папки в `content/` |
 
 `11_DECISION_LOG.md` перекрывает остальные файлы при расхождении — это её решение.

@@ -4,6 +4,8 @@
   radar        — запускает скрипт радара и присылает 3–5 сильных тем и файл отчёта; Claude не нужен;
   morning      — собирает утреннее сообщение из файлов; Claude не нужен;
   corrections  — нет поправок за неделю → одна строка; есть → Claude получает их прямо в задании.
+  content_plan — воскресенье вечером: Python собирает неделю (сбор, пул, расшифровки), потом Claude один ход
+                 (отбор, перевод, стратегия, страница) и присылает ей файл плана.
 
 Обработчик возвращает `Outcome`: `text` — готовое письмо владелице (уйдёт через `state/outbox/`, файлы
 из `files`), либо `prompt` — короткое задание для одного хода Claude.
@@ -219,7 +221,51 @@ def corrections(root: Path, now: dt.datetime) -> Outcome:
     return Outcome(prompt=template.replace("{{CORRECTIONS}}", "\n".join(found)))
 
 
-HANDLERS = {"radar": radar, "morning": morning, "corrections": corrections}
+# ---------- недельный контент-план ----------
+
+CONTENT_PLAN_WEEKS = Path("essa-ai") / "content-plan" / "weeks"
+CONTENT_PLAN_PROMPT = Path("runtime") / "prompts" / "weekly-content-plan.md"
+CONTENT_PLAN_TIMEOUT_SEC = 90 * 60
+
+
+def plan_monday(now: dt.datetime) -> dt.date:
+    """Понедельник недели, для которой собираем план: в воскресенье и позже — следующий; пн–вт — текущий (догон)."""
+    day = now.date()
+    if day.weekday() in (0, 1):
+        return day - dt.timedelta(days=day.weekday())
+    return day + dt.timedelta(days=7 - day.weekday())
+
+
+def run_content_plan_script(root: Path, week_rel: str) -> tuple[int, str]:
+    try:
+        proc = subprocess.run([_radar_python(root), "-m", "integrations.content_plan", "weekly", week_rel],
+                              cwd=str(root), capture_output=True, timeout=CONTENT_PLAN_TIMEOUT_SEC,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except subprocess.TimeoutExpired:
+        return 3, "сбор шёл дольше полутора часов"
+    except OSError as exc:
+        return 3, f"сбор не запустился: {type(exc).__name__}"
+    text = (proc.stdout + b"\n" + proc.stderr).decode("utf-8", "replace").strip().splitlines()
+    return proc.returncode, " ".join(text[-3:])
+
+
+def content_plan(root: Path, now: dt.datetime, runner=run_content_plan_script) -> Outcome:
+    monday = plan_monday(now)
+    week_rel = (CONTENT_PLAN_WEEKS / monday.isoformat()).as_posix()
+    if (root / week_rel / f"plan-{monday.isoformat()}.html").is_file():
+        return Outcome(f"План на неделю с {monday.day} {MONTHS[monday.month - 1]} уже собран, второй раз не трачу деньги.")
+    code, note = runner(root, week_rel)
+    if code == 2:
+        return Outcome("План недели не начат: не хватает паспорта или ключа Apify. " + note)
+    if code != 0:
+        return Outcome("План недели не дошёл до конца: сервис отказал или упёрся в потолок трат "
+                       f"(подробности в {week_rel}/STOPPED.md). Чаще всего это лимит расходов в Apify: "
+                       "проверь Billing и Settings → Limits. " + note)
+    template = (root / CONTENT_PLAN_PROMPT).read_text(encoding="utf-8")
+    return Outcome(prompt=template.replace("{{WEEK_DIR}}", week_rel).replace("{{WEEK_START}}", monday.isoformat()))
+
+
+HANDLERS = {"radar": radar, "morning": morning, "corrections": corrections, "content_plan": content_plan}
 
 
 def run(handler: str, root: Path | str, now: dt.datetime) -> Outcome:
