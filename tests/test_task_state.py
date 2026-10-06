@@ -78,7 +78,7 @@ def test_describe_for_the_owner():
     assert "карусель" in text and "жду твоего «да»" in text and "3 мин" in text
     assert "В очереди: 1" in text and "рилс" in text
     assert "пост" in text and "готово" in text and "перепроверил" in text
-    assert task_state.describe({"active": None, "queued": [], "last": None}) == "Сейчас ничего не выполняю."
+    assert task_state.describe({"active": None, "queued": [], "last": None}) == "Сейчас ничем не занят."
 
 
 # ---------- роутер пишет переходы ----------
