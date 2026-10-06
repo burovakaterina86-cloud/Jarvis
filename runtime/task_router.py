@@ -76,7 +76,8 @@ class Job:
     runtime: str | None = None        # явно: "codex" после её кнопки; None — кто активен в чате
     runtime_used: str = field(default="claude", init=False, repr=False)
     browser: bool = True              # False — ход без MCP/Playwright (расписание): минус ~17 тыс. токенов
-    queue: str | None = None          # своя очередь: "schedule" — фон не задерживает её сообщения
+    queue: str | None = None          # своя очередь: "schedule" — фон не задерживает её сообщения; "side" — быстрые ответы
+    options: object = None            # свои настройки хода (TurnOptions); None — обычные
     chat: str = field(default="", init=False, repr=False)      # чат владелицы (ставит submit)
     run_key: str = field(default="", init=False, repr=False)   # ключ очереди и запуска
 
@@ -324,7 +325,7 @@ class TaskRouter:
         limit = job.timeout_sec or self.default_timeout
         before = await asyncio.to_thread(self.git_status)
         job.started = time.monotonic()
-        options = claude_bridge.DEFAULT_OPTIONS if job.browser else claude_bridge.NO_BROWSER_OPTIONS
+        options = job.options or (claude_bridge.DEFAULT_OPTIONS if job.browser else claude_bridge.NO_BROWSER_OPTIONS)
         res = await self._timed(key, job, prompt, sid, limit, options=options, on_event=job.on_event,
                                 runtime=runtime)
         res.switched_back = back

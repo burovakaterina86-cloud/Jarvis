@@ -25,3 +25,6 @@ outbox/*
 essa-ai/content-plan/weeks/*/raw/
 essa-ai/content-plan/examples/raw/
 essa-ai/content-plan/weeks/*/_phone.html
+
+# очередь фоновых работ бота (запросы агента)
+/jobs/

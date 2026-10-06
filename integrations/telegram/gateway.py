@@ -32,7 +32,7 @@ from runtime import activation
 from runtime import schedule as schedule_mod
 from runtime import schedule_jobs
 from runtime import sessions as sessions_mod
-from runtime import task_router, task_state, worker
+from runtime import side_lane, task_router, task_state, worker
 from runtime.approvals import ApprovalsServer
 from runtime.task_router import Job
 
@@ -411,6 +411,8 @@ class Gateway:
             out = schedule_jobs.morning(self.root, dt.datetime.now())
             await self._send(context, chat_id, out.text)
             return
+        if await self._try_side_lane(context, chat_id, prompt):
+            return
         task = task or _task_name(prompt)
         runtime_for = getattr(self.router, "runtime_for", None)
         codex = (runtime or (runtime_for(chat_id) if runtime_for else "claude")) == "codex"
@@ -450,6 +452,27 @@ class Gateway:
                                  "Попроси ещё раз — или загляни в state/events.jsonl, там видно, что случилось.")
             except Exception:  # noqa: BLE001 — молчание лучше падения бота
                 log.warning("не удалось сообщить о неудачной отправке")
+
+    async def _try_side_lane(self, context, chat_id, prompt: str) -> bool:
+        """Короткий вопрос, пока идёт долгая задача, — сразу ответ в отдельной лёгкой полосе (её жалоба 2026-10-06).
+
+        True — ответ отправлен. False — это не вопрос-в-пути (просьба сделать работу, сбой): идёт в обычную очередь."""
+        pending = getattr(self.router, "pending", None)
+        if not pending or not pending(chat_id) or not side_lane.looks_like_question(prompt):
+            return False
+        job = Job(prompt=side_lane.build_prompt(self.root, chat_id, prompt), task="быстрый ответ", uses_browser=False,
+                  on_event=_ignore_event, context="isolated", browser=False, queue="side",
+                  timeout_sec=side_lane.TIMEOUT_SEC, options=side_lane.OPTIONS)
+        self.router.submit(chat_id, job)
+        typing = asyncio.ensure_future(_keep_typing(context.bot, chat_id))
+        try:
+            result = await job.result
+        finally:
+            typing.cancel()
+        if getattr(result, "status", "") != "ok" or side_lane.wants_queue(getattr(result, "text", "")):
+            return False
+        await self._deliver(context, chat_id, result)
+        return True
 
     def _queued_text(self, chat_id, position: int) -> str:
         """Её поправка 2026-10-05: не «в очереди: 4», а чем занят и что можно сделать."""
@@ -800,6 +823,17 @@ class Gateway:
                 await self.check_deferred()
             except Exception as exc:  # noqa: BLE001
                 log.warning("отложенные задачи не запустились: %s", type(exc).__name__)
+            try:
+                await self.check_jobs()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("фоновые работы: %s", type(exc).__name__)
+
+    async def check_jobs(self) -> None:
+        """Фоновые работы (`integrations/jobs`): запуск, слежение, письмо о результате. Не держат чат."""
+        if getattr(self, "jobs", None) is None:
+            from integrations.jobs.runner import JobRunner
+            self.jobs = JobRunner(self.root, post=lambda text, files: outbox.post(self.root, text, files))
+        await asyncio.to_thread(self.jobs.tick)
 
     async def _draft_action(self, query, token: str, value: str, decision: str) -> None:
         kind, _, name = value.partition(":")

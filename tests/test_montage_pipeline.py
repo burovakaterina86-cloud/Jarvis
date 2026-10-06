@@ -1,4 +1,5 @@
 """Сборка ffmpeg, громкость, окна пауз, отчёт реза, вендорная правка порога. Без сети."""
+import pytest
 import importlib.util
 import os
 import re
@@ -129,9 +130,78 @@ def test_preview_gets_a_light_copy_readable_without_a_button(tmp_path):
     assert small.name == "preview-small.jpg" and small.stat().st_size <= preview.SMALL_MAX_BYTES
 
 
-def test_skill_runs_the_build_in_foreground_and_reads_the_light_preview():
+def test_skill_queues_the_build_with_the_bot_and_reads_the_light_preview():
     from pathlib import Path
     text = (Path(__file__).resolve().parents[1] / ".claude" / "skills" / "reel-montage" / "SKILL.md").read_text(encoding="utf-8")
-    assert "на переднем плане" in text and "timeout: 600000" in text and "Фоном нельзя" in text
+    assert "python -m integrations.jobs submit" in text and "закончи ход" in text and "Не жди сборку внутри хода" in text
     assert "preview-small.jpg" in text
-    assert "запусти **фоном**" not in text
+    assert "запусти **фоном**" not in text and "timeout: 600000" not in text
+
+
+# ---------- защита от оборванной сборки (её требование 2026-10-06) ----------
+
+def test_build_lock_refuses_a_second_live_build_and_takes_over_a_dead_one(tmp_path):
+    from integrations.montage import render
+    lock = render.acquire_lock(tmp_path)
+    assert lock.name == ".build.lock"
+    with pytest.raises(render.BuildBusy, match="уже идёт"):
+        render.acquire_lock(tmp_path)                                 # тот же живой процесс — отказ
+    lock.write_text("999999 0", encoding="utf-8")                     # мёртвый процесс и древний замок
+    assert render.acquire_lock(tmp_path, alive=lambda pid: False).exists()
+    lock.write_text(f"{__import__('os').getpid()} 0", encoding="utf-8")   # живой, но замок старше двух часов
+    assert render.acquire_lock(tmp_path, now=lambda: render.LOCK_STALE_SEC + 10).exists()
+
+
+def test_stale_frames_are_removed_even_when_windows_holds_them_for_a_moment(tmp_path):
+    from integrations.montage import render
+    frames = tmp_path / "frames"
+    frames.mkdir()
+    (frames / "00001.png").write_bytes(b"x")
+    calls = {"n": 0}
+    real = render.shutil.rmtree
+
+    def flaky(path):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise OSError("папка не пуста")
+        return real(path)
+
+    render.shutil.rmtree, sleeps = flaky, []
+    try:
+        render.rmtree_retry(frames, sleep=sleeps.append)
+    finally:
+        render.shutil.rmtree = real
+    assert not frames.exists() and calls["n"] == 3 and len(sleeps) == 2
+
+
+def test_incomplete_frame_set_is_refused_before_ffmpeg(tmp_path, monkeypatch):
+    from integrations.montage import render
+    work = tmp_path / "w"
+    (work / "frames").mkdir(parents=True)
+    (work / "overlay.html").write_text("<html></html>", encoding="utf-8")
+    for i in range(1, 11):
+        (work / "frames" / f"{i:05d}.png").write_bytes(b"x")          # 10 кадров вместо 660
+
+    class Fake:
+        stdout = iter(["готово\n"])
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(render.subprocess, "Popen", lambda *a, **k: Fake())
+    monkeypatch.setattr(render, "kill_orphans", lambda: None)
+    monkeypatch.setattr(render, "rmtree_retry", lambda p: None)       # «кадры остались от оборванной сборки»
+    monkeypatch.setattr(render.config, "find_puppeteer", lambda: "p", raising=False)
+    monkeypatch.setattr(render.config, "find_browser", lambda: "b", raising=False)
+    with pytest.raises(RuntimeError, match="кадры неполные: 10 из 660"):
+        render.render_frames(work, 22.0, fps=30)
+    assert not (work / ".build.lock").exists()                         # замок снят и после ошибки
+
+
+def test_orphan_cleanup_spares_a_build_running_in_another_folder(tmp_path):
+    from integrations.montage import render
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir(); b.mkdir()
+    (b / ".build.lock").write_text("4242 0", encoding="utf-8")
+    assert render.other_builds_alive(tmp_path, a, alive=lambda pid: pid == 4242) is True
+    assert render.other_builds_alive(tmp_path, a, alive=lambda pid: False) is False
+    assert render.other_builds_alive(tmp_path, b, alive=lambda pid: True) is False   # свой замок не считается
