@@ -75,6 +75,16 @@ CASES = [
     ("write integrations", ev("Write", file_path="integrations/telegram/gateway.py", content="x"), "DENY", "deny"),
     ("bash redirect into runtime", ev("Bash", command="echo x > runtime/policy.yaml"), "DENY", "deny"),
     ("ps set-content hooks", ev("PowerShell", command=r"Set-Content .claude\hooks\guard.py 'x'"), "DENY", "deny"),
+    # state/ — рабочие файлы самого бота (бюджет, переключатель Claude/Codex, журнал, сессии): агент их не пишет
+    ("write run budget", ev("Write", file_path="state/run_budget.json", content="{}"), "DENY", "deny"),
+    ("write runtime switch (backslash)", ev("Write", file_path=r"state\runtime.json", content="{}"), "DENY", "deny"),
+    ("edit event journal", ev("Edit", file_path="state/events.jsonl", old_string="a", new_string="b"), "DENY", "deny"),
+    ("write outbox letter", ev("Write", file_path="state/outbox/x.md", content="привет"), "DENY", "deny"),
+    ("write specs", ev("Write", file_path="state/specs/1.json", content="{}"), "DENY", "deny"),
+    ("bash redirect into state", ev("Bash", command="echo {} > state/run_budget.json"), "DENY", "deny"),
+    ("ps set-content state", ev("PowerShell", command=r"Set-Content state\run_budget.json '{}'"), "DENY", "deny"),
+    ("read state sessions ok", ev("Read", file_path="state/sessions.json"), "READ", "allow"),
+    ("bash outbox module ok", ev("Bash", command='python -m integrations.telegram.outbox "Готово"'), "WRITE", "allow"),
     # запись внутри корня — сразу
     ("write essa-ai", ev("Write", file_path="essa-ai/VOICE.md", content="x"), "WRITE", "allow"),
     ("write memory", ev("Write", file_path="memory/decisions/a.md", content="x"), "WRITE", "allow"),

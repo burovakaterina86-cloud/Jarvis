@@ -143,6 +143,7 @@ protected_write_paths:
   - ".claude/agents/**"
   - "runtime/**"
   - "integrations/**"
+  - "state/**"            # рабочие файлы бота: бюджет, переключатель Claude/Codex, журнал, сессии, письма (аудит 2026-10-06)
   - ".git/hooks/**"
   - ".mcp.json"
   - ".codex/hooks.json"   # Guard для Codex (P4.1): его доверие подтверждает владелица
