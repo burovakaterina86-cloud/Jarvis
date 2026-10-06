@@ -96,6 +96,7 @@ def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS,
     # (заметки разработчика) и без каталога чужих навыков — с 29 тыс. до 13 тыс. токенов на ход.
     args = head + ["--json", "--disable", "plugins", "--disable", "memories",
                    "-c", "project_doc_max_bytes=0",
+                   "-c", 'model_reasoning_effort="low"',   # меньше «думает» — быстрее ответ и дешевле
                    "-c", "skills.include_instructions=false",
                    "-c", f'sandbox_mode="{sandbox}"',
                    "-c", 'approval_policy="never"',

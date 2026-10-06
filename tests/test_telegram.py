@@ -237,7 +237,7 @@ async def test_status_edits_not_more_than_once_per_three_seconds():
     rep.note({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash"}]}})
     await rep.update()
     assert len(bot.edits) == 1
-    assert "Bash" in bot.edits[-1]["text"]
+    assert "Смотрю файлы" in bot.edits[-1]["text"]
 
 
 async def test_status_finish_forces_edit():
@@ -277,14 +277,14 @@ async def test_long_turn_shows_status_and_deletes_it_at_the_end():
     clock.now += 6.0
     rep.note(_tool_event("Read"))
     await rep.update()
-    assert len(bot.sent) == 1 and bot.sent[0]["text"].startswith("⚙️")
-    assert "Read" in bot.sent[0]["text"]
+    assert len(bot.sent) == 1 and bot.sent[0]["text"].startswith("💭")
+    assert "Смотрю файлы" in bot.sent[0]["text"]
     message_id = rep.message_id
 
     clock.now += 4.0
-    rep.note(_tool_event("Bash"))
+    rep.note(_tool_event("WebSearch"))
     await rep.update()
-    assert any("Bash" in e["text"] for e in bot.edits)
+    assert any("ищу в интернете" in e["text"].lower() for e in bot.edits)
 
     await rep.finish("✅ Готово за 11 с.")
     assert [d["message_id"] for d in bot.deleted] == [message_id]
@@ -784,9 +784,9 @@ async def test_one_status_message_per_turn(tmp_path):
     g = make_gateway(tmp_path, status_delay=0.0)
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="посчитай")), ctx)
-    statuses = [m for m in ctx.bot.sent if m["text"].startswith("⚙️")]
+    statuses = [m for m in ctx.bot.sent if m["text"].startswith("💭")]
     assert len(statuses) == 1                      # ровно одно статус-сообщение на ход
-    assert any("Bash" in e["text"] for e in ctx.bot.edits)
+    assert any("Смотрю файлы" in e["text"] for e in ctx.bot.edits)
     assert len(ctx.bot.deleted) == 1               # и в конце оно исчезает
     assert not any(e["text"].startswith("✅") for e in ctx.bot.edits)
 
@@ -795,7 +795,7 @@ async def test_short_turn_leaves_only_the_answer(tmp_path):
     g = make_gateway(tmp_path)      # порог по умолчанию, ход в тесте мгновенный
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="привет")), ctx)
-    assert [m for m in ctx.bot.sent if m["text"].startswith("⚙️")] == []
+    assert [m for m in ctx.bot.sent if m["text"].startswith("💭")] == []
     assert ctx.bot.edits == []
     assert [m["text"] for m in ctx.bot.sent] == ["ответ агента"]
 
@@ -814,13 +814,13 @@ async def test_queued_turn_says_position_and_waits_with_status(tmp_path):
     text = ctx.bot.sent[0]["text"]
     assert "Сейчас занят" in text and "ещё 1" in text and "/status" in text and "/stop" in text
     assert "в очереди:" not in text                      # её поправка 2026-10-05: без голого номера
-    assert not text.startswith("⚙️")  # тикающий статус — только когда ход пошёл
+    assert not text.startswith("💭")  # тикающий статус — только когда ход пошёл
 
     # ход без единого события статус вообще не заводит — владелице нечего смотреть
     g2 = make_gateway(tmp_path, router=FakeRouter(events=[]))
     ctx2 = FakeContext()
     await g2.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="молча")), ctx2)
-    assert [m for m in ctx2.bot.sent if m["text"].startswith("⚙️")] == []
+    assert [m for m in ctx2.bot.sent if m["text"].startswith("💭")] == []
     assert ctx2.bot.edits == []
 
 
@@ -977,3 +977,23 @@ async def test_queue_message_names_the_current_task(tmp_path):
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="ещё")), ctx)
     assert ctx.bot.sent[0]["text"] == "Сейчас занят задачей «пост про ИИ» — твоё сообщение возьму сразу после неё."
+
+
+async def test_today_question_is_answered_by_python_without_agent(tmp_path):
+    g = make_gateway(tmp_path)
+    ctx = FakeContext()
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="привет, что у нас на сегодня?")), ctx)
+    assert g.router.jobs == []
+    assert any("Доброе утро" in m["text"] for m in ctx.bot.sent)
+
+
+async def test_typing_indicator_while_agent_works(tmp_path):
+    g = make_gateway(tmp_path, router=FakeRouter(answer="готово"))
+    ctx = FakeContext()
+    actions = []
+
+    async def send_chat_action(chat_id, action):
+        actions.append(action)
+    ctx.bot.send_chat_action = send_chat_action
+    await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="сделай пост")), ctx)
+    assert actions and set(actions) == {"typing"}

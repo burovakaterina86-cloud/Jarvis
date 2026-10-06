@@ -14,6 +14,7 @@ import datetime as dt
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -119,6 +120,23 @@ class Config:
 # --------------------------------------------------------------------- бот
 
 MAX_CODE_FILES_SHOWN = 10
+
+
+_TODAY_QUESTION = re.compile(r"(что|чем|какие|какой).{0,20}(на сегодня|сегодня)|план на сегодня",
+                             re.IGNORECASE)
+
+
+async def _keep_typing(bot, chat_id, every: float = 4.0) -> None:
+    """Telegram гасит «печатает…» через ~5 с, поэтому обновляем; сбой Telegram ход не роняет."""
+    send = getattr(bot, "send_chat_action", None)
+    if send is None:
+        return
+    while True:
+        try:
+            await send(chat_id=chat_id, action="typing")
+        except Exception:  # noqa: BLE001
+            pass
+        await asyncio.sleep(every)
 
 
 class Gateway:
@@ -343,6 +361,11 @@ class Gateway:
 
     async def _run(self, update, context, prompt: str, task: str = "", runtime: str | None = None) -> None:
         chat_id = update.effective_chat.id
+        if _TODAY_QUESTION.search(prompt) and len(prompt) <= 60:
+            # «что на сегодня» — Python отвечает сам, мгновенно и без лимита (её жалоба 2026-10-06: долго и технично)
+            out = schedule_jobs.morning(self.root, dt.datetime.now())
+            await self._send(context, chat_id, out.text)
+            return
         task = task or _task_name(prompt)
         runtime_for = getattr(self.router, "runtime_for", None)
         codex = (runtime or (runtime_for(chat_id) if runtime_for else "claude")) == "codex"
@@ -361,7 +384,11 @@ class Gateway:
         if position:
             # Статус-сообщение не создаём: оно появится, когда ход реально начнётся.
             await self._send(context, chat_id, self._queued_text(chat_id, position))
-        result = await job.result
+        typing = asyncio.ensure_future(_keep_typing(context.bot, chat_id))   # «печатает…» пока работаю
+        try:
+            result = await job.result
+        finally:
+            typing.cancel()
         # Статус-карточка уходит из чата вместе с концом хода; итоговая строка нужна только
         # репортёру с выключенным удалением (`delete_on_finish=False`).
         await reporter.finish(_final_line(result, reporter))
@@ -449,8 +476,7 @@ class Gateway:
                              reply_markup=self._switch_keyboard(chat_id, offer))
             return
         if getattr(result, "brief", False) is True:
-            await self._send(context, chat_id,
-                             "Начал новый разговор после паузы — что было раньше, взял из журнала задач.")
+            pass   # новый разговор после паузы — служебная кухня, ей это не нужно (её поправка 2026-10-06)
         elif getattr(result, "new_session", False):
             await self._send(context, chat_id,
                              "Начал новый разговор — прежний контекст потерялся.")

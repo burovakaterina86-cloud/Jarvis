@@ -88,6 +88,14 @@ def human_elapsed(seconds: float) -> str:
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 
+_TOOL_PHRASES = {
+    "Bash": "Смотрю файлы", "PowerShell": "Смотрю файлы", "Read": "Смотрю файлы", "Glob": "Ищу нужный файл",
+    "Grep": "Ищу нужный файл", "Write": "Пишу файл", "Edit": "Пишу файл", "MultiEdit": "Пишу файл",
+    "apply_patch": "Пишу файл", "WebSearch": "Ищу в интернете", "WebFetch": "Читаю страницу",
+    "Skill": "Беру нужный навык", "Agent": "Прошу помощника", "Task": "Прошу помощника",
+}
+
+
 class StatusReporter:
     """Одно сообщение на ход: этап, инструмент, время. Редактируется с троттлингом."""
 
@@ -114,14 +122,17 @@ class StatusReporter:
     # ---- сборка текста
 
     def text(self) -> str:
-        head = f"⚙️ JARVIS: {self.task}" if self.task else "⚙️ JARVIS работает"
-        lines = [head, f"Этап: {self.stage}"]
-        if self.tool:
-            lines.append(f"Инструмент: {self.tool}")
+        """Живая реплика вместо карточки с этапами: что делаю и что скоро отвечу."""
+        mark = "🟢 Codex · " if self.task.startswith("🟢 Codex") else ""
         if self.blocked:
-            lines.append(f"⛔ отклонено: {self.blocked}")
-        lines.append(f"⏱ {human_elapsed(self.clock() - self.started)}")
-        return "\n".join(lines)
+            line = "это действие мне не разрешено, ищу другой путь"
+        elif self.tool:
+            doing = _TOOL_PHRASES.get(self.tool, "Работаю")
+            line = f"{doing[0].lower()}{doing[1:]}, скоро отвечу"
+        else:
+            line = "минутку, думаю — скоро дам ответ 🙂"
+        line = line[0].upper() + line[1:]
+        return f"💭 {mark}{line}"
 
     # ---- приём событий stream-json
 
