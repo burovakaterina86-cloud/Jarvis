@@ -41,6 +41,8 @@ when_to_use: "Её триггеры: «контент-план на неделю
 | 8 | Оформление HTML | Python-генератор | `references/04-render.md` | `plan-ГГГГ-ММ-ДД.html` |
 | 9 | Проверка и сдача | `reviewer` | `references/06-checklist.md` | итог в Telegram |
 
+Читать данные — инструментами Read и Grep (`reels_short.txt` — по строке на рилс; полный текст выбранных: `… show <папка> КОД…`), писать JSON — Write, проверять — `… check <папка>`. **Самодельных скриптов (`python -c`, `python - <<EOF`) не пиши:** защита отправит каждый на кнопку.
+
 Команды запуска Python — `.venv\Scripts\python.exe -m integrations.content_plan <collect|pool|transcribe|digest> <папка_недели>`. Деньги: потолок `budget_usd` из паспорта, расчёт до запуска актора; упёрлись — `STOPPED.md` и код 3, скажи Катерине сумму и что доделано.
 
 ## Правила, на которых всё держится

@@ -404,3 +404,76 @@ def test_download_slides_only_from_instagram_hosts_and_saves_numbered(tmp_path):
     saved = collect.download_slides(tmp_path, ["car1"], fetch=lambda u: asked.append(u) or b"img")
     assert saved == {"car1": 2} and all("evil" not in u for u in asked)
     assert (raw / "carousels" / "car1" / "01.jpg").read_bytes() == b"img" and (raw / "carousels" / "car1" / "03.jpg").exists()
+
+
+# ---------- команды без самодельных скриптов ----------
+
+def test_digest_writes_short_file_with_one_line_per_ru_en_reel(tmp_path):
+    from integrations.content_plan.__main__ import cmd_digest
+    (tmp_path / "raw").mkdir()
+    now = dt.datetime.now(dt.timezone.utc)
+    pool_rows = pool.build_pool({"s": [reel("r1", comments=2000, views=90000, caption="claude tips"),
+                                       reel("r2", comments=2000, views=90000, caption="claude hindi")]}, now=now)
+    (tmp_path / "reels_pool.json").write_text(json.dumps(pool_rows), encoding="utf-8")
+    (tmp_path / "raw" / "transcripts_01.json").write_text(json.dumps([
+        {"shortCode": "r1", "transcript": "hello  there\nfriend", "language": "English", "durationSeconds": 30.4},
+        {"shortCode": "r2", "transcript": "namaste", "language": "Hindi"},
+        {"shortCode": "r3", "transcript": "", "status": "no_speech"}]), encoding="utf-8")
+    cmd_digest(tmp_path)
+    lines = (tmp_path / "reels_short.txt").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1 and lines[0].startswith("r1|@a|") and "hello there friend" in lines[0] and "|En|30s|" in lines[0]
+
+
+def test_show_prints_full_speech_and_reports_missing(tmp_path, capsys):
+    from integrations.content_plan.__main__ import cmd_show
+    now = dt.datetime.now(dt.timezone.utc)
+    rows = pool.build_pool({"s": [reel("r1", comments=2000, views=90000)]}, now=now)
+    (tmp_path / "reels_pool.json").write_text(json.dumps(rows), encoding="utf-8")
+    (tmp_path / "reels_transcripts.json").write_text(json.dumps({"r1": {"transcript": "full speech " * 200, "language": "English"}}), encoding="utf-8")
+    assert cmd_show(tmp_path, ["r1", "nope"]) == 3
+    out = capsys.readouterr().out
+    assert "### r1" in out and out.count("full speech") == 200 and "### nope: нет в пуле" in out
+
+
+def test_check_requires_pipeline_mark_recommended_reel_and_known_codes(tmp_path, capsys):
+    from integrations.content_plan.__main__ import cmd_check
+    mark = "textwriter → humaniser → VOICE — пройден"
+    day = {"date": "2026-10-12", "reels": [{"code": "r1", "recommended": True}]}
+    for name, body in (("reels", {"pipeline": mark, "days": [day]}), ("carousels", {"pipeline": mark}), ("strategy", {"pipeline": mark})):
+        (tmp_path / f"{name}.json").write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+    (tmp_path / "reels_pool.json").write_text(json.dumps([{"code": "r1"}]), encoding="utf-8")
+    assert cmd_check(tmp_path) == 0 and "проблем нет" in capsys.readouterr().out
+    (tmp_path / "reels.json").write_text(json.dumps({"days": [{"date": "x", "reels": [{"code": "zzz"}]}]}), encoding="utf-8")
+    assert cmd_check(tmp_path) == 2
+    out = capsys.readouterr().out
+    assert "нет отметки pipeline" in out and "zzz не найден" in out and "нет рекомендуемого" in out
+
+
+def test_slides_are_shrunk_below_the_guard_read_limit(tmp_path):
+    """Реальный ffmpeg на реальной картинке: слайд 700+ КБ должен стать читаемым без кнопки (<100 КБ)."""
+    import shutil as sh
+    import subprocess
+    if not sh.which("ffmpeg"):
+        import pytest
+        pytest.skip("нет ffmpeg")
+    big = tmp_path / "big.jpg"
+    # шумовая картинка 1024×1280: после JPEG весит сотни КБ
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "nullsrc=s=1024x1280,geq=random(1)*255:128:128",
+                    "-frames:v", "1", "-q:v", "2", str(big)], check=True)
+    assert big.stat().st_size > 200_000
+    assert collect.shrink_image(big) is True
+    assert big.stat().st_size <= collect.SLIDE_MAX_BYTES
+    assert not list(tmp_path.glob("*.orig.jpg")) and not list(tmp_path.glob("*.tmp.jpg"))
+    small = tmp_path / "small.jpg"
+    small.write_bytes(b"x" * 100)
+    assert collect.shrink_image(small) is True and small.read_bytes() == b"x" * 100
+
+
+def test_download_slides_calls_shrink_for_each_saved_file(tmp_path):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    item = {"shortCode": "c1", "childPosts": [{"displayUrl": "https://a.cdninstagram.com/1.jpg"}]}
+    (raw / "carousels_x.json").write_text(json.dumps([item]), encoding="utf-8")
+    seen = []
+    collect.download_slides(tmp_path, ["c1"], fetch=lambda u: b"img", shrink=seen.append)
+    assert [p.name for p in seen] == ["01.jpg"]

@@ -1,4 +1,4 @@
-"""CLI: python -m integrations.content_plan <collect|pool|transcribe|digest|weekly|slides|render> <папка_недели>
+"""CLI: python -m integrations.content_plan <collect|pool|transcribe|digest|weekly|slides|show|check|render> <папка_недели>
 
 collect      поиск + слой авторов + карусели → raw/ (платно, нужен APIFY_TOKEN, потолок из паспорта)
 examples     её примеры рилсов: <папка>/urls.txt → расшифровки и examples_digest.txt (платно, ≈ $0,01 за рилс)
@@ -6,6 +6,8 @@ pool         raw/reels_*.json → reels_pool.json, reels_review.txt, carousels_p
 transcribe   расшифровать кандидатов пула (платно): топ N по слотам, коды в raw/transcripts_*.json
 weekly       вся цепочка недели одной командой: сбор → пул → расшифровка → сводка (то, что запускает расписание)
 slides       slides <папка> КОД…: скачать слайды выбранных каруселей в raw/carousels/ (бесплатно)
+show         show <папка> КОД…: полный текст речи, подпись и цифры выбранных рилсов (только чтение)
+check        check <папка>: JSON недели читаются, есть отметка pipeline, коды рилсов из плана есть в пуле
 render       reels.json + carousels.json + strategy.json → plan-ГГГГ-ММ-ДД.html (адаптивная страница, без платных вызовов)
 digest       пул + расшифровки → reels_digest.txt для отбора по тексту (Claude)
 
@@ -68,6 +70,7 @@ def cmd_digest(week_dir: Path) -> int:
     (week_dir / "reels_transcripts.json").write_text(json.dumps(transcripts, ensure_ascii=False, indent=1),
                                                      encoding="utf-8")
     (week_dir / "reels_digest.txt").write_text(digest.build_digest(reels, transcripts), encoding="utf-8")
+    (week_dir / "reels_short.txt").write_text(digest.build_short(reels, transcripts), encoding="utf-8")
     silent = sum(1 for x in transcripts.values() if not digest.has_speech(x))
     print(f"рилсов в сводке: {len(transcripts)}; без речи: {silent}")
     return 0
@@ -109,6 +112,50 @@ def cmd_weekly(profile, week_dir: Path, client, today: dt.date) -> int:
     return cmd_digest(week_dir)
 
 
+def cmd_show(week_dir: Path, codes: list[str]) -> int:
+    pool_rows = {r["code"]: r for r in json.loads((week_dir / "reels_pool.json").read_text(encoding="utf-8"))}
+    transcripts = json.loads((week_dir / "reels_transcripts.json").read_text(encoding="utf-8"))
+    missing = 0
+    for code in codes:
+        item, row = transcripts.get(code), pool_rows.get(code)
+        if not item or not row:
+            print(f"### {code}: нет в пуле или не расшифрован")
+            missing += 1
+            continue
+        caption = re.sub(r"\s+", " ", row.get("cap") or "")
+        print(f"### {code} | @{row['U']} | {row['slot']} | комментарии {row['C']} · просмотры {row['V']} · x{row['x']} · "
+              f"{row['age']} дн. | {item.get('language')} | {round(item.get('durationSeconds') or 0)} с")
+        print(f"ПОДПИСЬ: {caption[:700]}")
+        print(f"РЕЧЬ: {(item.get('transcript') or '').strip()}\n")
+    return 0 if not missing else 3
+
+
+def cmd_check(week_dir: Path) -> int:
+    problems = []
+    data = {}
+    for name in ("reels", "carousels", "strategy"):
+        path = week_dir / f"{name}.json"
+        try:
+            data[name] = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            problems.append(f"{name}.json не читается: {type(exc).__name__}")
+            continue
+        if "humaniser" not in str(data[name].get("pipeline", "")):
+            problems.append(f"{name}.json: нет отметки pipeline (textwriter → humaniser → VOICE)")
+    if "reels" in data and (week_dir / "reels_pool.json").exists():
+        pool_codes = {r["code"] for r in json.loads((week_dir / "reels_pool.json").read_text(encoding="utf-8"))}
+        for day in data["reels"].get("days", []):
+            for r in day.get("reels", []):
+                if r.get("code") not in pool_codes:
+                    problems.append(f"рилс {r.get('code')} не найден в пуле")
+            if not any(r.get("recommended") for r in day.get("reels", [])):
+                problems.append(f"в дне {day.get('date')} нет рекомендуемого рилса")
+    for problem in problems:
+        print("✗", problem)
+    print("проблем нет" if not problems else f"проблем: {len(problems)}")
+    return 0 if not problems else 2
+
+
 def reel_codes(text: str) -> list[str]:
     """Коды рилсов и постов из ссылок (параметры utm и повторы отбрасываются, порядок сохраняется)."""
     return list(dict.fromkeys(re.findall(r"instagram\.com/(?:reel|reels|p)/([\w-]+)", text)))
@@ -129,7 +176,7 @@ def cmd_examples(folder: Path, client, budget: UsdBudget) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="integrations.content_plan")
-    parser.add_argument("command", choices=["collect", "pool", "transcribe", "digest", "examples", "render", "weekly", "slides"])
+    parser.add_argument("command", choices=["collect", "pool", "transcribe", "digest", "examples", "render", "weekly", "slides", "show", "check"])
     parser.add_argument("week_dir", type=Path)
     parser.add_argument("--budget", type=float, help="потолок трат на прогон, $ (по умолчанию из паспорта)")
     parser.add_argument("--trial", action="store_true",
@@ -150,6 +197,10 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             print(f"{out.name}: {out.stat().st_size / 1024:.1f} КБ")
             return 0
+        if args.command == "show":
+            return cmd_show(week_dir, args.slide_codes)
+        if args.command == "check":
+            return cmd_check(week_dir)
         if args.command == "slides":
             saved = collect.download_slides(week_dir, args.slide_codes)
             print(f"слайды скачаны: {saved}")

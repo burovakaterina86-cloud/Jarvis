@@ -57,3 +57,26 @@ def test_failures_are_explained_to_owner_without_claude(tmp_path):
 
 def test_handler_is_registered():
     assert jobs.HANDLERS["content_plan"] is jobs.content_plan
+
+
+def test_prompt_forbids_ad_hoc_python_and_names_allowed_commands(tmp_path):
+    root = _root(tmp_path)
+    out = jobs.content_plan(root, dt.datetime(2026, 10, 18, 19, 0), runner=lambda r, w: (0, "ok"))
+    for must in ("никаких самодельных скриптов", "reels_short.txt", "integrations.content_plan show",
+                 "integrations.content_plan check", "инструментом Write"):
+        assert must in out.prompt, must
+
+
+def test_guard_lets_plan_commands_through_but_asks_for_ad_hoc_python(tmp_path):
+    from tests import test_guard as g
+    root = tmp_path
+    (root / "state" / "secrets").mkdir(parents=True)
+    ok = [("Bash", {"command": f"python -m integrations.content_plan {cmd} essa-ai/content-plan/weeks/x"})
+          for cmd in ("show", "check", "slides", "render", "weekly")]
+    ok += [("Read", {"file_path": str(root / "essa-ai/content-plan/weeks/x/reels_short.txt")}),
+           ("Write", {"file_path": str(root / "essa-ai/content-plan/weeks/x/reels.json"), "content": "{}"})]
+    for tool, inp in ok:
+        assert g.decide(g.ev(tool, **inp), root, env={"JARVIS_TASK_ID": "t"}).action == "allow", (tool, inp)
+    adhoc = g.decide(g.ev("Bash", command="cd essa-ai/content-plan/weeks/x && python - <<'E'\nprint(1)\nE"), root,
+                     env={"JARVIS_TASK_ID": "t"})
+    assert adhoc.action == "ask"        # поэтому в задании сказано: самодельных скриптов не писать

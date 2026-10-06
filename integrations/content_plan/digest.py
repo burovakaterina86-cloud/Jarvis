@@ -53,3 +53,27 @@ def build_digest(pool: list[dict[str, Any]], transcripts: dict[str, dict[str, An
             f" | lang={item.get('language')} | dur={duration}s | status={item.get('status')}\n"
             f"CAPTION: {cap}\nSPEECH: {speech}\nON-SCREEN: {screen}\n")
     return "\n".join(blocks)
+
+
+SHORT_SPEECH = 280
+
+
+def build_short(pool: list[dict[str, Any]], transcripts: dict[str, dict[str, Any]],
+                langs: tuple[str, ...] = ("English", "Russian")) -> str:
+    """Одна строка на рилс: код | автор | слот | цифры | язык | длительность | начало речи.
+
+    Это то, что читает отбор: полная сводка (`reels_digest.txt`) слишком велика для одного чтения.
+    Без речи или на другом языке — не попадают (их разбор идёт отдельным списком).
+    """
+    by_code = {r["code"]: r for r in pool}
+    lines = []
+    for code, item in transcripts.items():
+        speech = re.sub(r"\s+", " ", (item.get("transcript") or "").strip())
+        if not speech or item.get("language") not in langs:
+            continue
+        row = by_code.get(code, {})
+        duration = round(item.get("durationSeconds") or 0)
+        lines.append(f"{code}|@{row.get('U') or item.get('ownerUsername')}|{row.get('slot')}|"
+                     f"C{row.get('C')} V{row.get('V')} x{row.get('x')}|{(item.get('language') or '')[:2]}|{duration}s|"
+                     f"{speech[:SHORT_SPEECH]}")
+    return "\n".join(lines)

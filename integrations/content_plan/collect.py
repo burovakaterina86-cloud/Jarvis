@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import shutil
+import subprocess
 import urllib.request
 from urllib.parse import urlparse
 from dataclasses import dataclass
@@ -172,8 +174,44 @@ def _fetch_bytes(url: str) -> bytes:
         return resp.read()
 
 
-def download_slides(week_dir: Path, codes: list[str], *, fetch=_fetch_bytes) -> dict[str, int]:
-    """Слайды выбранных каруселей → raw/carousels/<код>/NN.jpg. Ссылки Instagram протухают за часы — качать сразу."""
+#: Защита просит кнопку на чтение файла больше 100 КБ (runtime/policy.yaml → big_read), а слайды весят 600–900 КБ:
+#: сжимаем до читаемых ~90 КБ при скачивании, иначе ночной ход упрётся в кнопку.
+SLIDE_MAX_BYTES = 90_000
+_SHRINK_STEPS = ((720, 7), (640, 10), (540, 14))
+
+
+def shrink_image(path: Path, max_bytes: int = SLIDE_MAX_BYTES) -> bool:
+    """Уменьшить картинку через ffmpeg до `max_bytes`; True — получилось (или уже мала). Нет ffmpeg — оставляем как есть."""
+    if path.stat().st_size <= max_bytes:
+        return True
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return False
+    original = path.with_name(path.stem + ".orig" + path.suffix)
+    path.replace(original)                      # каждый проход — от оригинала, без потерь на повторном сжатии
+    try:
+        for width, quality in _SHRINK_STEPS:
+            tmp = path.with_name(path.stem + ".tmp" + path.suffix)
+            run = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(original), "-vf",
+                                  f"scale='min({width},iw)':-2", "-q:v", str(quality), str(tmp)],
+                                 capture_output=True, timeout=60, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if run.returncode == 0 and tmp.exists():
+                tmp.replace(path)
+                if path.stat().st_size <= max_bytes:
+                    return True
+        return path.exists()
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    finally:
+        if not path.exists():
+            original.replace(path)              # сжать не вышло — возвращаем исходник
+        original.unlink(missing_ok=True)
+
+
+def download_slides(week_dir: Path, codes: list[str], *, fetch=_fetch_bytes, shrink=shrink_image) -> dict[str, int]:
+    """Слайды выбранных каруселей → raw/carousels/<код>/NN.jpg. Ссылки Instagram протухают за часы — качать сразу.
+
+    Картинки сжимаются до ~90 КБ: больше читать без кнопки нельзя, а для текста на слайде хватает."""
     raw_dir = week_dir / "raw"
     wanted, saved = set(codes), {}
     for path in sorted(raw_dir.glob("carousels_*.json")):
@@ -196,7 +234,9 @@ def download_slides(week_dir: Path, codes: list[str], *, fetch=_fetch_bytes) -> 
                 if not host.endswith(SLIDE_HOSTS):
                     continue
                 try:
-                    (folder / f"{i:02d}.jpg").write_bytes(fetch(url))
+                    target = folder / f"{i:02d}.jpg"
+                    target.write_bytes(fetch(url))
+                    shrink(target)
                     ok += 1
                 except OSError:
                     continue
