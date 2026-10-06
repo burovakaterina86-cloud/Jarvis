@@ -531,3 +531,10 @@ def test_reviewer_runs_on_sonnet_without_browser(monkeypatch):
     monkeypatch.delenv("JARVIS_MODEL", raising=False)
     args = cb.build_args(None, review.OPTIONS)
     assert "--strict-mcp-config" in args and args[args.index("--model") + 1] == "sonnet"
+
+
+def test_claude_turn_is_lean_and_lists_skill_names():
+    from runtime import claude_bridge as cb
+    args = cb.build_args(None)
+    assert args[args.index("--setting-sources") + 1] == "project" and "--disable-slash-commands" in args
+    assert "carousel-instagram" in args[args.index("--append-system-prompt") + 1]

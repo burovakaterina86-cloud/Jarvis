@@ -93,6 +93,11 @@ def build_env(base: dict | None = None) -> dict:
             if k.upper() in _ENV_KEEP or not k.upper().startswith(_ENV_DROP_PREFIX)}
 
 
+def skill_names(root: Path = ROOT) -> list[str]:
+    folder = root / ".claude" / "skills"
+    return sorted(p.name for p in folder.iterdir() if (p / "SKILL.md").is_file()) if folder.is_dir() else []
+
+
 def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS) -> list[str]:
     args = ["-p", "--output-format", "stream-json", "--verbose"]
     if session_id:
@@ -101,6 +106,14 @@ def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS) -
              "--append-system-prompt-file", str(options.prompt_file),
              "--settings", str(options.settings),
              "--max-turns", str(options.max_turns)]
+    # Лёгкий вход хода (её просьба 2026-10-06): только настройки проекта (без её личных плагинов, навыков
+    # и глобального CLAUDE.md) и без каталога навыков — они идут списком имён, описание читается из файла.
+    args += ["--setting-sources", "project", "--disable-slash-commands"]
+    names = skill_names()
+    if names and Path(options.prompt_file) == TURN_PROMPT_FILE:
+        args += ["--append-system-prompt",
+                 "Навыки проекта (описание — в начале .claude/skills/<имя>/SKILL.md; задача подходит — "
+                 "открой его и действуй по нему): " + ", ".join(names)]
     model = model_for(options)
     if model:
         args += ["--model", model]
