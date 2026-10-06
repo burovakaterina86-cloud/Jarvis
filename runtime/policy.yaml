@@ -222,9 +222,14 @@ rules:
   - {tool: "mcp__playwright__browser_file_upload", match: '.', level: EXTERNAL, kind: send_message, reason: "загрузка файла на сайт"}
 
   # --- браузер: деньги и внешние действия ---
-  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(оплат|оплачу|pay\b|pay now|checkout|place order|оформить заказ|подтвердить заказ|купить|buy now|purchase)', level: DENY, kind: purchase, reason: "оплату и покупку делает только владелица сама (её решение 2026-09-25): JARVIS только кладёт в корзину"}
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(оплат|оплачу|pay\b|pay now|checkout|place order|оформить|подтвердить заказ|купить|buy now|purchase|continue to payment)', level: DENY, kind: purchase, reason: "оплату и покупку делает только владелица сама (её решение 2026-09-25): JARVIS только кладёт в корзину"}
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(заброниров|бронир|book now|reserve|booking)', level: MONEY, kind: booking, reason: "бронирование"}
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(удалить|delete|remove account|отменить заказ|cancel order)', level: MONEY, kind: irreversible, reason: "необратимое действие"}
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(отправить|send\b|submit|опубликовать|publish|post\b|поделиться|share|ответить|reply)', level: EXTERNAL, kind: send_message, reason: "отправка / публикация"}
+  # действия от имени владелицы в залогиненном профиле (аудит 2026-10-06): Guard видит только подпись элемента,
+  # которую назвал сам Claude, поэтому отдельно ловим автоотправку ввода, Enter и подписки/лайки/комментарии
+  - {tool: "mcp__playwright__browser_type", match: '"submit"\s*:\s*true', level: EXTERNAL, kind: send_message, reason: "ввод с автоотправкой (Enter)"}
+  - {tool: "mcp__playwright__browser_press_key", match: '"key"\s*:\s*"[^"]*enter"', level: EXTERNAL, kind: send_message, reason: "Enter может отправить форму или сообщение"}
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(\bfollow(ing)?\b|\bunfollow\b|\bsubscribe\b|подписаться|отписаться|\blike\b|\bunlike\b|нравится|лайк|add a comment|post comment|добавить комментарий|оставить комментарий|написать комментарий|\brepost\b|репост)', level: EXTERNAL, kind: send_message, reason: "действие от имени владелицы в соцсети (подписка, лайк, комментарий)"}
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(зарегистр|register|sign up|check-in|регистрация на рейс|онлайн-регистрац)', level: EXTERNAL, kind: register, reason: "регистрация"}
   - {tool: "mcp__playwright__browser_evaluate|mcp__playwright__browser_run_code", match: '.', level: EXTERNAL, kind: unknown_tool, reason: "выполнение кода на странице"}

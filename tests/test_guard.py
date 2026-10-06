@@ -123,6 +123,21 @@ CASES = [
     ("type card number", ev("mcp__playwright__browser_type", element="Номер карты", ref="e6", text="4111"), "DENY", "deny"),
     ("fill form cvv", ev("mcp__playwright__browser_fill_form", fields=[{"name": "CVV", "type": "textbox", "ref": "e7", "value": "123"}]), "DENY", "deny"),
     ("type search ok", ev("mcp__playwright__browser_type", element="Поиск товаров", ref="e8", text="молоко"), "READ", "allow"),
+    # аудит 2026-10-06: действия от имени владелицы в залогиненном профиле — кнопкой, а не «чтением»
+    ("type with submit sends", ev("mcp__playwright__browser_type", element="Поле комментария", ref="e5", text="Спасибо!", submit=True), "EXTERNAL", "ask"),
+    ("type submit false is plain typing", ev("mcp__playwright__browser_type", element="Поиск", ref="e5", text="молоко", submit=False), "READ", "allow"),
+    ("press Enter may submit a form", ev("mcp__playwright__browser_press_key", key="Enter"), "EXTERNAL", "ask"),
+    ("press Escape is harmless", ev("mcp__playwright__browser_press_key", key="Escape"), "READ", "allow"),
+    ("follow click (en)", ev("mcp__playwright__browser_click", element="Follow", ref="e9"), "EXTERNAL", "ask"),
+    ("follow click (ru)", ev("mcp__playwright__browser_click", element="Подписаться", ref="e9"), "EXTERNAL", "ask"),
+    ("like click (en)", ev("mcp__playwright__browser_click", element="Like", ref="e9"), "EXTERNAL", "ask"),
+    ("like click (ru)", ev("mcp__playwright__browser_click", element="Нравится", ref="e9"), "EXTERNAL", "ask"),
+    ("post comment click", ev("mcp__playwright__browser_click", element="Добавить комментарий", ref="e9"), "EXTERNAL", "ask"),
+    ("checkout click (ru)", ev("mcp__playwright__browser_click", element="Оформить", ref="e9"), "DENY", "deny"),
+    ("go to payment click", ev("mcp__playwright__browser_click", element="Перейти к оплате", ref="e9"), "DENY", "deny"),
+    ("add to cart still free", ev("mcp__playwright__browser_click", element="Добавить в корзину", ref="e9"), "READ", "allow"),
+    ("open cart still free", ev("mcp__playwright__browser_click", element="Корзина", ref="e9"), "READ", "allow"),
+    ("view comments is reading", ev("mcp__playwright__browser_click", element="Показать комментарии", ref="e9"), "READ", "allow"),
 ]
 
 
