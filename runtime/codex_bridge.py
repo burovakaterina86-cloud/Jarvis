@@ -52,11 +52,20 @@ _running: dict[str, asyncio.subprocess.Process] = {}
 _stopped: set[str] = set()
 
 
+def skill_names(root: Path = ROOT) -> list[str]:
+    folder = root / ".agents" / "skills"
+    return sorted(p.name for p in folder.iterdir() if (p / "SKILL.md").is_file()) if folder.is_dir() else []
+
+
 def brain(prompt_file: Path | None = None) -> str:
     """Инструкции для Codex: «мозг» хода или промпт роли (проверяющий)."""
     if prompt_file is not None and Path(prompt_file) != TURN_PROMPT_FILE:
         return CODEX_NOTE + "\n\n" + Path(prompt_file).read_text(encoding="utf-8")
     parts = [CODEX_NOTE]
+    names = skill_names()
+    if names:
+        parts.append("Навыки проекта (описание — в начале .agents/skills/<имя>/SKILL.md, открой нужный): "
+                     + ", ".join(names))
     for name in BRAIN_FILES:
         try:
             text = (ROOT / name).read_text(encoding="utf-8")
@@ -83,7 +92,11 @@ def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS,
                schema_path: Path | None = None) -> list[str]:
     head = ["exec", "resume", session_id] if session_id else ["exec"]
     sandbox = "read-only" if getattr(options, "read_only", False) else "workspace-write"
-    args = head + ["--json", "--disable", "plugins",
+    # Входной билет хода (её вопрос 2026-10-06: два сообщения = 6% лимита): без памяти Codex, без AGENTS.md
+    # (заметки разработчика) и без каталога чужих навыков — с 29 тыс. до 13 тыс. токенов на ход.
+    args = head + ["--json", "--disable", "plugins", "--disable", "memories",
+                   "-c", "project_doc_max_bytes=0",
+                   "-c", "skills.include_instructions=false",
                    "-c", f'sandbox_mode="{sandbox}"',
                    "-c", 'approval_policy="never"',
                    "-c", "sandbox_workspace_write.network_access=true",
