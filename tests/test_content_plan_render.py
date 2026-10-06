@@ -91,3 +91,16 @@ def test_stories_section_follows_reel_days(week):
     data.pop("stories_days")
     (week / "strategy.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     assert 'id="stories"' not in _render(week)
+
+
+def test_page_is_not_built_without_text_pipeline_mark(week, capsys):
+    from integrations.content_plan.__main__ import main
+    data = json.loads((week / "reels.json").read_text(encoding="utf-8"))
+    data.pop("pipeline")
+    (week / "reels.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    from integrations.content_plan import render
+    with pytest.raises(render.PipelineMissing, match="humaniser"):
+        render.render(week)
+    assert main(["render", str(week)]) == 2
+    assert "не прошли языковые проходы" in capsys.readouterr().err
+    assert not list(week.glob("plan-*.html"))

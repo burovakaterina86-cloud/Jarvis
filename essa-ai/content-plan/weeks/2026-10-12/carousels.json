@@ -85,5 +85,6 @@
    "comments": 6310,
    "reason": "подпись пустая, смысл слайдов не проверялся"
   }
- ]
+ ],
+ "pipeline": "textwriter → humaniser → VOICE — пройден 2026-10-06"
 }

@@ -3,7 +3,7 @@
 Папка недели: `{{WEEK_DIR}}` (понедельник {{WEEK_START}}). Работай по навыку `weekly-content-plan`, этапы 4–9, читая только файл текущего этапа из `references/`:
 
 1. Отбор по тексту: `reels_digest.txt` (файл большой — читай кусками), правила `01-select.md`. Рилсов столько, сколько `plan_reels` в паспорте; баланс Claude и ChatGPT проверь по каждому дню.
-2. Перевод и раскладка, `reels.json`, `запас.md` (`05-text-rules.md`). Сценарии — в её голосе; публичный текст пропусти через `textwriter` → `humaniser`.
+2. Перевод и раскладка, `reels.json`, `запас.md` (`05-text-rules.md`). Любой публичный текст (сценарии, сторисы, призывы, обещания лид-магнитов) **всегда** пропускай через `textwriter` → `humaniser` (`.claude/rules/public-texts.md`) и ставь поле `"pipeline"` в `reels.json`, `strategy.json`, `carousels.json`: без него страница не соберётся. Ничего не выдумывай от её имени.
 3. Карусели: выбери по `carousels_pool.json`, слайды скачай командой `python -m integrations.content_plan slides {{WEEK_DIR}} КОД…`, прочитай картинки и переведи (`02-carousels.md`). Анимированный слайд с пустым кадром честно пометь, не выдумывай.
 4. Стратегия, сторисы в дни рилсов, один прогрев (`03-strategy.md`), `strategy.json`.
 5. Страница: `python -m integrations.content_plan render {{WEEK_DIR}}`.

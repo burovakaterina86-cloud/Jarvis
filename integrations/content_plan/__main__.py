@@ -143,7 +143,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "render":
             from . import render
-            out = render.render(week_dir)
+            try:
+                out = render.render(week_dir)
+            except render.PipelineMissing as exc:
+                print(f"страница не собрана: {exc}", file=sys.stderr)
+                return 2
             print(f"{out.name}: {out.stat().st_size / 1024:.1f} КБ")
             return 0
         if args.command == "slides":

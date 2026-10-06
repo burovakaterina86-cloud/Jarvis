@@ -282,6 +282,10 @@ def lm_emoji(title, fmt=""):
 
 # ────────────────────────────── индексы ──────────────────────────────
 
+class PipelineMissing(RuntimeError):
+    """Тексты плана не прошли textwriter → humaniser (правило .claude/rules/public-texts.md)."""
+
+
 class _Nums(dict):
     """Числа шапки: нет данных — 0, а не падение."""
     def __missing__(self, key):
@@ -295,6 +299,9 @@ def init(base):
     global WEEK_TXT, YEAR, PRODUCT_ENTRY, PRODUCT_MAIN
     BASE = Path(base).resolve()
     REELS, CARS, ST = load("reels.json"), load("carousels.json"), load("strategy.json")
+    for name, obj in (("reels.json", REELS), ("strategy.json", ST)):
+        if "humaniser" not in str(obj.get("pipeline", "")):
+            raise PipelineMissing(f"в {name} нет отметки «pipeline: textwriter → humaniser → VOICE»: тексты не прошли языковые проходы")
     YT = {"topics": [], "stats": {}}  # YouTube не берём
     PROFILE = {}
     for cand in (BASE.parent / "profile.json", BASE.parent.parent / "profile.json"):
