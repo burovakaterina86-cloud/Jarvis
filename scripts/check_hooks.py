@@ -105,8 +105,10 @@ def big_read_results(root: Path) -> list[tuple[str, str, str]]:
     big.parent.mkdir(parents=True, exist_ok=True)
     line = b"big read selfcheck line\n"
     big.write_bytes(line * (BIG_READ_KB * 1024 // len(line) + 1))
+    # её решение 2026-10-06: external.big_read: auto — большие файлы читаются без кнопки; ждём то, что стоит в политике
+    whole = "allow" if (policy.get("external") or {}).get("big_read") == "auto" else "ask"
     cases = [
-        (f"чтение файла {BIG_READ_KB} КБ целиком — подтверждение", {}, "ask"),
+        (f"чтение файла {BIG_READ_KB} КБ целиком — " + ("без кнопки (политика: auto)" if whole == "allow" else "подтверждение"), {}, whole),
         (f"чтение куска файла {BIG_READ_KB} КБ — пропуск", {"offset": 1, "limit": 20}, "allow"),
     ]
     out = []

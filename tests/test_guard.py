@@ -183,6 +183,17 @@ def _policy(**override):
     return p
 
 
+def _ask_big_reads():
+    """Политика, где большое чтение спрашивает кнопку: так проверяем сам механизм (её настоящая политика — auto, 2026-10-06)."""
+    p = guard.load_policy(POLICY_PATH)
+    p["external"] = {**p.get("external", {}), "big_read": "ask"}
+    return p
+
+
+def decide_ask(event, root, env=None):
+    return guard.decide(event, policy=_ask_big_reads(), root=root, env=env or {})
+
+
 def test_external_auto_passes_without_request(root):
     p = _policy(rules=[{"tool": "mcp__tg__send", "match": ".", "level": "EXTERNAL", "kind": "message_owner"}],
                 external={"message_owner": "auto"})
@@ -487,7 +498,7 @@ def small_file(tmp_path):
 
 
 def test_read_whole_big_file_asks_owner(big_file):
-    d = decide(ev("Read", file_path=str(big_file)), REPO)
+    d = decide_ask(ev("Read", file_path=str(big_file)), REPO)
     assert (d.level, d.action) == ("EXTERNAL", "ask"), d.reason
     assert "big.md" in d.reason and "150" in d.reason and "Grep" in d.reason
 
@@ -518,12 +529,12 @@ def big_lines(tmp_path):
 
 def test_huge_limit_is_not_a_chunk(big_lines):
     # limit в строках: 999999 строк = весь файл, заслон не обходится
-    d = decide(ev("Read", file_path=str(big_lines), limit=999999), REPO)
+    d = decide_ask(ev("Read", file_path=str(big_lines), limit=999999), REPO)
     assert (d.level, d.action) == ("EXTERNAL", "ask"), d.reason
 
 
 def test_offset_without_limit_reads_to_end_and_asks(big_lines):
-    d = decide(ev("Read", file_path=str(big_lines), offset=2), REPO)
+    d = decide_ask(ev("Read", file_path=str(big_lines), offset=2), REPO)
     assert (d.level, d.action) == ("EXTERNAL", "ask"), d.reason
 
 
@@ -562,7 +573,8 @@ def test_broken_threshold_is_fail_closed(root, tmp_path_factory, big_file):
 
 def test_big_read_threshold_lives_in_policy(small_file):
     base = guard.load_policy(POLICY_PATH).get("big_read") or {}
-    p = _policy(big_read={**base, "max_kb": 10})
+    p = _ask_big_reads()
+    p["big_read"] = {**base, "max_kb": 10}
     d = guard.decide(ev("Read", file_path=str(small_file)), policy=p, root=REPO, env={})
     assert (d.level, d.action) == ("EXTERNAL", "ask"), d.reason
 
@@ -924,10 +936,10 @@ def test_structured_output_tool_is_harmless_read():
 
 # ---------- большой файл целиком через shell (P3.2, аудит 2026-10-05) ----------
 
-def _shell(command, cwd):
+def _shell(command, cwd, policy=None):
     event = ev("Bash", command=command)
     event["cwd"] = str(cwd)
-    return guard.decide(event, policy=guard.load_policy(POLICY_PATH), root=REPO, env={})
+    return guard.decide(event, policy=policy or guard.load_policy(POLICY_PATH), root=REPO, env={})
 
 
 @pytest.mark.parametrize("cmd", [
@@ -940,7 +952,7 @@ def _shell(command, cwd):
     "cat big.md && echo done",
 ])
 def test_whole_big_file_through_shell_asks(cmd, big_file, small_file):
-    d = _shell(cmd, big_file.parent)
+    d = _shell(cmd, big_file.parent, _ask_big_reads())
     assert (d.level, d.action, d.kind) == ("EXTERNAL", "ask", "big_read"), d
     assert "big.md" in d.reason and "КБ" in d.reason
 
@@ -1017,3 +1029,15 @@ def test_url_rule_lives_in_policy():
 
 def test_dev_mode_does_not_ask_for_urls(root):
     assert run_dev(ev("WebFetch", url="https://x.io/p?d=" + "a" * 300, prompt="x"), root)[0] == 0
+
+
+# ---------- её решение 2026-10-06: большие файлы читаем без кнопки ----------
+
+def test_real_policy_lets_big_files_be_read_without_a_button(big_file, big_lines):
+    """Слайды, расшифровки, листы кадров нужны в работе всегда; кнопка на каждое чтение только мешала."""
+    for event in (ev("Read", file_path=str(big_file)), ev("Read", file_path=str(big_lines), limit=999999)):
+        d = decide(event, REPO)
+        assert d.action == "allow", (d.level, d.reason)
+    d = _shell("cat big.md", big_file.parent)
+    assert d.action == "allow", d
+    assert guard.load_policy(POLICY_PATH)["external"]["big_read"] == "auto"

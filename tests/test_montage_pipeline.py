@@ -111,3 +111,27 @@ def test_limiter_is_added_only_when_the_peak_does_not_fit_linear_mode():
     assert lin is not None and 0.12 <= lin <= 0.16
     # нужен потолок ниже допустимого для alimiter — не обещаем linear
     assert loudness.limiter_for(-45.0, -15.0) is None
+
+
+def test_preview_gets_a_light_copy_readable_without_a_button(tmp_path):
+    """Лист кадров весит больше мегабайта, а защита просит кнопку на чтение файла больше 100 КБ."""
+    import shutil
+    import subprocess
+    import pytest
+    if not shutil.which("ffmpeg"):
+        pytest.skip("нет ffmpeg")
+    from integrations.montage import preview
+    sheet = tmp_path / "preview.png"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "nullsrc=s=1900x640,geq=random(1)*255:random(2)*255:random(3)*255",
+                    "-frames:v", "1", str(sheet)], check=True)
+    assert sheet.stat().st_size > 1_000_000
+    small = preview.small_copy(sheet)
+    assert small.name == "preview-small.jpg" and small.stat().st_size <= preview.SMALL_MAX_BYTES
+
+
+def test_skill_runs_the_build_in_foreground_and_reads_the_light_preview():
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / ".claude" / "skills" / "reel-montage" / "SKILL.md").read_text(encoding="utf-8")
+    assert "на переднем плане" in text and "timeout: 600000" in text and "Фоном нельзя" in text
+    assert "preview-small.jpg" in text
+    assert "запусти **фоном**" not in text

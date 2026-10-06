@@ -65,4 +65,20 @@ def frames(work, spec_path, times, progress=lambda m: None) -> Path:
         args += ["-i", str(o)]
     chain = "".join(f"[{i}:v]scale=360:-1[s{i}];" for i in range(n)) + "".join(f"[s{i}]" for i in range(n)) + f"hstack=inputs={n}" if n > 1 else "[0:v]scale=360:-1"
     _sh(args + ["-filter_complex", chain, "-frames:v", "1", str(sheet)])
+    small_copy(sheet)
     return sheet
+
+
+#: Защита просит кнопку на чтение файла больше 100 КБ, а лист кадров весит больше мегабайта.
+#: Для чтения агентом делаем рядом лёгкую копию (≈ 60–90 КБ): композицию и текст по ней видно; ей уходит полный `preview.png`.
+SMALL_MAX_BYTES = 90_000
+
+
+def small_copy(sheet: Path, max_bytes: int = SMALL_MAX_BYTES) -> Path:
+    small = sheet.with_name(sheet.stem + "-small.jpg")
+    for width, quality in ((1400, 6), (1100, 9), (900, 13), (700, 18)):
+        _sh(["ffmpeg", "-v", "error", "-y", "-i", str(sheet), "-vf", f"scale='min({width},iw)':-2",
+             "-q:v", str(quality), str(small)])
+        if small.stat().st_size <= max_bytes:
+            break
+    return small

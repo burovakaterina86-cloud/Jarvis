@@ -114,8 +114,8 @@ def test_mirror_has_no_orphans():
 def test_check_hooks_covers_big_read_through_decide(tmp_path):
     check_hooks = _load_check_hooks()
     results = check_hooks.big_read_results(tmp_path)
-    # тикет 14: файл >100 КБ целиком → подтверждение, кусок → проходит
-    assert [actual for _title, _expected, actual in results] == ["ask", "allow"]
+    # её решение 2026-10-06 (external.big_read: auto): файл >100 КБ целиком и кусок проходят без кнопки
+    assert [actual for _title, _expected, actual in results] == ["allow", "allow"]
     assert all(expected == actual for _title, expected, actual in results)
 
 
