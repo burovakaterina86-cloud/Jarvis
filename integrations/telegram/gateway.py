@@ -332,7 +332,10 @@ class Gateway:
         media = update.message.voice or getattr(update.message, "audio", None)
         path = await self._download(context, media.file_id,
                                     f"voice-{getattr(media, 'file_unique_id', 'msg')}.ogg")
-        text = voice.transcribe(path, transcriber=self.transcriber) if path else None
+        # Whisper считает секунды (первый раз ещё и грузит модель): вне цикла событий, иначе замрут
+        # /stop, кнопки подтверждения и расписание.
+        text = (await asyncio.to_thread(voice.transcribe, path, transcriber=self.transcriber)
+                if path else None)
         if not text:
             await self._send(context, chat_id, VOICE_FAILED)
             return
@@ -900,6 +903,22 @@ class Gateway:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_message))
         app.add_handler(CallbackQueryHandler(self.on_callback))
 
+    async def announce_interrupted(self, tasks: list[dict]) -> None:
+        """После перезапуска: очередь жила в памяти — говорим, какие задачи оборвались."""
+        if not tasks or self.bot is None or self.owner_id is None:
+            return
+        lines = ["Я перезапустился, и эти задачи оборвались:"]
+        for t in tasks[:5]:
+            how = "ждала в очереди" if t.get("state") == "queued" else "была в работе"
+            lines.append(f"• «{t.get('task') or 'задача'}» — {how}")
+        if len(tasks) > 5:
+            lines.append(f"…и ещё {len(tasks) - 5}")
+        lines.append("Если они ещё нужны — напиши заново.")
+        try:
+            await self.bot.send_message(self.owner_id, "\n".join(lines))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("не удалось сообщить о прерванных задачах: %s", type(exc).__name__)
+
     async def announce(self) -> None:
         if self.bot is None or self.owner_id is None:
             log.warning("%s", SETUP_HINT)
@@ -960,10 +979,13 @@ def run(config: Config | None = None) -> int:
     async def post_init(app: Application) -> None:
         nonlocal watcher
         gw.attach(app.bot)
+        orphans: list[dict] = []
         try:   # очередь живёт в памяти: незавершённые задачи из прошлого запуска — призраки в /status
-            closed = task_state.close_orphans(ROOT / "state" / "events.jsonl")
-            if closed:
-                log.info("закрыто прерванных задач из прошлого запуска: %d", len(closed))
+            journal = ROOT / "state" / "events.jsonl"
+            orphans = task_state.find_orphans(journal)
+            task_state.close_orphans(journal)
+            if orphans:
+                log.info("закрыто прерванных задач из прошлого запуска: %d", len(orphans))
         except Exception as exc:  # noqa: BLE001 — уборка журнала не должна мешать старту
             log.warning("не удалось закрыть прерванные задачи: %s", type(exc).__name__)
         try:   # меню команд в Telegram: кнопка «Меню» рядом со строкой ввода
@@ -977,6 +999,7 @@ def run(config: Config | None = None) -> int:
         activation.ensure_dirs(ROOT)
         watcher = asyncio.create_task(gw.watch_drafts())
         await gw.announce()
+        await gw.announce_interrupted(orphans)
 
     async def post_shutdown(app: Application) -> None:
         if watcher is not None:
@@ -993,8 +1016,35 @@ def run(config: Config | None = None) -> int:
     return 0
 
 
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+
+
+def setup_logging(path: str | Path | None = None) -> None:
+    """Лог в консоль и в файл `state/jarvis.log` (2 МБ × 3 копии): иначе после падения или закрытого окна
+    следа не остаётся. Повторный вызов обработчики не дублирует."""
+    from logging.handlers import RotatingFileHandler
+    path = Path(path) if path else ROOT / "state" / "jarvis.log"
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    formatter = logging.Formatter(LOG_FORMAT)
+    if not any(isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+               for h in root_logger.handlers):
+        console = logging.StreamHandler()
+        console.setFormatter(formatter)
+        root_logger.addHandler(console)
+    if not any(isinstance(h, RotatingFileHandler) and Path(h.baseFilename) == path.resolve()
+               for h in root_logger.handlers):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handler = RotatingFileHandler(path, maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8")
+        except OSError:
+            return   # без файла бот работает, как раньше — только в консоль
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
+
+
 def main(argv: list[str] | None = None, env_path: str | Path | None = None) -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    setup_logging()
     logging.getLogger("httpx").setLevel(logging.WARNING)
     load_env(env_path)
     config = Config.from_env()

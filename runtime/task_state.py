@@ -81,26 +81,28 @@ def snapshot(path, chat=None) -> dict:
             "last": max(finished, key=lambda t: t.get("since", "")) if finished else None}
 
 
-def close_orphans(path) -> list[str]:
-    """При старте бота: задачи, у которых в журнале нет финала, — следы прерванного процесса.
-
-    Очередь живёт в памяти и после перезапуска пуста, так что `running`/`review`/`queued` без финала —
-    призраки: /status называл бы бота занятым часами. Каждой дописывается `failed` (`interrupted`)."""
+def find_orphans(path) -> list[dict]:
+    """Задачи без финала в журнале — следы прерванного процесса (очередь живёт в памяти и после
+    перезапуска пуста). Каждая: `{"task_id", "task", "state", "chat"}`; `state` — последнее известное."""
     last: dict[str, dict] = {}
     for line in _tail_lines(Path(path)):
         try:
             row = json.loads(line)
         except ValueError:
             continue
-        if isinstance(row, dict) and row.get("type") == "task_state" and row.get("task_id") \
-                and row.get("state") in STATES:
+        if isinstance(row, dict) and row.get("type") == "task_state" and row.get("task_id")                 and row.get("state") in STATES:
             last[row["task_id"]] = row
-    closed = []
-    for tid, row in last.items():
-        if row["state"] not in TERMINAL:
-            emit(tid, row.get("task", ""), "failed", chat=row.get("chat"), interrupted=True)
-            closed.append(tid)
-    return closed
+    return [{"task_id": tid, "task": row.get("task", ""), "state": row["state"], "chat": row.get("chat")}
+            for tid, row in last.items() if row["state"] not in TERMINAL]
+
+
+def close_orphans(path) -> list[str]:
+    """При старте бота каждой «призрачной» задаче дописывается `failed` (`interrupted`):
+    иначе /status называл бы бота занятым часами. Возвращает номера закрытых задач."""
+    orphans = find_orphans(path)
+    for o in orphans:
+        emit(o["task_id"], o["task"], "failed", chat=o["chat"], interrupted=True)
+    return [o["task_id"] for o in orphans]
 
 
 def _when(ts: str):

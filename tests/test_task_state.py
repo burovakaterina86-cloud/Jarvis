@@ -187,3 +187,15 @@ def test_close_orphans_is_idempotent_and_ignores_finished(tmp_path, monkeypatch)
 def test_close_orphans_missing_journal(tmp_path, monkeypatch):
     monkeypatch.setattr(events, "EVENTS_PATH", tmp_path / "events.jsonl")
     assert task_state.close_orphans(tmp_path / "нет.jsonl") == []
+
+
+def test_find_orphans_reports_names_and_states(tmp_path):
+    p = tmp_path / "events.jsonl"
+    write_events(p, [
+        ev("task_state", "2026-10-05T10:00:00+00:00", task_id="a", task="пост", state="done", chat="1"),
+        ev("task_state", "2026-10-05T10:02:00+00:00", task_id="b", task="карусель", state="running", chat="1"),
+        ev("task_state", "2026-10-05T10:04:00+00:00", task_id="d", task="в очереди", state="queued", chat="1"),
+    ])
+    found = task_state.find_orphans(p)
+    assert [(o["task_id"], o["task"], o["state"]) for o in found] == [
+        ("b", "карусель", "running"), ("d", "в очереди", "queued")]

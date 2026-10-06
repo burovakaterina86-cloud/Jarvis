@@ -1019,3 +1019,62 @@ async def test_status_admits_long_task_after_a_minute():
     assert "несколько минут" not in rep.text()
     clock.now += 61
     assert "несколько минут" in rep.text()
+
+
+# ------------------------------------------------ голос не блокирует бота, лог в файле, весть о прерванном
+
+async def test_voice_transcribed_off_the_event_loop(tmp_path):
+    """Whisper считает секунды: в цикле событий он заморозил бы /stop, кнопки и расписание (аудит 2026-10-06)."""
+    import threading
+    seen = []
+
+    def transcriber(path):
+        seen.append(threading.current_thread())
+        return "привет"
+
+    g = make_gateway(tmp_path, transcriber=transcriber)
+    msg = FakeIncoming(voice=type("V", (), {"file_id": "f1", "file_unique_id": "u1"})())
+    await g.on_voice(FakeUpdate(OWNER, message=msg), FakeContext())
+    assert seen and seen[0] is not threading.main_thread()
+
+
+def test_setup_logging_writes_file_once(tmp_path):
+    import logging
+    from integrations.telegram import gateway as gw
+    path = tmp_path / "state" / "jarvis.log"
+    root = logging.getLogger()
+    before = list(root.handlers)
+    try:
+        gw.setup_logging(path)
+        gw.setup_logging(path)   # повторный вызов не дублирует строки
+        logging.getLogger("jarvis.test").warning("не удалось доставить ответ")
+        for h in root.handlers:
+            h.flush()
+        assert path.read_text(encoding="utf-8").count("не удалось доставить ответ") == 1
+    finally:
+        for h in list(root.handlers):
+            if h not in before:
+                root.removeHandler(h)
+                h.close()
+
+
+async def test_announce_interrupted_lists_lost_tasks(tmp_path):
+    g = make_gateway(tmp_path)
+    bot = FakeBot()
+    g.attach(bot)
+    await g.announce_interrupted([
+        {"task_id": "a", "task": "сделай контент", "state": "running"},
+        {"task_id": "b", "task": "рилс", "state": "queued"},
+    ])
+    text = bot.sent[-1]["text"]
+    assert bot.sent[-1]["chat_id"] == OWNER
+    assert "перезапустил" in text and "сделай контент" in text and "рилс" in text
+    assert "напиши" in text.lower()
+
+
+async def test_announce_interrupted_silent_when_nothing_lost(tmp_path):
+    g = make_gateway(tmp_path)
+    bot = FakeBot()
+    g.attach(bot)
+    await g.announce_interrupted([])
+    assert bot.sent == []
