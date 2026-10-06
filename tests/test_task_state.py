@@ -151,3 +151,39 @@ async def test_status_command_reads_the_journal(tmp_path):
     await g.cmd_status(FakeUpdate(OWNER, message=FakeIncoming(text="/status")), ctx)
     text = ctx.bot.sent[-1]["text"]
     assert "пост про ИИ" in text and "работаю" in text
+
+
+# --- призрачные задачи: процесс упал посреди хода, в журнале остался «running» (аудит 2026-10-06) ---
+
+def test_close_orphans_marks_unfinished_tasks_failed(tmp_path, monkeypatch):
+    p = tmp_path / "events.jsonl"
+    monkeypatch.setattr(events, "EVENTS_PATH", p)
+    write_events(p, [
+        ev("task_state", "2026-10-05T10:00:00+00:00", task_id="a", task="пост", state="running", chat="1"),
+        ev("task_state", "2026-10-05T10:01:00+00:00", task_id="a", task="пост", state="done", chat="1"),
+        ev("task_state", "2026-10-05T10:02:00+00:00", task_id="b", task="карусель", state="running", chat="1"),
+        ev("task_state", "2026-10-05T10:03:00+00:00", task_id="c", task="рилс", state="review", chat="1"),
+        ev("task_state", "2026-10-05T10:04:00+00:00", task_id="d", task="в очереди", state="queued", chat="1"),
+    ])
+    assert task_state.snapshot(p, chat="1")["active"] is not None
+    closed = task_state.close_orphans(p)
+    assert sorted(closed) == ["b", "c", "d"]
+    snap = task_state.snapshot(p, chat="1")
+    assert snap["active"] is None and snap["queued"] == []
+    assert snap["last"]["state"] == "failed"
+    assert task_state.describe(snap).startswith("Сейчас ничем не занят")
+
+
+def test_close_orphans_is_idempotent_and_ignores_finished(tmp_path, monkeypatch):
+    p = tmp_path / "events.jsonl"
+    monkeypatch.setattr(events, "EVENTS_PATH", p)
+    write_events(p, [ev("task_state", "2026-10-05T10:00:00+00:00", task_id="a", task="x", state="stopped", chat="1")])
+    assert task_state.close_orphans(p) == []
+    write_events(p, [ev("task_state", "2026-10-05T10:00:00+00:00", task_id="b", task="x", state="running", chat="1")])
+    assert task_state.close_orphans(p) == ["b"]
+    assert task_state.close_orphans(p) == []
+
+
+def test_close_orphans_missing_journal(tmp_path, monkeypatch):
+    monkeypatch.setattr(events, "EVENTS_PATH", tmp_path / "events.jsonl")
+    assert task_state.close_orphans(tmp_path / "нет.jsonl") == []

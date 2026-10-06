@@ -81,6 +81,28 @@ def snapshot(path, chat=None) -> dict:
             "last": max(finished, key=lambda t: t.get("since", "")) if finished else None}
 
 
+def close_orphans(path) -> list[str]:
+    """При старте бота: задачи, у которых в журнале нет финала, — следы прерванного процесса.
+
+    Очередь живёт в памяти и после перезапуска пуста, так что `running`/`review`/`queued` без финала —
+    призраки: /status называл бы бота занятым часами. Каждой дописывается `failed` (`interrupted`)."""
+    last: dict[str, dict] = {}
+    for line in _tail_lines(Path(path)):
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict) and row.get("type") == "task_state" and row.get("task_id") \
+                and row.get("state") in STATES:
+            last[row["task_id"]] = row
+    closed = []
+    for tid, row in last.items():
+        if row["state"] not in TERMINAL:
+            emit(tid, row.get("task", ""), "failed", chat=row.get("chat"), interrupted=True)
+            closed.append(tid)
+    return closed
+
+
 def _when(ts: str):
     try:
         return datetime.fromisoformat(ts)

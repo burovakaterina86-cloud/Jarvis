@@ -960,6 +960,12 @@ def run(config: Config | None = None) -> int:
     async def post_init(app: Application) -> None:
         nonlocal watcher
         gw.attach(app.bot)
+        try:   # очередь живёт в памяти: незавершённые задачи из прошлого запуска — призраки в /status
+            closed = task_state.close_orphans(ROOT / "state" / "events.jsonl")
+            if closed:
+                log.info("закрыто прерванных задач из прошлого запуска: %d", len(closed))
+        except Exception as exc:  # noqa: BLE001 — уборка журнала не должна мешать старту
+            log.warning("не удалось закрыть прерванные задачи: %s", type(exc).__name__)
         try:   # меню команд в Telegram: кнопка «Меню» рядом со строкой ввода
             await app.bot.set_my_commands([BotCommand(n, short) for n, short, _ in COMMANDS])
         except Exception as exc:  # noqa: BLE001 — без меню бот работает
