@@ -237,8 +237,10 @@ class Gateway:
     async def cmd_new(self, update, context) -> None:
         if not self._allowed(update):
             return
-        self.sessions.reset(update.effective_chat.id)
-        await self._send(context, update.effective_chat.id, "Хорошо, начинаем с чистого листа 🙂")
+        chat_id = update.effective_chat.id
+        self.sessions.reset(chat_id)
+        self.sessions.reset(worker.session_key(chat_id, "codex"))   # у Codex своя сессия — раньше /new её не сбрасывал
+        await self._send(context, chat_id, "Хорошо, начинаем с чистого листа 🙂")
 
     async def cmd_stop(self, update, context) -> None:
         if not self._allowed(update):

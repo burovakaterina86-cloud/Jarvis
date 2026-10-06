@@ -709,7 +709,7 @@ async def test_new_resets_session_and_stop_stops(tmp_path):
     ctx = FakeContext()
     g.sessions.set(OWNER, "sid-old")
     await g.cmd_new(FakeUpdate(OWNER, message=FakeIncoming(text="/new")), ctx)
-    assert g.sessions.resets == [str(OWNER)]
+    assert g.sessions.resets == [str(OWNER), f"{OWNER}:codex"]
     await g.cmd_stop(FakeUpdate(OWNER, message=FakeIncoming(text="/stop")), ctx)
     assert g.router.stopped == [OWNER]
 
