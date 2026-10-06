@@ -997,3 +997,16 @@ async def test_typing_indicator_while_agent_works(tmp_path):
     ctx.bot.send_chat_action = send_chat_action
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="сделай пост")), ctx)
     assert actions and set(actions) == {"typing"}
+
+
+def test_help_lists_every_registered_command():
+    from integrations.telegram.gateway import COMMANDS, HELP
+    assert {n for n, _, _ in COMMANDS} >= {"today", "status", "stop", "new", "codex", "claude"}
+    assert all(f"/{n} —" in HELP for n, _, _ in COMMANDS)
+
+
+async def test_today_command_answers_without_agent(tmp_path):
+    g = make_gateway(tmp_path)
+    ctx = FakeContext()
+    await g.cmd_today(FakeUpdate(OWNER, message=FakeIncoming(text="/today")), ctx)
+    assert g.router.jobs == [] and any("Доброе утро" in m["text"] for m in ctx.bot.sent)

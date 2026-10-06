@@ -22,7 +22,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, MessageHandler,
                           filters)
 
@@ -53,12 +53,19 @@ NO_TOKEN = ("Не вижу TELEGRAM_BOT_TOKEN.\n"
             "Создай бота у @BotFather и впиши токен в файл .env рядом со start.bat:\n"
             "TELEGRAM_BOT_TOKEN=...\n"
             "Там же TELEGRAM_OWNER_ID — свой номер подскажет команда /whoami.")
-HELP = ("Пиши задачу текстом или голосом, присылай фото и файлы.\n"
-        "/new — начать разговор заново\n"
-        "/stop — остановить текущую задачу\n"
-        "/status — что сейчас в работе\n"
-        "/browser_login <адрес> — открыть сайт в браузере JARVIS, чтобы войти самой\n"
-        "/whoami — показать мой Telegram ID")
+# Меню команд: (команда, подсказка в меню Telegram, пояснение в /help). Меню ставится при старте бота.
+COMMANDS = [
+    ("today", "Что у нас на сегодня", "утренняя сводка: что ждёт решения, свежая тема, один шаг на сегодня"),
+    ("status", "Чем ты сейчас занят", "что делаю, что в очереди и сколько осталось лимита у Claude и Codex"),
+    ("stop", "Остановить текущую задачу", "если пошло не туда — я сразу остановлюсь"),
+    ("new", "Начать разговор заново", "забываю текущий разговор, начинаем с чистого листа"),
+    ("codex", "Работать через Codex", "переключаюсь на Codex, когда у Claude кончается лимит"),
+    ("claude", "Вернуться к Claude", "обратно на Claude"),
+    ("browser_login", "Войти на сайт в моём браузере", "/browser_login адрес — открою окно, войди сама; пароль я не вижу"),
+    ("whoami", "Показать мой Telegram ID", "нужно только при первой настройке бота"),
+]
+HELP = ("Пиши мне текстом или голосом, присылай фото и файлы — разберёмся 🙂\n\nКоманды:\n"
+        + "\n".join(f"/{name} — {about}" for name, _short, about in COMMANDS))
 
 APPROVE_PREFIX = "ap"
 CONTENT_PREFIX = "ct"
@@ -261,6 +268,12 @@ class Gateway:
         if limits:
             text += "\n" + limits
         await self._send(context, chat_id, text)
+
+    async def cmd_today(self, update, context) -> None:
+        if not self._allowed(update):
+            return
+        out = schedule_jobs.morning(self.root, dt.datetime.now())
+        await self._send(context, update.effective_chat.id, out.text)
 
     async def cmd_codex(self, update, context) -> None:
         """Ручное переключение на Codex — до команды /claude."""
@@ -877,6 +890,7 @@ class Gateway:
         app.add_handler(CommandHandler("new", self.cmd_new))
         app.add_handler(CommandHandler("stop", self.cmd_stop))
         app.add_handler(CommandHandler("status", self.cmd_status))
+        app.add_handler(CommandHandler("today", self.cmd_today))
         app.add_handler(CommandHandler("codex", self.cmd_codex))
         app.add_handler(CommandHandler("claude", self.cmd_claude))
         app.add_handler(CommandHandler("browser_login", self.cmd_browser_login))
@@ -945,6 +959,10 @@ def run(config: Config | None = None) -> int:
     async def post_init(app: Application) -> None:
         nonlocal watcher
         gw.attach(app.bot)
+        try:   # меню команд в Telegram: кнопка «Меню» рядом со строкой ввода
+            await app.bot.set_my_commands([BotCommand(n, short) for n, short, _ in COMMANDS])
+        except Exception as exc:  # noqa: BLE001 — без меню бот работает
+            log.warning("не удалось поставить меню команд: %s", type(exc).__name__)
         approvals.on_request(gw.on_approval_request)
         port = await approvals.start(ROOT)
         log.info("Approvals API слушает 127.0.0.1:%s", port)
