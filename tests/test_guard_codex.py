@@ -150,3 +150,11 @@ def test_agent_cannot_touch_codex_hooks():
     d = guard.decide({"tool_name": "Write", "tool_input": {"file_path": ".codex/hooks.json", "content": "{}"}},
                      policy=guard.load_policy(POLICY), root=REPO, env={})
     assert d.action == "deny" and d.kind == "protected"
+
+
+def test_codex_helper_and_resource_tools_are_read_only():
+    from tests.test_guard import decide
+    from pathlib import Path
+    for tool in ("collaborationwait_agent", "list_mcp_resources", "read_mcp_resource"):
+        d = decide({"tool_name": tool, "tool_input": {}}, Path.cwd())
+        assert d.level == "READ", tool

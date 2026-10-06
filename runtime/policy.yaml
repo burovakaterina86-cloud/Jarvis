@@ -91,6 +91,13 @@ read_tools:
   - KillShell
   - ListMcpResourcesTool
   - ReadMcpResourceTool
+  - list_mcp_resources          # Codex: то же, что ListMcpResourcesTool — только чтение
+  - list_mcp_resource_templates
+  - read_mcp_resource
+  - ".*wait_agent"               # Codex: ждёт своего помощника (как Task/Agent у Claude)
+  - ".*spawn_agent"
+  - ".*close_agent"
+  - ".*send_input"
   - mcp__playwright__browser_navigate
   - mcp__playwright__browser_navigate_back
   - mcp__playwright__browser_snapshot

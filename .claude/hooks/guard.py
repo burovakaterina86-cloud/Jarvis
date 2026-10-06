@@ -543,9 +543,9 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
         if any(_tool_matches(t, tool) for t in policy.get("read_tools") or []):
             level, kind, reason = "READ", "", "чтение"
         else:
-            level, kind, reason = "EXTERNAL", "unknown_tool", f"неизвестный инструмент {tool}"
+            level, kind, reason = "EXTERNAL", "unknown_tool", f"хочу использовать незнакомый инструмент «{tool}»"
     elif not any(_tool_matches(t, tool) for t in policy.get("read_tools") or []):
-        level, kind, reason = "EXTERNAL", "unknown_tool", f"неизвестный инструмент {tool}"
+        level, kind, reason = "EXTERNAL", "unknown_tool", f"хочу использовать незнакомый инструмент «{tool}»"
 
     # 2б. чтение большого файла целиком — тем же путём, что EXTERNAL
     if level == "READ":
