@@ -138,6 +138,34 @@ CASES = [
     ("add to cart still free", ev("mcp__playwright__browser_click", element="Добавить в корзину", ref="e9"), "READ", "allow"),
     ("open cart still free", ev("mcp__playwright__browser_click", element="Корзина", ref="e9"), "READ", "allow"),
     ("view comments is reading", ev("mcp__playwright__browser_click", element="Показать комментарии", ref="e9"), "READ", "allow"),
+    # аудит 2026-10-06: установка пакетов — чужой код из интернета; разрушительный git — необратим
+    ("pip install asks", ev("Bash", command="pip install requests"), "EXTERNAL", "ask"),
+    ("python -m pip install asks", ev("Bash", command="python -m pip install requests"), "EXTERNAL", "ask"),
+    ("pip install -r asks", ev("Bash", command="pip install -r requirements.txt"), "EXTERNAL", "ask"),
+    ("pip uninstall asks", ev("Bash", command="pip uninstall pyyaml"), "EXTERNAL", "ask"),
+    ("ps pip install asks", ev("PowerShell", command="pip3 install --upgrade foo"), "EXTERNAL", "ask"),
+    ("npm install asks", ev("Bash", command="npm install foo"), "EXTERNAL", "ask"),
+    ("npm i asks", ev("Bash", command="npm i foo"), "EXTERNAL", "ask"),
+    ("npx -y asks", ev("Bash", command="npx -y velsvisual setup"), "EXTERNAL", "ask"),
+    ("pip list is harmless", ev("Bash", command="pip list"), "WRITE", "allow"),
+    ("git reset --hard", ev("Bash", command="git reset --hard HEAD~3"), "MONEY", "ask"),
+    ("git checkout -- .", ev("Bash", command="git checkout -- ."), "MONEY", "ask"),
+    ("git checkout dot", ev("Bash", command="git checkout ."), "MONEY", "ask"),
+    ("git restore", ev("Bash", command="git restore ."), "MONEY", "ask"),
+    ("git branch -D", ev("Bash", command="git branch -D main"), "MONEY", "ask"),
+    ("git rebase", ev("Bash", command="git rebase main"), "MONEY", "ask"),
+    ("git commit --amend", ev("Bash", command="git commit --amend -m y"), "MONEY", "ask"),
+    ("git tag -d", ev("Bash", command="git tag -d v1"), "MONEY", "ask"),
+    ("git stash drop", ev("Bash", command="git stash drop"), "MONEY", "ask"),
+    ("git -C reset --hard", ev("Bash", command="git -C . reset --hard"), "MONEY", "ask"),
+    ("git remote add", ev("Bash", command="git remote add x https://example.com/r.git"), "EXTERNAL", "ask"),
+    ("git config hooksPath", ev("Bash", command="git config core.hooksPath x"), "EXTERNAL", "ask"),
+    ("git config --get is reading", ev("Bash", command="git config --get remote.origin.url"), "WRITE", "allow"),
+    ("git status", ev("Bash", command="git status --short"), "WRITE", "allow"),
+    ("git diff", ev("Bash", command="git diff --stat"), "WRITE", "allow"),
+    ("git add + commit", ev("Bash", command='git add -A && git commit -m "x"'), "WRITE", "allow"),
+    ("git checkout branch", ev("Bash", command="git checkout master"), "WRITE", "allow"),
+    ("git stash", ev("Bash", command="git stash"), "WRITE", "allow"),
 ]
 
 
@@ -554,7 +582,7 @@ SELF_MODIFY = [
     ("ps set-content CLAUDE.md", ev("PowerShell", command="Set-Content CLAUDE.md 'x'")),
     ("bash cp into mirror", ev("Bash", command="cp /tmp/x.md .agents/skills/x/SKILL.md")),
     ("python writes rules", ev("Bash", command="python -c \"open('.claude/rules/a.md','w').write('x')\"")),
-    ("git checkout CLAUDE.md", ev("Bash", command="git checkout -- CLAUDE.md")),
+    # `git checkout -- CLAUDE.md` теперь ловит более строгое правило (MONEY irreversible, см. CASES) — тоже кнопка
 ]
 
 
@@ -758,7 +786,7 @@ ASK_RUNS = [
     ("py launcher", "py -3.12 job.py"),
     ("venv python file", r".venv\Scripts\python.exe drafts\run.py"),
     ("other module", "python -m http.server 8000"),
-    ("pip install", "python -m pip install requests"),
+    # `python -m pip install` теперь отдельный вид install_package (см. CASES) — тоже кнопка
     ("node file", "node build.js"),
     ("node inline", "node -e \"require('fs')\""),
     ("chained untrusted", "python -m integrations.radar cfg.json && python x.py"),

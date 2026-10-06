@@ -53,6 +53,8 @@ external:
   self_modify: ask
   run_script: ask
   url_data: ask
+  install_package: ask
+  git_config: ask
 
 # Порог чтения целиком. Самый большой живой текстовый файл проекта — 59 КБ,
 # так что ложных срабатываний на обычной работе нет.
@@ -209,6 +211,25 @@ rules:
   - {tool: "Bash|PowerShell", match: '(^|[\s;&|("''(])(rm|rmdir|unlink|shred|del|erase|rd|ri|remove-item|clear-content)(\.exe)?(\s|$)', level: MONEY, kind: delete, reason: "удаление файлов"}
   - {tool: "Bash|PowerShell", match: '\bfind\b[^;&|\n]*\s-delete\b|\bgit\s+clean\b', level: MONEY, kind: delete, reason: "удаление файлов"}
   - {tool: "*", match: '::\s*delete\s*\(|\bos\.(remove|unlink|rmdir|removedirs)\b|shutil\.rmtree|\.unlink\s*\(|\.rmdir\s*\(|unlinksync|rmsync|\bfs\.(rm|unlink)\b', level: MONEY, kind: delete, reason: "удаление файлов"}
+
+  # --- разрушительный git: правки без коммита и история стираются без возврата (аудит 2026-10-06) ---
+  # Обычные add / commit / status / diff / log / переключение ветки / stash — без вопросов.
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\breset\b[^;&|\n]*--(hard|merge|keep)\b', level: MONEY, kind: irreversible, reason: "git reset --hard: несохранённые правки пропадут"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\bcheckout\b[^;&|\n]*(\s--(\s|$)|\s\.(\s|$)|\s-f\b|\s--force\b)', level: MONEY, kind: irreversible, reason: "git checkout: несохранённые правки пропадут"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\b(restore|rebase|filter-branch|filter-repo|update-ref)\b', level: MONEY, kind: irreversible, reason: "git: откат файлов или переписывание истории"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\bswitch\b[^;&|\n]*(\s-f\b|--force|--discard-changes)', level: MONEY, kind: irreversible, reason: "git switch: несохранённые правки пропадут"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\bbranch\b[^;&|\n]*\s(-d|--delete)\b', level: MONEY, kind: irreversible, reason: "удаление ветки git"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\btag\b[^;&|\n]*\s(-d|--delete)\b', level: MONEY, kind: irreversible, reason: "удаление тега git"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\bstash\b[^;&|\n]*\b(drop|clear)\b', level: MONEY, kind: irreversible, reason: "удаление отложенных правок git"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\bcommit\b[^;&|\n]*--amend\b', level: MONEY, kind: irreversible, reason: "git commit --amend: переписывание коммита"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\b(reflog\s+(expire|delete)|gc\b[^;&|\n]*--prune)', level: MONEY, kind: irreversible, reason: "git: стирание журнала восстановления"}
+  # Настройки git и внешние адреса: подмена папки хуков запускает чужой код при следующей git-команде.
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\b(remote\s+(add|set-url|rename|remove|rm)|submodule\s+(add|update)|worktree\s+add)\b', level: EXTERNAL, kind: git_config, reason: "git: внешний адрес или подмодуль"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\bconfig\b(?![^;&|\n]*(--get|--list|\s-l\b))', level: EXTERNAL, kind: git_config, reason: "изменение настроек git (хуки, алиасы, адреса)"}
+
+  # --- установка пакетов: чужой код из интернета запускается при установке (аудит 2026-10-06) ---
+  - {tool: "Bash|PowerShell", match: '\bpip3?(\.exe)?\s+(-\S+\s+)*(install|uninstall|download|wheel)\b|\bpipx\s+(install|run|upgrade)\b|\b(uv|poetry|conda)\s+(pip\s+)?(add|install|sync)\b', level: EXTERNAL, kind: install_package, reason: "установка пакетов: чужой код из интернета"}
+  - {tool: "Bash|PowerShell", match: '\b(npm|pnpm|yarn|bun)(\.cmd)?\s+(-\S+\s+)*(install|i|add|ci|update|upgrade|exec|dlx|remove|uninstall)\b|\bnpx(\.cmd)?\b|\bbunx\b|\bplaywright(\.cmd)?\s+install\b', level: EXTERNAL, kind: install_package, reason: "установка пакетов: чужой код из интернета"}
 
   # --- отправка в сеть и публикация ---
   - {tool: "*", match: '\bgit\s+push\b', level: EXTERNAL, kind: publish, reason: "публикация в git"}
