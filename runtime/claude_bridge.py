@@ -335,9 +335,9 @@ def _human_rate_limit(resets_at) -> str:
     try:
         from datetime import datetime
         when = datetime.fromtimestamp(float(resets_at)).strftime("%H:%M")
-        return f"Лимит подписки Claude исчерпан, продолжу в {when}."
+        return f"У Claude закончился лимит — продолжу в {when}."
     except (TypeError, ValueError, OverflowError, OSError):
-        return "Лимит подписки Claude исчерпан, продолжу, когда он обновится."
+        return "У Claude закончился лимит — продолжу, как только он обновится."
 
 
 def _AUTH_MARKERS(blob: str) -> bool:  # noqa: N802
@@ -346,7 +346,7 @@ def _AUTH_MARKERS(blob: str) -> bool:  # noqa: N802
                                    "credentials are invalid"))
 
 
-AUTH_TEXT ="Нужно заново войти в Claude на компьютере: открой терминал и выполни claude, затем /login."
+AUTH_TEXT ="Claude просит войти заново. На компьютере открой терминал, набери claude, потом /login — и я снова в деле."
 
 
 def _to_result(out: _Outcome, session_id_in: str | None, run_id: str | None = None) -> TurnResult:
@@ -363,7 +363,7 @@ def _to_result_core(out: _Outcome, session_id_in: str | None, run_id: str | None
     res = out.result or {}
     cost = res.get("total_cost_usd")
     if run_id in _stopped:
-        return TurnResult("Остановлено.", sid, new, cost, "stopped", "stopped")
+        return TurnResult("Остановился.", sid, new, cost, "stopped", "stopped")
     if out.api_error == "rate_limit" and not (out.result and not res.get("is_error")):
         limited = TurnResult(_human_rate_limit(out.resets_at), sid, new, cost, "rate_limited", "rate_limit")
         try:
@@ -407,8 +407,8 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
             # Ход уже вызывал инструменты: повтор мог бы повторить внешнее действие.
             res.error = res.error or "turn_failed"
             res.text = (res.text or "") + (
-                "\n\nХод оборвался уже после вызова инструментов, поэтому я не повторяю его сам — "
-                "часть действий могла выполниться. Скажи, что делать дальше, или начни заново "
+                "\n\nОй, я прервался на полпути, поэтому сам не повторяю — "
+                "часть действий могла уже выполниться. Скажи, что делать дальше, или начни заново "
                 "командой /new.")
             return res
         if session_id and res.status == "error" and _is_overflow(out):

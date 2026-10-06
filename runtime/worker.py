@@ -106,11 +106,11 @@ def describe_limits(data: dict | None = None, now: float | None = None) -> str:
     if claude:
         reset = claude.get("resets_at")
         if claude.get("status") == "rejected" and (reset is None or float(reset) > now):
-            lines.append(f"Claude: лимит исчерпан до {_hhmm(reset)}" if reset else "Claude: лимит исчерпан")
+            lines.append(f"У Claude лимит закончился, вернётся в {_hhmm(reset)}" if reset else "У Claude лимит закончился")
         elif claude.get("status") == "allowed_warning":
-            lines.append("Claude: лимит на исходе" + (f" (сброс в {_hhmm(reset)})" if reset else ""))
+            lines.append("У Claude лимит почти на исходе" + (f" (сброс в {_hhmm(reset)})" if reset else ""))
         else:
-            lines.append("Claude: лимит в порядке")
+            lines.append("У Claude с лимитом всё хорошо")
     codex = data.get("codex") or {}
     parts = []
     for key, label in (("primary", "5 ч"), ("secondary", "неделя")):
@@ -119,7 +119,7 @@ def describe_limits(data: dict | None = None, now: float | None = None) -> str:
             parts.append(f"{label} — {window['used_percent']:g}%" +
                          (f" (сброс в {_hhmm(window['resets_at'])})" if key == "primary" and window.get("resets_at") else ""))
     if parts:
-        lines.append("Codex: " + ", ".join(parts) + " израсходовано")
+        lines.append("У Codex израсходовано: " + ", ".join(parts))
     return "\n".join(lines)
 
 

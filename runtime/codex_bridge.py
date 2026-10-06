@@ -45,8 +45,8 @@ CODEX_NOTE = (
 )
 RATE_MARKERS = ("usage limit", "rate limit", "limit reached", "you've hit your", "too many requests", "quota")
 AUTH_MARKERS = ("unauthorized", "401", "codex login", "not logged in", "authentication", "expired token")
-RATE_TEXT = "Лимит подписки Codex исчерпан — сейчас продолжить в Codex не получится."
-AUTH_TEXT = "Нужно заново войти в Codex на компьютере: в терминале выполни codex login."
+RATE_TEXT = "У Codex тоже закончился лимит — сейчас продолжить в нём не получится."
+AUTH_TEXT = "Codex просит войти заново. В терминале на компьютере набери codex login — и продолжим."
 
 _running: dict[str, asyncio.subprocess.Process] = {}
 _stopped: set[str] = set()

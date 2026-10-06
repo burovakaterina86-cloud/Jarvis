@@ -48,7 +48,7 @@ def greeting() -> str:
     return f"Привет, {name}! На связи Джарвис."
 SETUP_HINT = ("Бот в режиме настройки: в .env пуст TELEGRAM_OWNER_ID.\n"
               "Отправь /whoami, впиши показанный номер в .env и перезапусти start.bat.")
-VOICE_FAILED = "Я не разобрал голосовое — повтори или напиши текстом."
+VOICE_FAILED = "Ой, не расслышал голосовое 😅 Запиши ещё раз или напиши текстом."
 NO_TOKEN = ("Не вижу TELEGRAM_BOT_TOKEN.\n"
             "Создай бота у @BotFather и впиши токен в файл .env рядом со start.bat:\n"
             "TELEGRAM_BOT_TOKEN=...\n"
@@ -231,14 +231,14 @@ class Gateway:
         if not self._allowed(update):
             return
         self.sessions.reset(update.effective_chat.id)
-        await self._send(context, update.effective_chat.id, "Начал новый разговор.")
+        await self._send(context, update.effective_chat.id, "Хорошо, начинаем с чистого листа 🙂")
 
     async def cmd_stop(self, update, context) -> None:
         if not self._allowed(update):
             return
         stopped = self.router.stop(update.effective_chat.id)
         await self._send(context, update.effective_chat.id,
-                         "Останавливаю." if stopped else "Сейчас нечего останавливать.")
+                         "Всё, остановился." if stopped else "Я сейчас ничем не занят — останавливать нечего.")
 
     async def cmd_status(self, update, context) -> None:
         if not self._allowed(update):
@@ -268,13 +268,13 @@ class Gateway:
             return
         self.router.set_runtime(update.effective_chat.id, "codex")
         await self._send(context, update.effective_chat.id,
-                         "🟢 Дальше работаю в Codex — с теми же проверками и кнопками. Вернуться к Claude — /claude.")
+                         "Ну вот, дальше работаю через Codex 🟢 Проверки и кнопки те же. Вернуться к Claude — /claude.")
 
     async def cmd_claude(self, update, context) -> None:
         if not self._allowed(update):
             return
         self.router.set_runtime(update.effective_chat.id, "claude")
-        await self._send(context, update.effective_chat.id, "Дальше работаю в Claude.")
+        await self._send(context, update.effective_chat.id, "Вернулся к Claude, продолжаем 🙂")
 
     async def cmd_browser_login(self, update, context) -> None:
         if not self._allowed(update):
@@ -282,7 +282,7 @@ class Gateway:
         chat_id = update.effective_chat.id
         args = getattr(context, "args", None) or []
         if not args:
-            await self._send(context, chat_id, "Напиши адрес: /browser_login https://instagram.com")
+            await self._send(context, chat_id, "Напиши адрес сайта, например: /browser_login https://instagram.com")
             return
         script = self.root / "integrations" / "browser" / "login.py"
         if not script.exists():
@@ -294,7 +294,7 @@ class Gateway:
                              cwd=str(self.root))
         except OSError as exc:
             log.warning("не удалось запустить браузер: %s", type(exc).__name__)
-            await self._send(context, chat_id, "Не смог открыть браузер на компьютере.")
+            await self._send(context, chat_id, "Не получилось открыть браузер на компьютере 😕")
             return
         await self._send(context, chat_id,
                          "Открываю окно браузера JARVIS на компьютере. Войди сама и закрой окно — "
@@ -321,7 +321,7 @@ class Gateway:
         if not text:
             await self._send(context, chat_id, VOICE_FAILED)
             return
-        await self._send(context, chat_id, f"🎙 распознал: {text}")
+        await self._send(context, chat_id, f"🎙 Услышал так: {text}")
         await self._run(update, context, text)
 
     async def on_file(self, update, context) -> None:
@@ -340,7 +340,7 @@ class Gateway:
             return
         path = await self._download(context, file_id, name)
         if path is None:
-            await self._send(context, chat_id, "Не смог сохранить файл — пришли ещё раз.")
+            await self._send(context, chat_id, "Не получилось сохранить файл 😕 Пришли, пожалуйста, ещё раз.")
             return
         caption = (getattr(msg, "caption", None) or "").strip()
         prompt = (f"{caption}\n\n" if caption else "") + f"Файл от владелицы: {path}"
@@ -401,8 +401,8 @@ class Gateway:
             log.warning("не удалось доставить ответ: %s", type(exc).__name__)
             try:
                 await self._send(context, chat_id,
-                                 "Я не смог отправить ответ — Telegram отказал. "
-                                 "Повтори задачу или посмотри state/events.jsonl.")
+                                 "Ответ у меня готов, но Telegram его не принял 😕 "
+                                 "Попроси ещё раз — или загляни в state/events.jsonl, там видно, что случилось.")
             except Exception:  # noqa: BLE001 — молчание лучше падения бота
                 log.warning("не удалось сообщить о неудачной отправке")
 
@@ -414,17 +414,17 @@ class Gateway:
             active = None
         busy = f"задачей «{active['task']}»" if active and active.get("task") else "другой задачей"
         if position <= 1:
-            return f"Сейчас занят {busy} — твоё сообщение возьму сразу после неё."
-        return (f"Сейчас занят {busy}, перед твоим сообщением ещё {position - 1}. Отвечу, как дойду. "
-                "Посмотреть — /status, прервать текущую — /stop.")
+            return f"Секунду, я ещё занят {busy} — сразу после неё займусь твоим сообщением."
+        return (f"Секунду, я ещё занят {busy}, а перед твоим сообщением есть ещё {position - 1}. Отвечу, как только дойду до него. "
+                "Посмотреть, что делаю, — /status, остановить — /stop.")
 
     def _offer_text(self, offer: dict) -> str:
         reset = offer.get("resets_at")
-        lines = ["⏳ Лимит Claude закончился" + (f", обновится в {_hhmm(reset)}." if reset else ".")]
+        lines = ["⏳ У Claude закончился лимит" + (f", обновится в {_hhmm(reset)}." if reset else ".")]
         files = offer.get("files") or []
         lines.append(f"Задача «{offer.get('task') or 'задача'}» не доделана"
                      + (": уже изменены " + ", ".join(files[:5]) + ("…" if len(files) > 5 else "") + "." if files else "."))
-        lines.append("Могу продолжить в Codex: он получит сводку и доделает — с теми же проверками и кнопками.")
+        lines.append("Могу передать Codex — он получит сводку и доделает, проверки и кнопки те же. Как тебе?")
         return "\n".join(lines)
 
     def _switch_keyboard(self, chat_id, offer: dict) -> InlineKeyboardMarkup:
@@ -439,19 +439,19 @@ class Gateway:
         if decision == "codex":
             job = self.router.offer_job(chat)
             if job is None:
-                await query.edit_message_text(text="Это предложение устарело.", reply_markup=None)
+                await query.edit_message_text(text="Это предложение уже неактуально.", reply_markup=None)
                 return
-            await query.edit_message_text(text="🟢 Продолжаю в Codex.", reply_markup=None)
+            await query.edit_message_text(text="Хорошо, продолжаю в Codex 🟢", reply_markup=None)
             await self._run(update, context, job.prompt, task=job.task, runtime="codex")
             return
         offer = worker.load_offer(chat)
         if not offer:
-            await query.edit_message_text(text="Это предложение устарело.", reply_markup=None)
+            await query.edit_message_text(text="Это предложение уже неактуально.", reply_markup=None)
             return
         at = offer.get("resets_at") or (time.time() + 3600)
         worker.defer(chat, at=at, prompt=offer.get("prompt", ""), task=offer.get("task") or "задача")
         worker.drop_offer(chat)
-        await query.edit_message_text(text=f"Хорошо, жду. Начну в Claude в {_hhmm(at)} и напишу.", reply_markup=None)
+        await query.edit_message_text(text=f"Договорились, подожду. В {_hhmm(at)} продолжу в Claude и напишу тебе.", reply_markup=None)
 
     async def check_deferred(self, now: float | None = None) -> list[str]:
         """«Подождать»: задачи, чьё время пришло, — в Claude, ответ придёт как обычный."""
@@ -469,7 +469,7 @@ class Gateway:
 
     async def _deliver_inner(self, context, chat_id, result) -> None:
         if getattr(result, "switched_back", False) is True:
-            await self._send(context, chat_id, "Лимит Claude восстановился — дальше снова работаю в Claude.")
+            await self._send(context, chat_id, "Лимит у Claude восстановился, так что возвращаюсь к нему 🙂")
         offer = getattr(result, "switch_offer", None)
         if isinstance(offer, dict):
             await self._send(context, chat_id, self._offer_text(offer),
@@ -479,7 +479,7 @@ class Gateway:
             pass   # новый разговор после паузы — служебная кухня, ей это не нужно (её поправка 2026-10-06)
         elif getattr(result, "new_session", False):
             await self._send(context, chat_id,
-                             "Начал новый разговор — прежний контекст потерялся.")
+                             "Не смог подхватить прошлый разговор и начал заново 😅 Если что-то важное из него нужно — напомни.")
         raw = (getattr(result, "text", "") or "").strip()
         if not raw:
             return
@@ -497,7 +497,7 @@ class Gateway:
                 stamp = dt.datetime.now().strftime("%Y-%m-%d-%H%M%S")
                 await context.bot.send_document(
                     chat_id, document=text.encode("utf-8"), filename=f"answer-{stamp}.md",
-                    caption="Ответ длинный — целиком в файле.")
+                    caption="Получилось длинно, поэтому весь ответ — в файле.")
             else:
                 for part in parts:
                     if part.strip():
@@ -506,7 +506,7 @@ class Gateway:
             await self._send_attachments(context, chat_id, attachments)
         bundle = files.find_content_bundle(text, self.root)
         if bundle:
-            await self._send(context, chat_id, "Черновик — ждёт твоего решения.",
+            await self._send(context, chat_id, "Черновик готов — посмотри и скажи, что с ним делать.",
                              reply_markup=self._content_keyboard(bundle))
 
     async def _send_attachments(self, context, chat_id, raw_paths: list[str]) -> None:
@@ -519,19 +519,19 @@ class Gateway:
             name = Path(raw.strip()).name or raw.strip() or "(пусто)"
             if i >= files.ATTACH_MAX_FILES:
                 await self._send(context, chat_id,
-                                 f"Не отправил {name}: больше {files.ATTACH_MAX_FILES} файлов за раз")
+                                 f"Не получилось прислать {name}: больше {files.ATTACH_MAX_FILES} файлов за раз")
                 continue
             try:
                 path = files.resolve_attachment(self.root, raw)
             except ValueError as exc:
-                await self._send(context, chat_id, f"Не отправил {name}: {exc}")
+                await self._send(context, chat_id, f"Не получилось прислать {name}: {exc}")
                 continue
             try:
                 with open(path, "rb") as fh:
                     await context.bot.send_document(chat_id, document=fh, filename=path.name)
             except Exception as exc:  # noqa: BLE001 — сбой одного файла не должен ронять остальные
                 log.warning("не удалось отправить вложение %s: %s", path.name, type(exc).__name__)
-                await self._send(context, chat_id, f"Не отправил {path.name}: Telegram отказал")
+                await self._send(context, chat_id, f"Не получилось прислать {path.name}: Telegram не принял")
 
     # ---- кнопки
 
@@ -554,7 +554,7 @@ class Gateway:
             log.warning("некому показать запрос подтверждения (%s)", level)
             return
         mark = "💸" if level == "MONEY" else "🌐"
-        text = f"{mark} {summary}\n\nИнструмент: {tool} · уровень {level}"
+        text = f"{mark} {summary}\n\nМожно, я это сделаю?"
         try:
             await self.bot.send_message(self.owner_id, text,
                                         reply_markup=self._approval_keyboard(request_id))
@@ -816,7 +816,7 @@ class Gateway:
                 return
             sent += 1
         if not sent:
-            await query.edit_message_text(text=f"Не нашёл черновик {name} на диске.",
+            await query.edit_message_text(text=f"Не нашёл черновик {name} — похоже, его уже нет.",
                                           reply_markup=None)
 
     async def on_callback(self, update, context) -> None:
@@ -833,7 +833,7 @@ class Gateway:
         token = f"{prefix}:{token_id}"
         entry = self._tokens.get(token)
         if entry is None:
-            await query.edit_message_text(text="Кнопка устарела — этот запрос уже неактуален.",
+            await query.edit_message_text(text="Эта кнопка уже не работает — запрос устарел.",
                                           reply_markup=None)
             return
         value = entry[0]

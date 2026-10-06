@@ -76,11 +76,11 @@ def test_reviewer_command_line_is_fresh_and_read_only():
 
 
 def test_annotate_texts():
-    assert review.annotate("Готово.", {"verdict": "pass", "rounds": 1}).endswith("✅ Независимая проверка: пройдена.")
-    assert "после исправлений" in review.annotate("x", {"verdict": "pass", "rounds": 2})
+    assert review.annotate("Готово.", {"verdict": "pass", "rounds": 1}).endswith("✅ Перепроверил себя — всё в порядке.")
+    assert "после правок" in review.annotate("x", {"verdict": "pass", "rounds": 2})
     t = review.annotate("x", {"verdict": "fix", "rounds": 2, "problems": ["нет отметки"]})
     assert "⚠️" in t and "нет отметки" in t
-    assert "не выполнилась" in review.annotate("x", {"verdict": None, "error": "лимит"})
+    assert "не вышло" in review.annotate("x", {"verdict": None, "error": "лимит"})
 
 
 # ---------- в очереди ----------
@@ -118,7 +118,7 @@ async def test_pass_on_first_review(router):
     job, res, calls = await _run(router, "pass")
     assert [_is_review(c) for c in calls] == [False, True]
     assert res.review["verdict"] == "pass" and res.review["rounds"] == 1
-    assert res.text.endswith("✅ Независимая проверка: пройдена.")
+    assert res.text.endswith("✅ Перепроверил себя — всё в порядке.")
     rv = calls[1]["argv"]
     assert "--resume" not in rv and "--no-session-persistence" in rv
     assert rv[rv.index("--settings") + 1].endswith("reviewer-settings.json")
@@ -132,7 +132,7 @@ async def test_fix_goes_back_to_worker_then_passes(router):
     assert fix["argv"][fix["argv"].index("--resume") + 1] == "sess-new-0001"   # сессия исполнителя
     assert "нет отметки pipeline" in fix["stdin_tail"]
     assert res.review == {"verdict": "pass", "rounds": 2, "problems": [], "checked": ["essa-ai/content/x/post.md"]}
-    assert "после исправлений" in res.text
+    assert "после правок" in res.text
 
 
 async def test_two_failed_rounds_reach_the_owner_with_problems(router):
@@ -151,7 +151,7 @@ async def test_fail_verdict_is_not_sent_back(router):
 
 async def test_broken_review_does_not_break_the_answer(router):
     job, res, calls = await _run(router, "broken")
-    assert res.status == "ok" and "не выполнилась" in res.text
+    assert res.status == "ok" and "не вышло" in res.text
 
 
 async def test_ledger_records_review(router):

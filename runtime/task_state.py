@@ -21,10 +21,10 @@ STATES = ("queued", "running", "waiting_approval", "review", "done", "failed", "
 TERMINAL = {"done", "failed", "timeout", "stopped"}
 TAIL_BYTES = 512 * 1024
 
-LABELS = {"queued": "в очереди", "running": "работаю", "waiting_approval": "ждёт твоего подтверждения",
-          "review": "на независимой проверке", "done": "готово", "failed": "ошибка",
-          "timeout": "остановлено по времени", "stopped": "остановлено"}
-VERDICTS = {"pass": "проверка пройдена", "fix": "остались замечания проверки", "fail": "проверка: сделано не то"}
+LABELS = {"queued": "в очереди", "running": "работаю", "waiting_approval": "жду твоего «да»",
+          "review": "перепроверяю себя", "done": "готово", "failed": "не получилось",
+          "timeout": "остановился: слишком долго", "stopped": "остановлен"}
+VERDICTS = {"pass": "перепроверил — всё в порядке", "fix": "при проверке нашлись замечания", "fail": "при проверке вышло, что сделано не то"}
 
 
 def final_state(result_status: str) -> str:
@@ -107,19 +107,19 @@ def describe(snap: dict, now: str | None = None) -> str:
     active = snap.get("active")
     if active:
         ago = _ago(active.get("since", ""), now)
-        lines.append(f"▶️ Сейчас: «{active.get('task') or 'задача'}» — {LABELS[active['state']]}"
+        lines.append(f"▶️ Сейчас занят: «{active.get('task') or 'задача'}» — {LABELS[active['state']]}"
                      + (f" ({ago})" if ago else ""))
     queued = snap.get("queued") or []
     if queued:
         names = ", ".join(f"«{q.get('task') or 'задача'}»" for q in queued[:3])
         lines.append(f"⏳ В очереди: {len(queued)} — {names}")
     if not lines:
-        lines.append("Сейчас ничего не выполняю.")
+        lines.append("Сейчас ничем не занят.")
     last = snap.get("last")
     if last:
         when = _when(last.get("since", ""))
         at = f" в {when.astimezone():%H:%M}" if when else ""
         verdict = VERDICTS.get(last.get("review_verdict") or "")
-        lines.append(f"Последняя: «{last.get('task') or 'задача'}» — {LABELS[last['state']]}{at}"
+        lines.append(f"В прошлый раз: «{last.get('task') or 'задача'}» — {LABELS[last['state']]}{at}"
                      + (f", {verdict}" if verdict else ""))
-    return "\n".join(lines) if (active or queued or last) else "Сейчас ничего не выполняю."
+    return "\n".join(lines) if (active or queued or last) else "Сейчас ничем не занят."

@@ -75,9 +75,9 @@ def test_describe_for_the_owner():
             "queued": [{"task": "рилс"}],
             "last": {"task": "пост", "state": "done", "since": "2026-10-05T10:05:00+00:00", "review_verdict": "pass"}}
     text = task_state.describe(snap, now="2026-10-05T10:10:00+00:00")
-    assert "карусель" in text and "ждёт твоего подтверждения" in text and "3 мин" in text
+    assert "карусель" in text and "жду твоего «да»" in text and "3 мин" in text
     assert "В очереди: 1" in text and "рилс" in text
-    assert "пост" in text and "готово" in text and "проверка пройдена" in text
+    assert "пост" in text and "готово" in text and "перепроверил" in text
     assert task_state.describe({"active": None, "queued": [], "last": None}) == "Сейчас ничего не выполняю."
 
 

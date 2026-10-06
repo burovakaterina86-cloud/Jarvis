@@ -257,7 +257,7 @@ class TaskRouter:
             try:
                 res = await self._run(key, job)
             except Exception as exc:  # noqa: BLE001
-                res = claude_bridge.TurnResult("Внутренняя ошибка моста.", None, False, None,
+                res = claude_bridge.TurnResult("Ой, у меня что-то сломалось внутри, и ответить не вышло 😕 Попробуй ещё раз.", None, False, None,
                                                "error", repr(exc)[:500], attempts=0)
             finally:
                 self._active.pop(qkey, None)
@@ -278,8 +278,8 @@ class TaskRouter:
             events.emit("error", subtype="daily_budget_exceeded", task=job.task, task_id=job.task_id,
                         status="failed")
             return claude_bridge.TurnResult(
-                f"Дневной лимит запусков ({limit}) исчерпан — продолжу завтра "
-                "или владелица может поднять JARVIS_DAILY_RUN_BUDGET.",
+                f"На сегодня я исчерпал дневной лимит запусков ({limit}), продолжу завтра. "
+                "Если срочно — лимит можно поднять настройкой JARVIS_DAILY_RUN_BUDGET.",
                 self.sessions.get(key), False, None, "error", "daily_budget_exceeded", attempts=0)
         task_state.emit(job.task_id, job.task, "running", chat=key)
         isolated = job.context == "isolated"
@@ -343,7 +343,7 @@ class TaskRouter:
         if review.needs_review(job, res, env=self.env if self.env is not None else os.environ):
             res = await self._review(key, job, res, limit)
         if runtime == "codex" and res.status == "ok":
-            res.text = (res.text or "").rstrip() + "\n\n🟢 Сделано в Codex"
+            res.text = (res.text or "").rstrip() + "\n\n🟢 Отвечал через Codex"
         return res
 
     async def _timed(self, key: str, job: Job, prompt: str, sid, limit: float,
@@ -367,8 +367,8 @@ class TaskRouter:
             events.emit("error", subtype="timeout", task=job.task, task_id=job.task_id,
                         status="failed", timeout_sec=limit, session=res.session_id or sid)
             res.status, res.error = "timeout", "timeout"
-            res.text = (f"Остановил задачу: она шла дольше {_human_duration(limit)}. "
-                        "Часть действий могла выполниться — скажи, продолжать ли и с чего.")
+            res.text = (f"Остановился: я работал над этим дольше {_human_duration(limit)}. "
+                        "Часть действий могла уже выполниться — скажи, продолжать ли и с чего.")
         return res
 
     async def _review(self, key: str, job: Job, res, limit: float):

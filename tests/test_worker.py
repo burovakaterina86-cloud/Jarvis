@@ -75,6 +75,6 @@ def test_describe_limits_for_status():
         "codex": {"primary": {"used_percent": 46.0, "resets_at": 1789566847},
                   "secondary": {"used_percent": 61.0, "resets_at": 1789830210}},
     }, now=1789560000)
-    assert "Claude: лимит исчерпан до" in text
-    assert "Codex: 5 ч — 46%" in text and "неделя — 61%" in text
-    assert worker.describe_limits({"claude": {"status": "allowed"}}) == "Claude: лимит в порядке"
+    assert "У Claude лимит закончился, вернётся в" in text
+    assert "У Codex израсходовано: 5 ч — 46%" in text and "неделя — 61%" in text
+    assert worker.describe_limits({"claude": {"status": "allowed"}}) == "У Claude с лимитом всё хорошо"

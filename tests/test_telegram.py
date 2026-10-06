@@ -599,7 +599,7 @@ async def test_dotenv_never_sent_by_relative_forms(tmp_path, raw):
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай .env")), ctx)
     assert ctx.bot.documents == []
-    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+    assert any("Не получилось прислать" in m["text"] for m in ctx.bot.sent)
 
 
 async def test_dotenv_absolute_path_never_sent(tmp_path):
@@ -609,7 +609,7 @@ async def test_dotenv_absolute_path_never_sent(tmp_path):
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай .env")), ctx)
     assert ctx.bot.documents == []
-    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+    assert any("Не получилось прислать" in m["text"] for m in ctx.bot.sent)
 
 
 async def test_path_outside_project_not_sent(tmp_path):
@@ -622,7 +622,7 @@ async def test_path_outside_project_not_sent(tmp_path):
         ctx = FakeContext()
         await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай файл")), ctx)
         assert ctx.bot.documents == []
-        assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+        assert any("Не получилось прислать" in m["text"] for m in ctx.bot.sent)
     finally:
         outside_file.unlink(missing_ok=True)
         outside_dir.rmdir()
@@ -634,7 +634,7 @@ async def test_directory_not_sent(tmp_path):
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="папку")), ctx)
     assert ctx.bot.documents == []
-    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+    assert any("Не получилось прислать" in m["text"] for m in ctx.bot.sent)
 
 
 async def test_too_many_attachments_only_limit_sent(tmp_path):
@@ -646,7 +646,7 @@ async def test_too_many_attachments_only_limit_sent(tmp_path):
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай всё")), ctx)
     assert len(ctx.bot.documents) == files.ATTACH_MAX_FILES
-    assert any("Не отправил" in m["text"] and str(files.ATTACH_MAX_FILES) in m["text"]
+    assert any("Не получилось прислать" in m["text"] and str(files.ATTACH_MAX_FILES) in m["text"]
                for m in ctx.bot.sent)
 
 
@@ -657,7 +657,7 @@ async def test_over_size_limit_not_sent(tmp_path, monkeypatch):
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="файл")), ctx)
     assert ctx.bot.documents == []
-    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+    assert any("Не получилось прислать" in m["text"] for m in ctx.bot.sent)
 
 
 async def test_one_bad_attachment_does_not_block_others(tmp_path):
@@ -668,7 +668,7 @@ async def test_one_bad_attachment_does_not_block_others(tmp_path):
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="файлы")), ctx)
     assert len(ctx.bot.documents) == 1
     assert ctx.bot.documents[0]["filename"] == "good.txt"
-    assert any("Не отправил" in m["text"] for m in ctx.bot.sent)
+    assert any("Не получилось прислать" in m["text"] for m in ctx.bot.sent)
 
 
 async def test_markup_refusal_never_costs_the_answer(tmp_path):
@@ -720,7 +720,7 @@ async def test_voice_failure_never_reaches_agent(tmp_path):
     msg = FakeIncoming(voice=type("V", (), {"file_id": "f1", "file_unique_id": "u1"})())
     await g.on_voice(FakeUpdate(OWNER, message=msg), ctx)
     assert g.router.jobs == []
-    assert "не разобрал" in ctx.bot.sent[-1]["text"]
+    assert "не расслышал" in ctx.bot.sent[-1]["text"]
 
 
 async def test_voice_success_shows_transcript_and_runs(tmp_path):
@@ -728,7 +728,7 @@ async def test_voice_success_shows_transcript_and_runs(tmp_path):
     ctx = FakeContext()
     msg = FakeIncoming(voice=type("V", (), {"file_id": "f1", "file_unique_id": "u1"})())
     await g.on_voice(FakeUpdate(OWNER, message=msg), ctx)
-    assert "🎙 распознал" in ctx.bot.sent[0]["text"]
+    assert "🎙 Услышал" in ctx.bot.sent[0]["text"]
     assert "сделай контент на завтра" in g.router.jobs[0][1].prompt
 
 
@@ -812,7 +812,7 @@ async def test_queued_turn_says_position_and_waits_with_status(tmp_path):
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="ещё задача")), ctx)
     text = ctx.bot.sent[0]["text"]
-    assert "Сейчас занят" in text and "ещё 1" in text and "/status" in text and "/stop" in text
+    assert "я ещё занят" in text and "ещё 1" in text and "/status" in text and "/stop" in text
     assert "в очереди:" not in text                      # её поправка 2026-10-05: без голого номера
     assert not text.startswith("💭")  # тикающий статус — только когда ход пошёл
 
@@ -829,7 +829,7 @@ async def test_new_session_is_announced_before_the_answer(tmp_path):
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="привет")), ctx)
     texts = [m["text"] for m in ctx.bot.sent]
-    notice = next(i for i, t in enumerate(texts) if "Начал новый разговор" in t)
+    notice = next(i for i, t in enumerate(texts) if "Не смог подхватить прошлый разговор" in t)
     answer = next(i for i, t in enumerate(texts) if "ответ агента" in t)
     assert notice < answer
 
@@ -839,7 +839,7 @@ async def test_delivery_failure_is_reported_not_raised(tmp_path):
     ctx = FakeContext(bot=FakeBot(fail_document=True))
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="дай много")), ctx)
     assert ctx.bot.documents == []
-    assert any("не смог отправить" in m["text"].lower() for m in ctx.bot.sent)
+    assert any("не принял" in m["text"].lower() for m in ctx.bot.sent)
 
 
 async def test_browser_flag_is_not_guessed_from_words(tmp_path):
@@ -874,7 +874,7 @@ async def test_download_failure_tells_owner(tmp_path):
     doc = type("D", (), {"file_id": "f9", "file_name": "a.pdf", "file_unique_id": "u9"})()
     await g.on_file(FakeUpdate(OWNER, message=FakeIncoming(document=doc)), ctx)
     assert g.router.jobs == []
-    assert "не смог сохранить" in ctx.bot.sent[-1]["text"].lower()
+    assert "не получилось сохранить" in ctx.bot.sent[-1]["text"].lower()
     assert list((tmp_path / "inbox").rglob("*.pdf")) == []  # пустышка не остаётся
 
 
@@ -888,7 +888,7 @@ async def test_approval_button_works_once(tmp_path):
         cb = FakeCallback(data)
         await g.on_callback(FakeUpdate(OWNER, callback_query=cb), FakeContext(bot=bot))
     assert g.approvals.calls == [("rid-9", "allow", "")]
-    assert "устарела" in cb.edits[-1]["text"]
+    assert "уже не работает" in cb.edits[-1]["text"]
 
 
 async def test_stranger_cannot_press_buttons(tmp_path):
@@ -976,7 +976,7 @@ async def test_queue_message_names_the_current_task(tmp_path):
     g = make_gateway(tmp_path, router=FakeRouter(position=1))
     ctx = FakeContext()
     await g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="ещё")), ctx)
-    assert ctx.bot.sent[0]["text"] == "Сейчас занят задачей «пост про ИИ» — твоё сообщение возьму сразу после неё."
+    assert ctx.bot.sent[0]["text"] == "Секунду, я ещё занят задачей «пост про ИИ» — сразу после неё займусь твоим сообщением."
 
 
 async def test_today_question_is_answered_by_python_without_agent(tmp_path):

@@ -47,13 +47,13 @@ async def test_limit_shows_offer_with_two_buttons(tmp_path):
     res.switch_offer = OFFER
     await g._deliver(ctx, OWNER, res)
     msg = ctx.bot.sent[-1]
-    assert "Лимит Claude закончился" in msg["text"] and "комплект про ИИ" in msg["text"]
+    assert "У Claude закончился лимит" in msg["text"] and "комплект про ИИ" in msg["text"]
     assert "essa-ai/content/x/post.md" in msg["text"]
     assert labels(msg)[0] == "Продолжить в Codex" and labels(msg)[1].startswith("Подождать до ")
 
 
 async def test_continue_in_codex_button_runs_the_task_in_codex(tmp_path):
-    router = SwitchRouter(answer="Готово\n\n🟢 Сделано в Codex")
+    router = SwitchRouter(answer="Готово\n\n🟢 Отвечал через Codex")
     g = make_gateway(tmp_path, router=router)
     bot = FakeBot()
     g.attach(bot)
@@ -63,7 +63,7 @@ async def test_continue_in_codex_button_runs_the_task_in_codex(tmp_path):
     assert "Codex" in cb.edits[0]["text"] and cb.edits[0].get("reply_markup") is None
     chat, job = router.jobs[-1]
     assert job.runtime == "codex" and "сделай комплект" in job.prompt
-    assert any("Сделано в Codex" in m["text"] for m in bot.sent)
+    assert any("Отвечал через Codex" in m["text"] for m in bot.sent)
 
 
 async def test_wait_button_defers_the_task_to_claude(tmp_path):
@@ -88,7 +88,7 @@ async def test_stale_button(tmp_path):
     g = make_gateway(tmp_path, router=SwitchRouter())
     cb = FakeCallback(g.switch_callback_data(OWNER, "codex"))
     await g.on_callback(FakeUpdate(OWNER, callback_query=cb), FakeContext())
-    assert "устарел" in cb.edits[0]["text"]
+    assert "неактуально" in cb.edits[0]["text"]
 
 
 async def test_switched_back_is_announced_before_the_answer(tmp_path):
@@ -98,7 +98,7 @@ async def test_switched_back_is_announced_before_the_answer(tmp_path):
     res.switched_back = True
     await g._deliver(ctx, OWNER, res)
     texts = [m["text"] for m in ctx.bot.sent]
-    assert "Лимит Claude восстановился" in texts[0] and "ответ Claude" in texts[-1]
+    assert "Лимит у Claude восстановился" in texts[0] and "ответ Claude" in texts[-1]
 
 
 async def test_codex_and_claude_commands(tmp_path):
@@ -130,7 +130,7 @@ async def test_status_shows_runtime_and_limits(tmp_path):
     await g.cmd_status(FakeUpdate(OWNER, message=FakeIncoming(text="/status")), ctx)
     text = ctx.bot.sent[-1]["text"]
     assert "Работает: 🟢 Codex" in text and "потом вернусь к Claude" in text
-    assert "Claude: лимит исчерпан" in text and "Codex: 5 ч — 46%" in text
+    assert "У Claude лимит закончился" in text and "У Codex израсходовано: 5 ч — 46%" in text
 
 
 def test_bot_handles_updates_concurrently():

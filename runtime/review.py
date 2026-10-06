@@ -105,13 +105,13 @@ def annotate(text: str, review: dict, by: str | None = None) -> str:
     """Строка для владелицы под ответом исполнителя (`by` — кто проверял, если не Claude)."""
     verdict, rounds = review.get("verdict"), review.get("rounds", 1)
     if verdict == "pass":
-        tail = "✅ Независимая проверка: пройдена" + (" после исправлений." if rounds > 1 else ".")
+        tail = "✅ Перепроверил себя — всё в порядке" + (" (после правок)." if rounds > 1 else ".")
     elif verdict in ("fix", "fail"):
         problems = review.get("problems") or []
-        head = "не то, что просили" if verdict == "fail" else "остались замечания"
-        tail = f"⚠️ Независимая проверка: {head}:\n" + "\n".join(f"- {p}" for p in problems[:5])
+        head = "вышло не то, что просили" if verdict == "fail" else "остались замечания"
+        tail = f"⚠️ Перепроверил себя — {head}:\n" + "\n".join(f"- {p}" for p in problems[:5])
     else:
-        tail = f"⚠️ Независимая проверка не выполнилась: {review.get('error') or 'нет вердикта'}."
+        tail = f"⚠️ Перепроверить себя не вышло: {review.get('error') or 'нет вердикта'}."
     if by:
-        tail = tail.replace("Независимая проверка", f"Независимая проверка (проверял {by})", 1)
+        tail = tail.replace("Перепроверил себя", f"Меня перепроверил {by}", 1)
     return ((text or "").rstrip() + "\n\n" + tail).strip()

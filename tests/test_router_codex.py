@@ -82,7 +82,7 @@ async def test_button_runs_codex_with_handoff_and_marks_the_answer(router):
     assert job.runtime == "codex" and "сделай комплект про ИИ" in job.prompt and "Claude" in job.prompt
     res = await submit(router, job)
     assert res.status == "ok" and res.runtime == "codex"
-    assert res.text.endswith("🟢 Сделано в Codex")
+    assert res.text.endswith("🟢 Отвечал через Codex")
     assert len(calls(router, "codex")) == 1
     assert sessions.get("1:codex") == "thread-new-0001" and worker.load_offer("1") is None
 
@@ -134,7 +134,7 @@ async def test_reviewer_in_codex_mode_is_codex(router):
     res = await submit(router, task_router.Job(prompt="сделай пост"))
     review_call = calls(router, "codex")[-1]["argv"]
     assert "--output-schema" in review_call and 'sandbox_mode="read-only"' in review_call
-    assert res.review["verdict"] == "pass" and "проверял Codex" in res.text
+    assert res.review["verdict"] == "pass" and "перепроверил Codex" in res.text
     assert calls(router, "claude") == []
 
 
