@@ -26,7 +26,7 @@ from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Upd
 from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, MessageHandler,
                           filters)
 
-from integrations.telegram import files, outbox, render, voice
+from integrations.telegram import explain, files, outbox, render, voice
 from integrations.telegram.status import STATUS_DELAY, StatusReporter, too_long
 from runtime import activation
 from runtime import schedule as schedule_mod
@@ -568,8 +568,7 @@ class Gateway:
         if self.bot is None or self.owner_id is None:
             log.warning("некому показать запрос подтверждения (%s)", level)
             return
-        mark = "💸" if level == "MONEY" else "🌐"
-        text = f"{mark} {summary}\n\nМожно, я это сделаю?"
+        text = explain.build(level, tool, summary, details)
         try:
             await self.bot.send_message(self.owner_id, text,
                                         reply_markup=self._approval_keyboard(request_id))

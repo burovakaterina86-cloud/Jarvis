@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:G;src:url("%%FONT%%");font-weight:100 900}
+@font-face{font-family:PF;src:url("%%FONTPF%%");font-style:italic;font-weight:400 900}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:transparent;font-family:G,sans-serif;width:1080px;height:1920px;overflow:hidden}
+.scene{position:absolute;left:0;top:0;width:1080px;height:1920px;color:%%INK%%;visibility:hidden}
+.scene.on{visibility:visible}
+.abs{position:absolute}
+.fsbg{position:absolute;left:0;top:0;width:1080px;height:1920px}
+.m{position:absolute;inset:0;-webkit-mask:url("%%MASK%%") center/contain no-repeat;mask:url("%%MASK%%") center/contain no-repeat}
+.card{background:#fff;border-radius:44px;box-shadow:0 18px 44px rgba(14,13,12,.22)}
+.tile{display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff}
+.seg{position:relative;width:90px;height:14px;border-radius:7px;background:rgba(255,255,255,.38);overflow:hidden}
+.seg .fill{position:absolute;inset:0;background:#fff;transform-origin:0 50%;transform:scaleX(0)}
+.chip{position:relative;display:flex;align-items:center;gap:14px;height:92px;padding:0 32px;border-radius:46px;font-size:36px;font-weight:800;background:%%CREAM%%;color:%%INK%%;opacity:0}
+.chip img{width:48px;height:48px}
+.chip .ring{position:absolute;inset:-4px;border-radius:50px;border:5px solid %%CLAY%%;opacity:0}
+.arrow{font-size:44px;font-weight:800;color:%%CLAY%%;align-self:center;opacity:0}
+.cur{position:absolute;left:0;top:0;width:64px;height:64px;opacity:0;filter:drop-shadow(0 6px 8px rgba(0,0,0,.35));z-index:9}
+.big .ring2{position:absolute;inset:-6px;border-radius:90px;border:6px solid #fff;opacity:0}
+</style>
+<body>
+%%SCENES%%
+<script>window.DATA=%%DATA%%;</script>
+<script>%%JS%%</script>
+</body>
