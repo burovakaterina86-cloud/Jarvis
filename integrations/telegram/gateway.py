@@ -29,6 +29,7 @@ from integrations.telegram import files, outbox, render, voice
 from integrations.telegram.status import STATUS_DELAY, StatusReporter, too_long
 from runtime import activation
 from runtime import schedule as schedule_mod
+from runtime import schedule_jobs
 from runtime import sessions as sessions_mod
 from runtime import task_router, task_state, worker
 from runtime.approvals import ApprovalsServer
@@ -648,11 +649,17 @@ class Gateway:
         started = []
         state = schedule_mod.load_state(self.root)
         for task, slot in schedule_mod.due_tasks(now, self.root):
-            prompt = schedule_mod.prompt_for(task, self.root).strip()
-            if not prompt:
+            handler = task.get("handler")
+            prompt = "" if handler else schedule_mod.prompt_for(task, self.root).strip()
+            if not prompt and not handler:
                 continue
             state[task["id"]] = slot.isoformat()
             schedule_mod.save_state(state, self.root)
+            if handler:   # делает Python; Claude — только если обработчик вернул задание
+                self._schedule_runs = getattr(self, "_schedule_runs", [])
+                self._schedule_runs.append(asyncio.ensure_future(self._run_handler(task, slot, now)))
+                started.append(task["id"])
+                continue
             header = (f"Это задача по расписанию «{task['id']}» ({slot:%Y-%m-%d %H:%M}), владелица сейчас "
                       "ничего не писала. Твой ответ уйдёт ей в Telegram как есть.\n\n")
             minutes = task.get("timeout_min")
@@ -660,12 +667,31 @@ class Gateway:
             job = Job(prompt=header + prompt, task=f"по расписанию: {task['id']}", uses_browser=False,
                       on_event=_ignore_event,   # статус-карточку для фоновой задачи не показываем
                       context="isolated", timeout_sec=float(minutes) * 60 if minutes else None,
+                      browser=False,      # расписанию браузер не нужен: минус ~17 тыс. токенов на ход
                       queue="schedule")   # своя очередь: долгий радар не задерживает её сообщения
             if not hasattr(self, "_schedule_runs"):
                 self._schedule_runs = []
             self._schedule_runs.append(asyncio.ensure_future(self._run_scheduled(job)))
             started.append(task["id"])
         return started
+
+    async def _run_handler(self, task: dict, slot: dt.datetime, now: dt.datetime) -> None:
+        """Задача на Python: письмо уходит через почтовый ящик; задание Claude — обычным фоновым ходом."""
+        try:
+            out = await asyncio.to_thread(schedule_jobs.run, task["handler"], self.root, now)
+        except Exception as exc:  # noqa: BLE001 — сбой расписания не роняет бота
+            log.warning("задача по расписанию %s не выполнилась: %s", task["id"], type(exc).__name__)
+            return
+        if out.prompt:
+            header = (f"Это задача по расписанию «{task['id']}» ({slot:%Y-%m-%d %H:%M}), владелица сейчас "
+                      "ничего не писала. Твой ответ уйдёт ей в Telegram как есть.\n\n")
+            minutes = task.get("timeout_min")
+            job = Job(prompt=header + out.prompt, task=f"по расписанию: {task['id']}", uses_browser=False,
+                      on_event=_ignore_event, context="isolated", browser=False, queue="schedule",
+                      timeout_sec=float(minutes) * 60 if minutes else None)
+            await self._run_scheduled(job)
+        elif out.text:
+            outbox.post(self.root, out.text, out.files)
 
     async def _run_scheduled(self, job) -> None:
         try:

@@ -40,7 +40,7 @@ SCHEMA = {
 }
 
 OPTIONS = TurnOptions(settings=SETTINGS, prompt_file=PROMPT, max_turns=MAX_TURNS,
-                      json_schema=SCHEMA, persist=False, read_only=True)
+                      json_schema=SCHEMA, persist=False, read_only=True, browser=False)
 
 
 def enabled(env=None) -> bool:

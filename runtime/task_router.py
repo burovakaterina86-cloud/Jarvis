@@ -75,6 +75,7 @@ class Job:
     session_mode: str = field(default="", init=False, repr=False)        # resume | new | brief | isolated
     runtime: str | None = None        # явно: "codex" после её кнопки; None — кто активен в чате
     runtime_used: str = field(default="claude", init=False, repr=False)
+    browser: bool = True              # False — ход без MCP/Playwright (расписание): минус ~17 тыс. токенов
     queue: str | None = None          # своя очередь: "schedule" — фон не задерживает её сообщения
     chat: str = field(default="", init=False, repr=False)      # чат владелицы (ставит submit)
     run_key: str = field(default="", init=False, repr=False)   # ключ очереди и запуска
@@ -311,7 +312,9 @@ class TaskRouter:
         limit = job.timeout_sec or self.default_timeout
         before = await asyncio.to_thread(self.git_status)
         job.started = time.monotonic()
-        res = await self._timed(key, job, prompt, sid, limit, on_event=job.on_event, runtime=runtime)
+        options = claude_bridge.DEFAULT_OPTIONS if job.browser else claude_bridge.NO_BROWSER_OPTIONS
+        res = await self._timed(key, job, prompt, sid, limit, options=options, on_event=job.on_event,
+                                runtime=runtime)
         res.switched_back = back
         if isolated or not sid:
             res.new_session = False   # терять было нечего: «контекст потерялся» — только при сбое resume

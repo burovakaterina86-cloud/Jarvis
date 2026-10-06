@@ -22,6 +22,8 @@ from runtime.redact import tool_summary
 ROOT = Path(__file__).resolve().parents[1]
 TURN_PROMPT_FILE = ROOT / "runtime" / "jarvis-turn.md"
 SETTINGS_FILE = ROOT / "runtime" / "jarvis-settings.json"
+NO_MCP_FILE = ROOT / "runtime" / "no-mcp.json"   # пустой список MCP: описания Playwright ~17 тыс. токенов на ход
+DEFAULT_MODEL = "sonnet"   # её решение 2026-10-06: обычные ходы и проверяющий на Sonnet, Pro тратится медленнее
 MAX_TURNS = 60
 STREAM_LIMIT = 32 * 1024 * 1024
 
@@ -65,9 +67,18 @@ class TurnOptions:
     json_schema: dict | None = None
     persist: bool = True
     read_only: bool = False      # Codex: песочница read-only (Claude ограничивают его settings)
+    browser: bool = True         # False — MCP (Playwright) в ход не грузим; проверяющему и расписанию он не нужен
+    model: str | None = None     # None — JARVIS_MODEL или DEFAULT_MODEL; «default» — без флага, модель аккаунта
+
+
+def model_for(options: "TurnOptions", env: dict | None = None) -> str | None:
+    """Модель хода для `--model`; None — флаг не ставим (модель по умолчанию у аккаунта)."""
+    value = options.model or (os.environ if env is None else env).get("JARVIS_MODEL") or DEFAULT_MODEL
+    return None if value.strip().lower() in ("", "default", "off") else value.strip()
 
 
 DEFAULT_OPTIONS = TurnOptions()
+NO_BROWSER_OPTIONS = TurnOptions(browser=False)
 
 
 _running: dict[str, asyncio.subprocess.Process] = {}
@@ -90,6 +101,11 @@ def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS) -
              "--append-system-prompt-file", str(options.prompt_file),
              "--settings", str(options.settings),
              "--max-turns", str(options.max_turns)]
+    model = model_for(options)
+    if model:
+        args += ["--model", model]
+    if not options.browser:
+        args += ["--strict-mcp-config", "--mcp-config", str(NO_MCP_FILE)]
     if options.json_schema is not None:
         args += ["--json-schema", json.dumps(options.json_schema, ensure_ascii=False)]
     if not options.persist:

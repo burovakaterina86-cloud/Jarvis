@@ -511,3 +511,23 @@ async def test_stop_stops_only_her_task(fake, monkeypatch):
     from runtime import claude_bridge as cb
     cb.stop(task_router.run_id_for("1:schedule"))       # уборка: фон тоже гасим
     await asyncio.wait_for(background.result, 10)
+
+
+def test_turn_args_model_and_browser_switches(monkeypatch):
+    from runtime import claude_bridge as cb
+    monkeypatch.delenv("JARVIS_MODEL", raising=False)
+    args = cb.build_args(None)
+    assert args[args.index("--model") + 1] == "sonnet" and "--strict-mcp-config" not in args
+    quiet = cb.build_args(None, cb.NO_BROWSER_OPTIONS)
+    assert "--strict-mcp-config" in quiet and str(cb.NO_MCP_FILE) in quiet
+    monkeypatch.setenv("JARVIS_MODEL", "default")
+    assert "--model" not in cb.build_args(None)
+    monkeypatch.setenv("JARVIS_MODEL", "opus")
+    assert cb.build_args(None)[cb.build_args(None).index("--model") + 1] == "opus"
+
+
+def test_reviewer_runs_on_sonnet_without_browser(monkeypatch):
+    from runtime import claude_bridge as cb, review
+    monkeypatch.delenv("JARVIS_MODEL", raising=False)
+    args = cb.build_args(None, review.OPTIONS)
+    assert "--strict-mcp-config" in args and args[args.index("--model") + 1] == "sonnet"
