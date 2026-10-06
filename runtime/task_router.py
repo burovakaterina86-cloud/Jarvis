@@ -115,6 +115,18 @@ def git_status(root: Path = ROOT) -> set[str]:
     return paths
 
 
+# Туда бот писать не может (Guard), поэтому новые файлы там в `git status` — чужая работа (её другие чаты,
+# монтаж, разработка), а не его: проверяющему и отчёту их не приписываем (её просьба 2026-10-06).
+FOREIGN_PREFIXES = (".claude/", ".agents/", ".codex/", "runtime/", "integrations/", "tests/", "scripts/",
+                    "docs/", "Dashi-montag/", ".git")
+
+
+def own_changes(before, after) -> set[str]:
+    """Новые изменения из git status, которые мог сделать сам бот."""
+    return {p for p in set(after) - set(before)
+            if not p.replace(chr(92), "/").startswith(FOREIGN_PREFIXES)}
+
+
 def run_tests(root: Path = ROOT) -> str:
     """Хвост вывода `pytest -q` — для проверяющего, когда ход менял код."""
     python = root / ".venv" / "Scripts" / "python.exe"
@@ -334,7 +346,7 @@ class TaskRouter:
             worker.save_offer(key, res.switch_offer)
         # Файлы хода: записи Write/Edit плюс то, что git увидел нового (запись командами shell).
         after = await asyncio.to_thread(self.git_status)
-        res.files = sorted(set(res.files) | (set(after) - set(before)))
+        res.files = sorted(set(res.files) | own_changes(before, after))
         if res.switch_offer is not None:   # Codex должен знать, что Claude уже успел изменить
             res.switch_offer["files"] = list(res.files)
             worker.save_offer(key, res.switch_offer)
@@ -400,7 +412,7 @@ class TaskRouter:
             if fixed.status != "ok":
                 break
             after = await asyncio.to_thread(self.git_status)
-            fixed.files = sorted(set(res.files) | set(fixed.files) | (set(after) - set(before)))
+            fixed.files = sorted(set(res.files) | set(fixed.files) | own_changes(before, after))
             fixed.attempts += res.attempts
             fixed.tool_uses += res.tool_uses
             fixed.cost_usd = (fixed.cost_usd or 0) + (res.cost_usd or 0)

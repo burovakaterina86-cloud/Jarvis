@@ -175,3 +175,11 @@ async def test_tests_run_only_when_code_changed(router):
     router.tests_runner = lambda: seen.append(1) or "ok"
     await _run(router, "pass")              # сценарий ledger меняет только .md
     assert seen == []
+
+
+def test_foreign_git_changes_are_not_attributed_to_the_bot():
+    from runtime.task_router import own_changes
+    after = {"essa-ai/content/x/post.md", "integrations/montage/README.md",
+             ".claude/skills/reel-montage/SKILL.md", "tests/test_montage_subs.py"}
+    assert own_changes(set(), after) == {"essa-ai/content/x/post.md"}
+    assert own_changes({"essa-ai/content/x/post.md"}, after) == set()
