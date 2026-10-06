@@ -8,12 +8,13 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import tempfile
 import time
 from pathlib import Path
+
+from . import config
 
 URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 MODEL = "whisper-large-v3"
@@ -43,9 +44,9 @@ def to_wav(src, wav, start: float | None = None, end: float | None = None) -> No
 
 
 def _request(wav: Path, words: bool = True, tries: int = 4) -> dict:
-    key = os.environ.get("GROQ_API_KEY")
+    key = config.groq_key()
     if not key:
-        raise AsrError("нет GROQ_API_KEY в окружении")
+        raise AsrError("нет ключа Groq (GROQ_API_KEY или GROQ_KEY) в окружении")
     cfg = f'header = "Authorization: Bearer {key}"\n'
     cmd = ["curl", "-sS", "--max-time", "600", "--config", "-", URL, "-F", f"model={MODEL}", "-F", "language=ru",
            "-F", "response_format=verbose_json", "-F", f"file=@{wav}"]

@@ -10,7 +10,6 @@ import json
 import re
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 
 from . import config
 
@@ -48,9 +47,33 @@ def second_pass_filter(m: dict, chain: str = config.LOUD_CHAIN) -> str:
     return f"{chain},{ln}" if chain else ln
 
 
+def crest_limit() -> float:
+    """Сколько дБ пик может быть выше средней громкости, чтобы линейный режим влез: цель пика − цель громкости (13 дБ)."""
+    return config.LOUD_TP - config.LOUD_I
+
+
+def limiter_for(input_i: float, input_tp: float, margin: float = 0.8) -> float | None:
+    """Потолок лимитера (линейная амплитуда), при котором пик после подъёма до цели уложится под −1 dBTP.
+    None — пик и так укладывается, либо нужен потолок ниже допустимого для alimiter (0,0625): тогда режим останется dynamic."""
+    if input_tp - input_i <= crest_limit() - 0.3:
+        return None
+    lin = 10 ** ((input_i + crest_limit() - margin) / 20)
+    return round(lin, 4) if lin >= 0.0625 else None
+
+
+def fit_peaks(src, chain: str, m: dict) -> tuple[str, dict]:
+    """Тихая запись с большим запасом по пику не влезает в linear: подрезаем пики ровно настолько, насколько нужно, и меряем заново."""
+    lin = limiter_for(float(m["input_i"]), float(m["input_tp"]))
+    if lin is None:
+        return chain, m
+    chain2 = f"{chain},alimiter=limit={lin}:attack=3:release=60:level=disabled"
+    return chain2, measure(src, chain2)
+
+
 def normalize(src, out, chain: str = config.LOUD_CHAIN) -> LoudResult:
     """Видео не перекодируется (-c:v copy); звук AAC 128k/48 кГц; -shortest, иначе AAC удлиняет файл на 100 мс."""
     m = measure(src, chain)
+    chain, m = fit_peaks(src, chain, m)
     r = subprocess.run(["ffmpeg", "-hide_banner", "-y", "-i", str(src), "-c:v", "copy", "-af", second_pass_filter(m, chain), "-c:a", "aac",
                         "-b:a", "128k", "-ar", "48000", "-shortest", "-movflags", "+faststart", str(out)], capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0:

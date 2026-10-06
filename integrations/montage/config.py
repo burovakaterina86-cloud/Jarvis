@@ -16,6 +16,7 @@ ASSETS = HERE / "assets"
 TEMPLATES = HERE / "templates"
 DATA = HERE / "data"
 OUTBOX = ROOT / "outbox"
+LOGO_CACHE = OUTBOX / "montage" / "logos"   # сюда JARVIS скачивает логотипы (integrations/ ему закрыта)
 
 # --- первый заход (рез) ---
 # Её запись громкая (p75 огибающей около −22 дБ): каноничный порог упирается в −30 дБ и режет хвосты слов
@@ -23,6 +24,13 @@ OUTBOX = ROOT / "outbox"
 FLOOR_DB = -42.0
 SPEED = 1.3          # ускорение — последним шагом, после проверки речи
 FPS = 30
+
+# --- очистка шума (её выбор: мягкий вариант №2, 2026-10-06) ---
+DENOISE_FILTER = "afftdn=nr=10:nf=-40"   # шум −7 дБ; сильный anlmdn потерял слово и звучит «под водой»
+DENOISE_AUTO_BELOW_DB = 25.0             # режим auto: чистим, если голос над фоном меньше (у «10 систем» 28,7 — не нужно, у «монтаж» 17,8 — нужно)
+DENOISE_MIN_SIMILARITY = 0.97            # проверка речи до/после очистки
+DENOISE_MAX_LOST_WORDS = 1
+DENOISE_MAX_CHANGED_WORDS = 2             # слова, распознанные иначе (число ↔ слово, «я»): не потеря речи
 
 # --- субтитры ---
 SUB_MAX_CHARS = 24   # длиннее — строка ломается на две, нижняя падает на макушку
@@ -53,6 +61,31 @@ LOUD_I, LOUD_TP = -14.0, -1.0
 
 # --- палитра оформления (её выбор 2026-10-06: оранжевый фон, карточки как в варианте B) ---
 PALETTE = {"bg": "#D97757", "ink": "#0E0D0C", "cream": "#F3EDE6"}
+
+
+def _load_env() -> None:
+    """Подхватить файл окружения проекта, как делают бот и радар (значения никуда не печатаются)."""
+    try:
+        from integrations.radar.keys import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
+
+
+def groq_key() -> str | None:
+    """Ключ Groq: `GROQ_API_KEY` или `GROQ_KEY` (так он назван в окружении бота). Только из окружения."""
+    _load_env()
+    return os.environ.get("GROQ_API_KEY") or os.environ.get("GROQ_KEY") or None
+
+
+def child_env(extra: dict | None = None) -> dict:
+    """Окружение для дочерних скриптов: вендорные roughcut/captions ждут именно GROQ_API_KEY."""
+    env = dict(os.environ)
+    key = groq_key()
+    if key:
+        env["GROQ_API_KEY"] = key
+    env.update(extra or {})
+    return env
 
 
 def _first_existing(paths):
@@ -99,8 +132,8 @@ def require_tools() -> list[str]:
     for t in ("ffmpeg", "ffprobe", "curl", "node"):
         if not shutil.which(t):
             missing.append(t)
-    if not os.environ.get("GROQ_API_KEY"):
-        missing.append("GROQ_API_KEY (переменная окружения)")
+    if not groq_key():
+        missing.append("GROQ_API_KEY (или GROQ_KEY) в окружении")
     try:
         find_browser()
     except FileNotFoundError:

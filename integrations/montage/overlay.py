@@ -11,8 +11,8 @@ import html as _html
 import json
 from pathlib import Path
 
-from . import config
-from .spec import BAND_TYPES, FULL_TYPES, PANEL_TYPES, Resolved, Scene, logo_path
+from . import config, custom, icons
+from .spec import Resolved, logo_path
 
 P = config.PALETTE
 CLAY, INK, CREAM = P["bg"], P["ink"], P["cream"]
@@ -79,7 +79,7 @@ def hook_html(d: dict) -> str:
 def chip_html(c: dict) -> str:
     if c.get("arrow"):
         return ARROW
-    img = f"<img src='{_logo(c['logo'])}'>" if c.get("logo") else ""
+    img = f"<img src='{_logo(c['logo'])}'>" if c.get("logo") else (icons.icon_svg(c["icon"], 44) if c.get("icon") else "")
     return f"<div class=chip data-t='{c['t']}'><div class=ring></div>{img}<span>{esc(c['text'])}</span></div>"
 
 
@@ -176,7 +176,7 @@ def _pillwrap(inner: str, top: int) -> str:
 
 
 def pill_html(d: dict) -> str:
-    img = f"<img src='{_logo(d['logo'])}' style='width:62px'>" if d.get("logo") else ""
+    img = f"<img src='{_logo(d['logo'])}' style='width:62px'>" if d.get("logo") else (icons.icon_svg(d["icon"], 56) if d.get("icon") else "")
     return _pillwrap(f"<div class=pill style='background:#fff;border-radius:60px;padding:20px 42px;font-size:46px;font-weight:900;display:flex;gap:18px;"
                      f"align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.3)'>{img}{esc(d['text'])}</div>", 150)
 
@@ -191,7 +191,15 @@ def cta_html(d: dict) -> str:
         f"<div class=ct3 style='font-size:34px;font-weight:900;color:#fff;margin-top:12px;-webkit-text-stroke:6px rgba(14,13,12,.85);paint-order:stroke fill'>{esc(d['bottom'])}</div></div>", 135)
 
 
-BUILDERS = {"hook": hook_html, "step": step_html, "phone": phone_html, "week": week_html, "money": money_html,
+def custom_html(d: dict) -> str:
+    layout = d.get("layout", "full")
+    base = {"full": f"<div class=fsbg style='background:{CLAY}'></div>", "split": PANEL_BG, "band": ""}[layout]
+    if d.get("bg") is False:
+        base = ""
+    return base + d["html_final"]
+
+
+BUILDERS = {"custom": custom_html, "hook": hook_html, "step": step_html, "phone": phone_html, "week": week_html, "money": money_html,
             "pipe": pipe_html, "pill": pill_html, "cta": cta_html}
 JS_TYPE = {"step": "panel"}   # тип сцены в overlay.js
 
@@ -217,9 +225,10 @@ def build(res: Resolved, out_dir: Path) -> dict:
             .replace("%%SCENES%%", body).replace("%%DATA%%", json.dumps({"scenes": meta}, ensure_ascii=False))
             .replace("%%JS%%", (config.TEMPLATES / "overlay.js").read_text(encoding="utf-8")))
     (out_dir / "overlay.html").write_text(page, encoding="utf-8")
-    tl = {"scenes": meta, "dur": res.duration,
-          "split": [list(w) for w in res.windows(PANEL_TYPES)],
-          "band": [list(w) for w in res.windows(BAND_TYPES)],
-          "full": [list(w) for w in res.windows(FULL_TYPES)]}
+    warnings = [f"{sc.id}: {w}" for sc in res.scenes if sc.type == "custom" for w in custom.safe_warnings(sc.data["html_final"])]
+    tl = {"scenes": meta, "dur": res.duration, "warnings": warnings,
+          "split": [list(w) for w in res.windows("split")],
+          "band": [list(w) for w in res.windows("band")],
+          "full": [list(w) for w in res.windows("full")]}
     (out_dir / "timeline.json").write_text(json.dumps(tl, ensure_ascii=False, indent=1), encoding="utf-8")
     return tl

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import config
 
-SCENE_TYPES = {"hook", "step", "phone", "week", "money", "pipe", "pill", "cta"}
+SCENE_TYPES = {"hook", "step", "phone", "week", "money", "pipe", "pill", "cta", "custom"}
 PANEL_TYPES = {"hook", "step"}      # сплит: панель сверху, спикер снизу
 BAND_TYPES = {"pill", "cta"}        # полоса: спикер сдвинут вниз, плашка над головой
 FULL_TYPES = {"phone", "week", "money", "pipe"}   # полноэкранные визуалы без спикера
@@ -53,11 +53,11 @@ def resolve_time(anchor, words: list[dict], what: str = "") -> float:
 
 
 def logo_path(name: str) -> Path:
-    for p in (config.ASSETS / "logos" / f"{name}.svg", config.ASSETS / f"{name}.svg"):
+    for p in (config.ASSETS / "logos" / f"{name}.svg", config.ASSETS / f"{name}.svg", config.LOGO_CACHE / f"{name}.svg"):
         if p.exists():
             return p
-    raise SpecError(f"нет логотипа «{name}» в integrations/montage/assets/logos — возьми настоящий SVG "
-                    "из glincker/thesvg или gilbarbara/logos (модель логотипы не рисует)")
+    raise SpecError(f"нет логотипа «{name}». Скачай настоящий SVG (модель логотипы не рисует): "
+                    f"python -m integrations.montage.logos search {name}  →  python -m integrations.montage.logos fetch <имя>")
 
 
 @dataclass
@@ -66,6 +66,13 @@ class Scene:
     start: float
     end: float
     data: dict = field(default_factory=dict)
+
+    @property
+    def zone(self) -> str:
+        """Раскладка кадра на время сцены: split — панель сверху, band — полоса над головой, full — экран без спикера."""
+        if self.type == "custom":
+            return {"full": "full", "split": "split", "band": "band"}[self.data.get("layout", "full")]
+        return "split" if self.type in PANEL_TYPES else "band" if self.type in BAND_TYPES else "full"
 
     @property
     def id(self) -> str:
@@ -81,8 +88,8 @@ class Resolved:
     fixes: dict
     context_fixes: dict
 
-    def windows(self, types: set[str]) -> list[tuple[float, float]]:
-        return [(s.start, s.end) for s in self.scenes if s.type in types]
+    def windows(self, zone: str) -> list[tuple[float, float]]:
+        return [(s.start, s.end) for s in self.scenes if s.zone == zone]
 
 
 def load(path) -> dict:
@@ -118,12 +125,16 @@ def resolve(spec: dict, words: list[dict], duration: float) -> Resolved:
                 data["press_t"] = resolve_time({**press, "after": press.get("after", starts[i])}, words, "нажатие в призыве")
             except SpecError:
                 data["press_t"] = round(starts[i] + 0.6, 2)
+        if sc["type"] == "pill":
+            _set_icon(data, data.get("text", ""))
         if sc["type"] == "money":
             data["rows"] = _resolve_rows(data.get("rows"), starts[i], end, words)
         if sc["type"] == "week":
             for k in ("a", "b"):
                 w = data.get(f"word_{k}", "текст" if k == "a" else "пост")
                 data[f"t_{k}"] = find_word(words, w, starts[i]) or round(starts[i] + 0.5, 2)
+        if sc["type"] == "custom":
+            data = _resolve_custom(data, words, starts[i], i + 1)
         for lg in _logos_in(sc):
             logo_path(lg)
         scenes.append(Scene(sc["type"], starts[i], end, data))
@@ -166,10 +177,24 @@ def _resolve_chips(data: dict, a: float, b: float, words: list[dict], idx: int) 
     missing = [c for c in real if c.get("t") is None]
     for c, t in zip(missing, spread(a + 0.9, max(a + 1.0, b - 0.5), len(missing))):
         c["t"] = t
+    for c in real:
+        _set_icon(c, c.get("text", ""))
     data["chips"] = chips
     if "n" not in data:
         data["n"] = idx
     return data
+
+
+def _set_icon(item: dict, text: str) -> None:
+    """Иконка плашки: явная (`"icon": "mic"`), отключённая (`"icon": null`) или по смыслу слов; фирменный логотип — главнее иконки."""
+    from . import icons
+    if item.get("logo"):
+        item["icon"] = None
+    elif "icon" in item:
+        if item["icon"] is not None and item["icon"] not in icons.NAMES:
+            raise SpecError(f"нет иконки «{item['icon']}»; есть: {', '.join(icons.NAMES)}")
+    else:
+        item["icon"] = icons.auto_icon(text)
 
 
 def _resolve_rows(rows, a: float, b: float, words: list[dict]):
@@ -178,3 +203,26 @@ def _resolve_rows(rows, a: float, b: float, words: list[dict]):
         t = find_word(words, r["word"], a) if r.get("word") else None
         r["t"] = t if t is not None and a <= t <= b else round(min(b - 0.2, a + 0.9 + 0.35 * i), 2)
     return rows
+
+
+def _resolve_custom(data: dict, words: list[dict], start: float, idx: int) -> dict:
+    """Своя сцена: HTML из поля `html` или из файла в outbox/, сито и привязка слов к времени."""
+    from . import custom
+    if data.get("layout", "full") not in custom.LAYOUTS:
+        raise SpecError(f"сцена {idx} (custom): layout должен быть одним из {sorted(custom.LAYOUTS)}")
+    html = data.get("html")
+    if html is None and data.get("file"):
+        p = Path(data["file"])
+        p = p if p.is_absolute() else config.ROOT / p
+        try:
+            p = p.resolve()
+            p.relative_to(config.OUTBOX.resolve())
+        except ValueError:
+            raise SpecError(f"сцена {idx} (custom): файл HTML должен лежать в outbox/ (там, где ты работаешь), а не {data['file']}")
+        if not p.exists():
+            raise SpecError(f"сцена {idx} (custom): нет файла {data['file']}")
+        html = p.read_text(encoding="utf-8")
+    if not html:
+        raise SpecError(f"сцена {idx} (custom): нужен `html` или `file`")
+    data["html_final"] = custom.process(html, words, start)
+    return data

@@ -78,5 +78,36 @@ def test_slug_is_safe_for_filenames():
 
 
 def test_tools_check_names_what_is_missing(monkeypatch):
+    monkeypatch.setattr(config, "_load_env", lambda: None)       # не читаем настоящий файл окружения
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_KEY", raising=False)
     assert any("GROQ_API_KEY" in m for m in config.require_tools())
+
+
+def test_groq_key_accepts_the_bots_name_and_children_get_the_vendor_name(monkeypatch):
+    monkeypatch.setattr(config, "_load_env", lambda: None)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setenv("GROQ_KEY", "test-not-a-real-key")
+    assert config.groq_key() == "test-not-a-real-key"
+    assert config.child_env()["GROQ_API_KEY"] == "test-not-a-real-key"
+
+
+def test_canvas_filter_only_for_vertical_non_1080x1920_sources():
+    assert cut.canvas_filter(1080, 1920) is None
+    f = cut.canvas_filter(720, 1280)
+    assert "scale=1080:1920:force_original_aspect_ratio=increase" in f and "crop=1080:1920" in f
+    f2 = cut.canvas_filter(464, 848)
+    assert f2 and "crop=1080:1920" in f2
+    import pytest
+    with pytest.raises(RuntimeError, match="не вертикальный"):
+        cut.canvas_filter(1920, 1080)
+
+
+def test_limiter_is_added_only_when_the_peak_does_not_fit_linear_mode():
+    # её громкий дубль: пик на 12 дБ над средним — влезает, лимитер не нужен
+    assert loudness.limiter_for(-19.1, -7.0) is None
+    # тихий дубль «монтаж»: −30 LUFS, пик −14 дБ (запас 16 дБ > 13) — подрезаем до ~−17 dBFS
+    lin = loudness.limiter_for(-30.1, -13.96)
+    assert lin is not None and 0.12 <= lin <= 0.16
+    # нужен потолок ниже допустимого для alimiter — не обещаем linear
+    assert loudness.limiter_for(-45.0, -15.0) is None

@@ -1,7 +1,6 @@
 """Первый заход: чистовик из сырого дубля (вендорный roughcut.py автора + порог для её записи)."""
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 import sys
@@ -27,10 +26,7 @@ class CutReport:
 
 
 def _env(floor_db: float) -> dict:
-    env = dict(os.environ)
-    env["ROUGHCUT_FLOOR_DB"] = str(floor_db)
-    env["PYTHONIOENCODING"] = "utf-8"
-    return env
+    return config.child_env({"ROUGHCUT_FLOOR_DB": str(floor_db), "PYTHONIOENCODING": "utf-8"})
 
 
 def _run(src, extra: list[str], floor_db: float, timeout: int = 1800) -> subprocess.CompletedProcess:
@@ -78,3 +74,36 @@ def build(src, out, drops=(), speed: float = config.SPEED, floor_db: float = con
     if r.returncode != 0:
         raise RuntimeError("первый заход не прошёл проверку (аудит по энергии или речь) — не обходим флагами:\n" + text[-1200:])
     return parse_report(text)
+
+
+CANVAS = (1080, 1920)
+
+
+def probe_size(path) -> tuple[int, int]:
+    out = subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                                   "-of", "csv=p=0", str(path)]).decode().strip().split(",")
+    return int(out[0]), int(out[1])
+
+
+def canvas_filter(w: int, h: int) -> str | None:
+    """Фильтр приведения к 1080×1920 (вертикаль 9:16): масштаб «чтобы закрыть кадр» и обрезка лишнего. None — уже подходит."""
+    if (w, h) == CANVAS:
+        return None
+    if h <= w:
+        raise RuntimeError(f"дубль {w}×{h} не вертикальный — рилс снимается вертикально (9:16)")
+    return f"scale={CANVAS[0]}:{CANVAS[1]}:force_original_aspect_ratio=increase,crop={CANVAS[0]}:{CANVAS[1]},setsar=1"
+
+
+def to_canvas(src, dst) -> bool:
+    """Сырой чистовик → work/chistovik.mp4 нужного размера. Звук копируется, длительность не меняется. True — перекодировали."""
+    src, dst = Path(src), Path(dst)
+    flt = canvas_filter(*probe_size(src))
+    if flt is None:
+        src.replace(dst)
+        return False
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-vf", flt, "-c:v", "libx264", "-crf", "14", "-preset", "medium",
+                        "-pix_fmt", "yuv420p", "-c:a", "copy", "-movflags", "+faststart", str(dst)], capture_output=True, text=True, encoding="utf-8")
+    if r.returncode != 0:
+        raise RuntimeError("не удалось привести кадр к 1080×1920:\n" + r.stderr[-600:])
+    src.unlink()
+    return True

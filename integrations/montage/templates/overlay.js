@@ -16,6 +16,31 @@ function centerOf(el, root) {
   while (e && e !== root) { x += e.offsetLeft; y += e.offsetTop; e = e.offsetParent; }
   return [x + el.offsetWidth / 2, y + el.offsetHeight / 2];
 }
+// Хук: самая широкая строка не шире безопасной полосы (кадр минус поля 64 px), иначе уменьшаем кегль
+SC.forEach(s => {
+  if (s.type !== 'hook') return;
+  s.el.classList.add('on');
+  const rows = $(s.el, '.hl');
+  const box = rows[0] && rows[0].parentElement;
+  if (box) {
+    let w = 0;
+    rows.forEach(r => {
+      const a = r.firstElementChild.getBoundingClientRect(), b = r.lastElementChild.getBoundingClientRect();
+      w = Math.max(w, b.right - a.left);
+    });
+    const avail = 1080 - 2 * 64;
+    if (w > avail) {
+      const f0 = parseFloat(getComputedStyle(box).fontSize), f1 = Math.floor(f0 * avail / w), k = f1 / f0;
+      box.style.fontSize = f1 + 'px';
+      $(s.el, '.lg').forEach(lg => {                  // объёмный логотип уменьшается вместе с текстом
+        lg.style.width = (210 * k) + 'px'; lg.style.height = (170 * k) + 'px';
+        if (lg.firstElementChild) lg.firstElementChild.style.zoom = k;
+      });
+    }
+  }
+  s.el.classList.remove('on');
+});
+
 SC.forEach(s => {
   if (s.type !== 'panel') return;
   s.el.classList.add('on');
@@ -189,6 +214,32 @@ const U = {
     if (d >= 0 && d < .6) { const q = d / .6; ring.style.opacity = .9 * (1 - q); ring.style.transform = `scale(${1 + .3 * eo3(q)})`; } else ring.style.opacity = 0;
     riseIn(ct3, l, .3, .35, 24);
   },
+};
+
+// Своя сцена (type: custom): появление по data-a/data-d/data-dur, «нажатие» по data-t (из data-word), фон — как у остальных
+U.custom = function (s, t, l) {
+  const bg = s.el.querySelector('.fsbg');
+  if (bg) bg.style.opacity = Math.min(1, prog(l, 0, .16) * 1.4);
+  $(s.el, '[data-a],[data-t]').forEach(el => {
+    let sc = 1, op = 1, ty = 0;
+    const a = el.dataset.a;
+    if (a) {
+      const p = prog(l, parseFloat(el.dataset.d || 0), parseFloat(el.dataset.dur || .4));
+      if (a === 'pop') { sc = .5 + .5 * eob(p); op = Math.min(1, p * 4); }
+      else if (a === 'rise') { ty = 36 * (1 - eo3(p)); op = Math.min(1, p * 3); }
+      else if (a === 'fade') { op = p; }
+    }
+    if (el.dataset.t !== undefined) {
+      const d = t - parseFloat(el.dataset.t);
+      if (d >= 0) {
+        sc *= pressScale(d);
+        const q = cl(d / .5);
+        el.style.boxShadow = d < .5 ? `0 0 0 ${Math.round(10 * eo3(q))}px rgba(14,13,12,${(.35 * (1 - q)).toFixed(3)})` : '';
+      } else el.style.boxShadow = '';
+    }
+    el.style.opacity = op;
+    el.style.transform = `translateY(${ty}px) scale(${sc})`;
+  });
 };
 
 function render(t) {

@@ -31,7 +31,7 @@ def make_ass(clip, out_ass, max_chars: int = config.SUB_MAX_CHARS) -> Path:
     tmp_video = out_ass.with_suffix(".mp4")      # captions.py кладёт .ass рядом с «выходом» и ничего не жжёт
     cmd = [sys.executable, str(CAPTIONS), str(clip), "--preset", config.SUB_PRESET, "--fontsdir", str(config.ASSETS / "fonts"),
            "--font", config.SUB_FONT, "--highlight", config.SUB_HIGHLIGHT, "--max-chars", str(max_chars), "--ass-only", "-o", str(tmp_video)]
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", env=config.child_env({"PYTHONIOENCODING": "utf-8"}))
     if r.returncode != 0:
         raise RuntimeError("captions.py упал:\n" + (r.stdout + r.stderr)[-800:])
     if not out_ass.exists():
