@@ -368,13 +368,17 @@ class FakeFile:
 class FakeIncoming:
     """Входящее сообщение Telegram: текст, голос, документ или фото."""
 
-    def __init__(self, text=None, voice=None, document=None, photo=None, caption=None):
+    def __init__(self, text=None, voice=None, document=None, photo=None, caption=None,
+                 video=None, video_note=None, animation=None):
         self.message_id = 1
         self.text = text
         self.voice = voice
         self.document = document
         self.photo = photo or []
         self.caption = caption
+        self.video = video
+        self.video_note = video_note
+        self.animation = animation
 
 
 class FakeUpdate:
@@ -1078,3 +1082,52 @@ async def test_announce_interrupted_silent_when_nothing_lost(tmp_path):
     g.attach(bot)
     await g.announce_interrupted([])
     assert bot.sent == []
+
+
+async def test_video_sent_as_video_is_saved_and_path_goes_to_agent(tmp_path):
+    """Видео «обычным способом» (не файлом) раньше молча терялось: на него не было обработчика."""
+    g = make_gateway(tmp_path)
+    ctx = FakeContext()
+    vid = type("V", (), {"file_id": "v1", "file_unique_id": "uv1", "file_size": 5 * 1024 * 1024, "file_name": None})()
+    await g.on_file(FakeUpdate(OWNER, message=FakeIncoming(video=vid, caption="смонтируй")), ctx)
+    saved = list((tmp_path / "inbox").rglob("*.mp4"))
+    assert len(saved) == 1 and saved[0].name.startswith("video-uv1")
+    prompt = g.router.jobs[0][1].prompt
+    assert "смонтируй" in prompt and saved[0].name in prompt
+
+
+async def test_video_note_and_animation_are_handled_too(tmp_path):
+    g = make_gateway(tmp_path)
+    for kind in ("video_note", "animation"):
+        ctx = FakeContext()
+        obj = type("V", (), {"file_id": "x", "file_unique_id": "u" + kind, "file_size": 1000})()
+        await g.on_file(FakeUpdate(OWNER, message=FakeIncoming(**{kind: obj})), ctx)
+    assert len(g.router.jobs) == 2
+
+
+async def test_video_over_bot_limit_explains_what_to_do_instead_of_silence(tmp_path):
+    g = make_gateway(tmp_path)
+    ctx = FakeContext()
+    vid = type("V", (), {"file_id": "v2", "file_unique_id": "uv2", "file_size": 87 * 1024 * 1024, "file_name": "reel.mp4"})()
+    await g.on_file(FakeUpdate(OWNER, message=FakeIncoming(video=vid)), ctx)
+    text = ctx.bot.sent[-1]["text"]
+    assert "87 МБ" in text and "20 МБ" in text and "inbox" in text and "смонтируй рилс из inbox/reel.mp4" in text
+    assert g.router.jobs == [] and list((tmp_path / "inbox").rglob("*.mp4")) == []
+
+
+async def test_telegram_too_big_error_with_unknown_size_gets_the_same_explanation(tmp_path):
+    class TooBigBot(FakeBot):
+        async def get_file(self, file_id):
+            raise RuntimeError("File is too big")
+    g = make_gateway(tmp_path)
+    ctx = FakeContext(bot=TooBigBot())
+    doc = type("D", (), {"file_id": "f", "file_name": "raw.mov", "file_unique_id": "ur"})()
+    await g.on_file(FakeUpdate(OWNER, message=FakeIncoming(document=doc)), ctx)
+    assert "20 МБ" in ctx.bot.sent[-1]["text"] and g.router.jobs == []
+
+
+def test_gateway_registers_video_handler(tmp_path):
+    import inspect
+    from integrations.telegram import gateway
+    src = inspect.getsource(gateway)
+    assert "filters.VIDEO" in src and "filters.VIDEO_NOTE" in src

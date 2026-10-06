@@ -64,6 +64,9 @@ COMMANDS = [
     ("browser_login", "Войти на сайт в моём браузере", "/browser_login адрес — открою окно, войди сама; пароль я не вижу"),
     ("whoami", "Показать мой Telegram ID", "нужно только при первой настройке бота"),
 ]
+#: Лимит Telegram Bot API на скачивание файла ботом.
+BOT_FILE_LIMIT = 20 * 1024 * 1024
+
 HELP = ("Пиши мне текстом или голосом, присылай фото и файлы — разберёмся 🙂\n\nКоманды:\n"
         + "\n".join(f"/{name} — {about}" for name, _short, about in COMMANDS))
 
@@ -354,22 +357,46 @@ class Gateway:
         elif getattr(msg, "photo", None):
             photo = msg.photo[-1]
             file_id, name = photo.file_id, f"photo-{photo.file_unique_id}.jpg"
+        elif any(getattr(msg, kind, None) for kind in ("video", "video_note", "animation")):
+            # Видео, отправленное обычным способом (не «как файл»), раньше не обрабатывалось вовсе: бот молчал.
+            doc = next(getattr(msg, kind) for kind in ("video", "video_note", "animation") if getattr(msg, kind, None))
+            file_id = doc.file_id
+            name = getattr(doc, "file_name", None) or f"video-{doc.file_unique_id}.mp4"
         else:
+            return
+        size = getattr(doc, "file_size", None) or 0
+        if size > BOT_FILE_LIMIT:
+            await self._send(context, chat_id, self._too_big_text(name, size))
             return
         path = await self._download(context, file_id, name)
         if path is None:
+            if "too big" in self._last_download_error.lower():
+                await self._send(context, chat_id, self._too_big_text(name, size))
+                return
             await self._send(context, chat_id, "Не получилось сохранить файл 😕 Пришли, пожалуйста, ещё раз.")
             return
         caption = (getattr(msg, "caption", None) or "").strip()
         prompt = (f"{caption}\n\n" if caption else "") + f"Файл от владелицы: {path}"
         await self._run(update, context, prompt)
 
+    _last_download_error = ""
+
+    def _too_big_text(self, name: str, size: int) -> str:
+        mb = f"{size / 1048576:.0f} МБ" if size else "больше 20 МБ"
+        return (f"Файл «{name}» весит {mb}, а Telegram не отдаёт ботам файлы больше 20 МБ 😕\n\n"
+                f"Два выхода:\n"
+                f"1. Перетащи файл в папку {self.root / 'inbox'} на компьютере и напиши мне "
+                f"«смонтируй рилс из inbox/{name}».\n"
+                f"2. Пришли версию полегче (до 20 МБ): сожми в Telegram или в CapCut.")
+
     async def _download(self, context, file_id: str, name: str) -> Path | None:
         path = files.reserve_path(self.root, name)
+        self._last_download_error = ""
         try:
             tg_file = await context.bot.get_file(file_id)
             await tg_file.download_to_drive(str(path))
         except Exception as exc:  # noqa: BLE001 — сеть Telegram не должна ронять бота
+            self._last_download_error = str(exc)
             log.warning("не удалось скачать файл: %s", type(exc).__name__)
             path.unlink(missing_ok=True)   # занятое имя освобождаем, пустышку не оставляем
             return None
@@ -899,7 +926,7 @@ class Gateway:
         app.add_handler(CommandHandler("claude", self.cmd_claude))
         app.add_handler(CommandHandler("browser_login", self.cmd_browser_login))
         app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, self.on_voice))
-        app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, self.on_file))
+        app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VIDEO_NOTE | filters.ANIMATION, self.on_file))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_message))
         app.add_handler(CallbackQueryHandler(self.on_callback))
 
