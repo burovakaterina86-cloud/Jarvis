@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from runtime import (claude2_bridge, claude_bridge, codex_bridge, dialogue_context, errorlog, events, public_texts, review, spec,
+from runtime import (claude2_bridge, claude_bridge, codex_bridge, conversation, dialogue_context, errorlog, events, public_texts, review, spec,
                      task_state, worker)
 from runtime import sessions as sessions_mod
 from runtime.redact import redact
@@ -57,7 +57,7 @@ DEFAULT_TASK_TIMEOUT_SEC = 2700
 DEFAULT_IDLE_HOURS = 8
 BRIEF_EPISODES = 3
 BRIEF_TEXT_LIMIT = 300
-CONTEXTS = ("chat", "isolated")
+CONTEXTS = ("chat", "isolated", "conversation", "task")
 
 
 @dataclass
@@ -79,6 +79,11 @@ class Job:
     browser: bool = True              # False — ход без MCP/Playwright (расписание): минус ~17 тыс. токенов
     queue: str | None = None          # своя очередь: "schedule" — фон не задерживает её сообщения; "side" — быстрые ответы
     options: object = None            # свои настройки хода (TurnOptions); None — обычные
+    data_root: Path | None = None     # журнал собеседника / карточки независимых задач
+    snapshot: str = ""
+    role: str = ""
+    original: str = ""
+    resume_task: bool = False         # продолжить только собственную сессию явно указанной задачи
     chat: str = field(default="", init=False, repr=False)      # чат владелицы (ставит submit)
     run_key: str = field(default="", init=False, repr=False)   # ключ очереди и запуска
     cancelled: bool = field(default=False, init=False, repr=False)
@@ -200,14 +205,19 @@ class TaskRouter:
         key = str(chat_id)
         qkey = f"{key}:{job.queue}" if job.queue else key   # фон — своя очередь, параллельно с чатом
         job.chat, job.run_key = key, qkey
+        if job.context == "conversation":
+            conversation.receive(job.data_root or ROOT, key, job.prompt, job.task_id)
+        if job.context == "task" and job.data_root is not None:
+            conversation.save_task(job.data_root / "state" / "tasks", job)
         loop = asyncio.get_running_loop()
         if job.result is None:
             job.result = loop.create_future()
         q = self._queues.setdefault(qkey, deque())
         position = len(q) + (1 if qkey in self._active else 0)
         q.append(job)
-        task_state.emit(job.task_id, job.task, "queued", chat=key)
-        events.emit("user_message", task=job.task, task_id=job.task_id, status="queued",
+        if job.context != "conversation":
+            task_state.emit(job.task_id, job.task, "queued", chat=key)
+        events.emit("conversation_message" if job.context == "conversation" else "user_message", task=job.task, task_id=job.task_id, status="queued",
                     chat=key, position=position, session=self.sessions.get(key))
         worker = self._workers.get(qkey)
         if worker is None or worker.done():
@@ -286,7 +296,11 @@ class TaskRouter:
             lines += ["", f"{source} уже менял эти файлы — проверь их и не делай работу заново:"]
             lines += [f"- {f}" for f in offer["files"][:40]]
         lines += ["", "Доведи задачу до конца и ответь владелице итогом: что сделано и где лежит."]
-        return Job(prompt="\n".join(lines), task=offer.get("task") or "продолжение задачи", runtime=runtime)
+        job = Job(prompt="\n".join(lines), task=offer.get("task") or "продолжение задачи", runtime=runtime)
+        if offer.get("context") == "task" and offer.get("task_id") and offer.get("role") in conversation.ROLES:
+            job.context, job.task_id, job.role = "task", offer["task_id"], offer["role"]
+            job.original = str(offer.get("original") or offer.get("prompt") or "")
+        return job
 
     def _pick_runtime(self, key: str, job: Job) -> tuple[str, bool]:
         if job.runtime:
@@ -342,6 +356,18 @@ class TaskRouter:
     async def _run_turn(self, key: str, job: Job):
         if job.cancelled:
             return _stopped()
+        if job.context == "conversation":
+            job.started = time.monotonic()
+            job.runtime_used = job.runtime or "claude"
+            if job.runtime_used not in ("claude", "claude2"):
+                return claude_bridge.TurnResult("Собеседнику нужен аккаунт Claude.", None, False, None, "error")
+            prompt = conversation.build_prompt(job.data_root or ROOT, key, job.prompt, job.snapshot)
+            result = await self._timed(key, job, prompt, None, job.timeout_sec or conversation.TIMEOUT_SEC,
+                options=conversation.OPTIONS, on_event=job.on_event, runtime=job.runtime_used)
+            decision = conversation.parse(result)
+            if not job.cancelled and decision is not None:
+                conversation.remember(job.data_root or ROOT, key, job.prompt, decision["reply"])
+            return result
         if not self._take_budget():
             limit = self._limit()
             events.emit("error", subtype="daily_budget_exceeded", task=job.task, task_id=job.task_id,
@@ -351,11 +377,11 @@ class TaskRouter:
                 "Если срочно — лимит можно поднять настройкой JARVIS_DAILY_RUN_BUDGET.",
                 self.sessions.get(key), False, None, "error", "daily_budget_exceeded", attempts=0)
         task_state.emit(job.task_id, job.task, "running", chat=key)
-        isolated = job.context == "isolated"
+        isolated = job.context in ("isolated", "task")
         runtime, back = self._pick_runtime(key, job)
         job.runtime_used = runtime
-        skey = worker.session_key(key, runtime)
-        sid = None if isolated else self.sessions.get(skey)
+        skey = worker.session_key(f"{key}:task:{job.task_id}" if job.context == "task" else key, runtime)
+        sid = self.sessions.get(skey) if job.resume_task or not isolated else None
         prompt = job.prompt
         job.session_mode = "isolated" if isolated else ("resume" if sid else "new")
         if not isolated:
@@ -397,7 +423,7 @@ class TaskRouter:
             res.brief, res.new_session = True, False   # новая сессия запланирована, контекст не «потерян»
         if res.status in ("rate_limited", "auth_required", "error"):
             self._refund_budget()  # неуспешный ход не тратит дневной лимит; таймаут — тратит
-        if not isolated and res.session_id and res.session_id != sid:
+        if (not isolated or job.context == "task") and res.session_id and res.session_id != sid:
             self.sessions.set(skey, res.session_id)
         if runtime == "codex" and res.session_id:
             limits = self.limits_reader(res.session_id)
@@ -409,6 +435,8 @@ class TaskRouter:
         if target and res.status == "rate_limited":
             res.switch_offer = {"task": job.task, "prompt": job.prompt, "spec": (job.spec or {}).get("text"),
                                 "files": [], "resets_at": res.resets_at, "runtime": target, "source": runtime}
+            if job.context == "task":
+                res.switch_offer.update(task_id=job.task_id, role=job.role, original=job.original, context="task")
             worker.save_offer(key, res.switch_offer)
         # Файлы хода: записи Write/Edit плюс то, что git увидел нового (запись командами shell).
         after = await asyncio.to_thread(self.git_status)
@@ -420,13 +448,13 @@ class TaskRouter:
             worker.save_offer(key, res.switch_offer)
         if not isolated and res.status == "ok" and spec.is_spec(res.text):
             self._track_spec(key, job, res)
-        if res.status == "ok" and job.context == "chat":
+        if res.status == "ok" and job.context in ("chat", "task"):
             res = await self._enforce_public_texts(key, job, res, limit)
         if review.needs_review(job, res, env=self.env if self.env is not None else os.environ):
             res = await self._review(key, job, res, limit)
         elif review.needs_review(job, res, env={"JARVIS_REVIEW": "on"}):
             res.acceptance = "check_unavailable"
-        if res.status == "ok" and job.context == "chat":
+        if res.status == "ok" and job.context in ("chat", "task"):
             # Исправляющий ход review мог заменить файлы после первой проверки конвейера.
             try:
                 res.pipeline_problems = public_texts.check(res.files, job.task_id)
@@ -498,7 +526,8 @@ class TaskRouter:
             skills = ".agents/skills" if job.runtime_used == "codex" else ".claude/skills"
             task_state.emit(job.task_id, job.task, "running", chat=key, fixing=True)
             fixed = await self._timed(key, job, public_texts.fix_prompt(problems, skills), res.session_id, limit,
-                                      on_event=job.on_event, runtime=job.runtime_used)
+                                      on_event=job.on_event, runtime=job.runtime_used,
+                                      options=job.options or (claude_bridge.DEFAULT_OPTIONS if job.browser else claude_bridge.NO_BROWSER_OPTIONS))
             if fixed.status == "ok":
                 fixed.files = sorted(set(res.files) | set(fixed.files))
                 fixed.attempts += res.attempts
@@ -545,7 +574,8 @@ class TaskRouter:
             task_state.emit(job.task_id, job.task, "running", chat=key, fixing=True)
             before = await asyncio.to_thread(self.git_status)
             fixed = await self._timed(key, job, review.fix_prompt(verdict), res.session_id, limit,
-                                      on_event=job.on_event, runtime=job.runtime_used)
+                                      on_event=job.on_event, runtime=job.runtime_used,
+                                      options=job.options or (claude_bridge.DEFAULT_OPTIONS if job.browser else claude_bridge.NO_BROWSER_OPTIONS))
             if fixed.status != "ok":
                 break
             after = await asyncio.to_thread(self.git_status)
@@ -554,7 +584,8 @@ class TaskRouter:
             fixed.tool_uses += res.tool_uses
             fixed.cost_usd = (fixed.cost_usd or 0) + (res.cost_usd or 0)
             if fixed.session_id and fixed.session_id != res.session_id:
-                self.sessions.set(worker.session_key(key, job.runtime_used), fixed.session_id)
+                session_owner = f"{key}:task:{job.task_id}" if job.context == "task" else key
+                self.sessions.set(worker.session_key(session_owner, job.runtime_used), fixed.session_id)
             res = fixed
             if review.code_changed(res.files):
                 tests = await asyncio.to_thread(self.tests_runner)
@@ -636,9 +667,13 @@ class TaskRouter:
 
     def _record(self, job: Job, res, key: str | None = None) -> None:
         """Итог задачи в журнал и, если ход работал, строка эпизода. Не бросает исключений."""
+        if job.context == "conversation":
+            return  # разговор не выдаём за выполненную рабочую задачу
         started = job.started
         duration = round(time.monotonic() - started, 1) if started else 0.0
         try:
+            if job.context == "task" and job.data_root is not None:
+                conversation.save_task(job.data_root / "state" / "tasks", job, res)
             final = task_state.final_state(res.status, res.acceptance)
             task_state.emit(job.task_id, job.task, final, chat=key)
             events.emit("task_done", task=job.task, task_id=job.task_id,
@@ -656,6 +691,9 @@ class TaskRouter:
                 errorlog.record(f"turn.{job.runtime_used}", message=res.error or res.status,
                                 type=res.status, task_id=job.task_id, task=job.task)
         except Exception as exc:  # noqa: BLE001 — журнал не должен ронять очередь
+            if job.context == "task":
+                res.acceptance = "check_unavailable"
+                res.pipeline_error = "task_record_unavailable"
             errorlog.record("task_router.record", exc, task_id=job.task_id)
 
     def _write_episode(self, job: Job, res) -> None:

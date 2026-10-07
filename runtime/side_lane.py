@@ -43,7 +43,10 @@ def wants_queue(answer: str) -> bool:
 
 def _recent_steps(events_path: Path, task_id: str) -> list[str]:
     try:
-        lines = events_path.read_text(encoding="utf-8", errors="replace").splitlines()[-600:]
+        with events_path.open("rb") as file:
+            file.seek(0, 2)
+            file.seek(max(0, file.tell() - 512 * 1024))
+            lines = file.read().decode("utf-8", "replace").splitlines()[-600:]
     except OSError:
         return []
     steps = []
@@ -104,7 +107,7 @@ def context(root: Path, chat_id, *, tasks=None, approvals=()) -> str:
     active = snap.get("active")
     if tasks is not None:
         active = next(({"task": j.task, "task_id": j.task_id, "state": "running", "since": ""}
-                       for j in tasks if getattr(j, "queue", None) != "side"), None)
+                       for j in tasks if getattr(j, "queue", None) not in ("side", "conversation")), None)
     if active:
         lines.append(f"Основная задача: «{active.get('task', '?')}», состояние: {active.get('state')}, с {active.get('since', '')[11:19]} UTC.")
         steps = _recent_steps(events_path, active.get("task_id", ""))

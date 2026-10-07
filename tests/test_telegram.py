@@ -492,6 +492,7 @@ def make_gateway(tmp_path, owner_id=OWNER, **kw):
     kw.setdefault("router", FakeRouter())
     kw.setdefault("sessions", FakeSessions())
     kw.setdefault("approvals", FakeApprovals())
+    kw.setdefault("conversation_enabled", False)  # старые тесты отдельного рабочего входа; новый вход тестируется отдельно
     return gw.Gateway(owner_id=owner_id, root=tmp_path, min_status_interval=0.0, **kw)
 
 

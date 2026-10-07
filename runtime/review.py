@@ -53,7 +53,7 @@ def code_changed(files) -> list[str]:
 
 def needs_review(job, res, env=None) -> bool:
     """Существенный ход чата: был план, комплект или код. Расписание и простые ответы — нет."""
-    if not enabled(env) or getattr(res, "status", "") != "ok" or getattr(job, "context", "chat") != "chat":
+    if not enabled(env) or getattr(res, "status", "") != "ok" or getattr(job, "context", "chat") not in ("chat", "task"):
         return False
     files = getattr(res, "files", None) or []
     return bool(getattr(job, "spec", None)) or any(f.startswith((CONTENT_PREFIX, "essa-ai/content-plan/weeks/")) for f in files) \

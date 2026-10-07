@@ -27,7 +27,10 @@ LIVE_JOURNALS = (
 
 
 def _sizes():
-    return {p: (p.stat().st_size if p.exists() else None) for p in LIVE_JOURNALS}
+    paths = list(LIVE_JOURNALS)
+    for name in ("conversation", "tasks"):
+        paths.extend((REPO / "state" / name).rglob("*.json*"))
+    return {p: (p.stat().st_size if p.exists() else None) for p in paths}
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -38,7 +41,8 @@ def live_journals_untouched():
         return
     before = _sizes()
     yield
-    changed = [str(p.relative_to(REPO)) for p, size in _sizes().items() if size != before[p]]
+    after = _sizes()
+    changed = [str(p.relative_to(REPO)) for p in before.keys() | after.keys() if after.get(p) != before.get(p)]
     assert not changed, (
         f"тесты дописали в боевые журналы: {changed}. Подпроцессный Guard запускай через "
         "фикстуру guard_copy (копия во временном корне). Если в это время работал бот — "

@@ -33,7 +33,7 @@ from runtime import activation
 from runtime import schedule as schedule_mod
 from runtime import schedule_jobs
 from runtime import sessions as sessions_mod
-from runtime import claude2_bridge, side_lane, task_router, task_state, worker
+from runtime import claude2_bridge, conversation, side_lane, task_router, task_state, worker
 from runtime.approvals import ApprovalsServer
 from runtime.task_router import Job
 
@@ -158,7 +158,8 @@ class Gateway:
 
     def __init__(self, *, owner_id: int | None, root: str | Path = ROOT, router=None,
                  sessions=None, approvals=None, transcriber=None,
-                 min_status_interval: float = 3.0, status_delay: float = STATUS_DELAY):
+                 min_status_interval: float = 3.0, status_delay: float = STATUS_DELAY,
+                 conversation_enabled: bool = True):
         self.owner_id = owner_id
         self.root = Path(root)
         self.router = router if router is not None else task_router.default_router()
@@ -167,6 +168,7 @@ class Gateway:
         self.transcriber = transcriber
         self.min_status_interval = min_status_interval
         self.status_delay = status_delay
+        self.conversation_enabled = conversation_enabled
         self.bot = None
         # короткий токен кнопки -> (значение, момент создания); чистится после нажатия и по TTL
         self._tokens: dict[str, tuple[str, float]] = {}
@@ -257,6 +259,8 @@ class Gateway:
         self.sessions.reset(chat_id)
         self.sessions.reset(worker.session_key(chat_id, "codex"))   # у Codex своя сессия — раньше /new её не сбрасывал
         self.sessions.reset(worker.session_key(chat_id, "claude2"))
+        if self.conversation_enabled:
+            conversation.reset(self.root, chat_id)
         await self._send(context, chat_id, "Хорошо, начинаем с чистого листа 🙂")
 
     async def cmd_stop(self, update, context) -> None:
@@ -406,10 +410,10 @@ class Gateway:
     async def on_message(self, update, context) -> None:
         if not self._allowed(update):
             return
-        text = (getattr(update.message, "text", None) or "").strip()
-        if not text:
+        text = getattr(update.message, "text", None) or ""
+        if not text.strip():
             return
-        if re.fullmatch(r"(?:стоп|остановись)[.!]?", text, re.IGNORECASE) and not getattr(update.message, "forward_origin", None):
+        if re.fullmatch(r"(?:стоп|остановись)[.!]?", text.strip(), re.IGNORECASE) and not getattr(update.message, "forward_origin", None):
             await self.cmd_stop(update, context)
             return
         if await self._explain_pending(update, context, text):
@@ -564,15 +568,34 @@ class Gateway:
 
     # ---- ход агента
 
-    async def _run(self, update, context, prompt: str, task: str = "", runtime: str | None = None) -> None:
+    async def _run(self, update, context, prompt: str, task: str = "", runtime: str | None = None,
+                   continuation: Job | None = None) -> None:
         generation = self._stop_generation.get(str(update.effective_chat.id), 0)
         chat_id = update.effective_chat.id
+        decision = None
+        previous = None
+        incoming = prompt
+        original = prompt
+        if self.conversation_enabled and runtime is None:
+            decision = await self._conversation(context, chat_id, prompt, generation)
+            if decision is None or decision["action"] != "dispatch":
+                return
+            if decision.get("task_id"):
+                previous = conversation.previous_task(self.root, chat_id, decision["task_id"], decision["role"])
+                if previous is None:
+                    await self._send(context, chat_id, "Не могу безопасно продолжить эту задачу: она ещё выполняется или не совпадают её данные. Уточни, какую задачу ты имеешь в виду.")
+                    return
+                original = previous["original"]
+            prompt = conversation.worker_prompt(decision["role"], decision["brief"], original)
+            if previous is not None:
+                prompt += "\n\nНовое сообщение по этой же задаче целиком:\n" + incoming
+            task = _task_name(decision["brief"])
         if _TODAY_QUESTION.search(prompt) and len(prompt) <= 60:
             # «что на сегодня» — Python отвечает сам, мгновенно и без лимита (её жалоба 2026-10-06: долго и технично)
             out = schedule_jobs.morning(self.root, dt.datetime.now())
             await self._send(context, chat_id, out.text)
             return
-        if await self._try_side_lane(context, chat_id, prompt):
+        if not self.conversation_enabled and await self._try_side_lane(context, chat_id, prompt):
             return
         if self._stop_generation.get(str(chat_id), 0) != generation:
             return
@@ -590,8 +613,30 @@ class Gateway:
         # uses_browser не угадывается по словам: угадав, ход занял бы глобальный браузерный
         # замок и заблокировал чужие задачи. Факт использования браузера виден только по ходу.
         job = Job(prompt=prompt, task=task, uses_browser=False, on_event=on_event, runtime=runtime)
-        position = self.router.submit(chat_id, job)
-        if position:
+        if self.conversation_enabled:
+            job.context = "task"
+            job.data_root = self.root
+            job.original = original
+            job.role = decision["role"] if decision else "technical"
+            job.options = task_router.claude_bridge.TurnOptions(disallowed_tools=("Agent", "Task"))
+            if previous is not None:
+                job.task_id = previous["task_id"]
+                job.resume_task = True
+                job.runtime = previous["runtime"]
+            elif continuation is not None and continuation.context == "task":
+                job.task_id, job.role, job.original = continuation.task_id, continuation.role, continuation.original
+        try:
+            position = self.router.submit(chat_id, job)
+        except OSError:
+            await self._send(context, chat_id, "Не удалось сохранить задачу. Я её не запустила; исходное сообщение осталось в истории собеседника.")
+            return
+        if self.conversation_enabled:
+            role = conversation.ROLES[job.role]
+            await self._send(context, chat_id,
+                f"Для задачи назначен отдельный помощник: {role}. "
+                + ("Он начнёт после предыдущей работы с файлами. " if position else "Задача передана на выполнение. ")
+                + "Я на связи — можешь продолжать разговор.")
+        elif position:
             # Статус-сообщение не создаём: оно появится, когда ход реально начнётся.
             await self._send(context, chat_id, self._queued_text(chat_id, position))
         typing = asyncio.ensure_future(_keep_typing(context.bot, chat_id))   # «печатает…» пока работаю
@@ -603,6 +648,37 @@ class Gateway:
         # репортёру с выключенным удалением (`delete_on_finish=False`).
         await reporter.finish(_final_line(result, reporter))
         await self._deliver(context, chat_id, result, generation=generation)
+
+    async def _conversation(self, context, chat_id, prompt: str, generation: int):
+        """Все сообщения — отдельному собеседнику; сбой никогда не запускает исполнителя."""
+        tasks, approvals = self._live_context(chat_id)
+        snapshot = side_lane.context(self.root, chat_id, tasks=tasks, approvals=approvals)
+        snapshot += "\nПоследние задачи и их проверенные состояния (JSON):\n" + conversation.task_snapshot(self.root, chat_id)
+        env = getattr(self.router, "env", None)
+        env = os.environ if env is None else env
+        runtime = conversation.account_for(env)
+        job = Job(prompt, task="собеседник", on_event=_ignore_event, context="conversation",
+                  queue="conversation", options=conversation.OPTIONS, browser=False,
+                  timeout_sec=conversation.TIMEOUT_SEC, runtime=runtime,
+                  data_root=self.root, snapshot=snapshot)
+        self.router.submit(chat_id, job)
+        typing = asyncio.ensure_future(_keep_typing(context.bot, chat_id))
+        try:
+            result = await job.result
+        finally:
+            typing.cancel()
+        if result.status == "stopped" or self._stop_generation.get(str(chat_id), 0) != generation:
+            return None
+        decision = conversation.parse(result)
+        if decision is None:
+            await self._send(context, chat_id,
+                "Собеседник сейчас не смог ответить. Твоё сообщение не передано исполнителю. "
+                "Текущую работу можно посмотреть через /status, остановить — /stop.")
+            return None
+        if decision["action"] != "dispatch":
+            result.text = decision["reply"]
+            await self._deliver(context, chat_id, result, generation=generation)
+        return decision
 
     async def _deliver(self, context, chat_id, result, *, generation=None) -> None:
         if generation is None:
@@ -691,7 +767,7 @@ class Gateway:
             await query.edit_message_text(text="Хорошо, продолжаю со вторым аккаунтом Claude" if decision == "claude2" else "Хорошо, продолжаю в Codex 🟢", reply_markup=None)
             if self._stop_generation.get(str(chat), 0) != generation:
                 return
-            await self._run(update, context, job.prompt, task=job.task, runtime=decision)
+            await self._run(update, context, job.prompt, task=job.task, runtime=decision, continuation=job)
             return
         offer = worker.load_offer(chat)
         if not offer:

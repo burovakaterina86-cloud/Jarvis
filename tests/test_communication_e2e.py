@@ -28,7 +28,7 @@ async def test_approval_question_copy_and_stop_never_start_another_turn(tmp_path
     await server.start(tmp_path)
     bot = FakeBot()
     ctx = FakeContext(bot)
-    g = Gateway(owner_id=OWNER, root=tmp_path, router=router, approvals=server, status_delay=60)
+    g = Gateway(owner_id=OWNER, root=tmp_path, router=router, approvals=server, status_delay=60, conversation_enabled=False)
     g.attach(bot)
     server.on_request(g.on_approval_request)
     run = asyncio.create_task(g.on_message(FakeUpdate(OWNER, message=FakeIncoming(text="посмотри идеи")), ctx))

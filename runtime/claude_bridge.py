@@ -70,6 +70,9 @@ class TurnOptions:
     read_only: bool = False      # Codex: песочница read-only (Claude ограничивают его settings)
     browser: bool = True         # False — MCP (Playwright) в ход не грузим; проверяющему и расписанию он не нужен
     model: str | None = None     # None — JARVIS_MODEL или DEFAULT_MODEL; «default» — без флага, модель аккаунта
+    tools: str | None = None     # "" — собеседник без файлов, команд и других агентов
+    disallowed_tools: tuple[str, ...] = ()
+    minimal: bool = False        # собеседник: без CLAUDE.md, плагинов и авто-памяти, авторизация остаётся
 
 
 def model_for(options: "TurnOptions", env: dict | None = None) -> str | None:
@@ -104,12 +107,14 @@ def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS) -
     if session_id:
         args += ["--resume", session_id]
     args += ["--permission-mode", "dontAsk",
-             "--append-system-prompt-file", str(options.prompt_file),
+             "--system-prompt-file" if options.minimal else "--append-system-prompt-file", str(options.prompt_file),
              "--settings", str(options.settings),
              "--max-turns", str(options.max_turns)]
     # Лёгкий вход хода (её просьба 2026-10-06): только настройки проекта (без её личных плагинов, навыков
     # и глобального CLAUDE.md) и без каталога навыков — они идут списком имён, описание читается из файла.
-    args += ["--setting-sources", "project", "--disable-slash-commands"]
+    args += ["--setting-sources", "" if options.minimal else "project", "--disable-slash-commands"]
+    if options.minimal:
+        args += ["--safe-mode"]
     names = skill_names()
     if names and Path(options.prompt_file) == TURN_PROMPT_FILE:
         args += ["--append-system-prompt",
@@ -124,6 +129,10 @@ def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS) -
         args += ["--json-schema", json.dumps(options.json_schema, ensure_ascii=False)]
     if not options.persist:
         args += ["--no-session-persistence"]
+    if options.tools is not None:
+        args += ["--tools", options.tools]
+    if options.disallowed_tools:
+        args += ["--disallowedTools", ",".join(options.disallowed_tools)]
     return args
 
 
