@@ -33,7 +33,7 @@ from runtime import activation
 from runtime import schedule as schedule_mod
 from runtime import schedule_jobs
 from runtime import sessions as sessions_mod
-from runtime import side_lane, task_router, task_state, worker
+from runtime import claude2_bridge, side_lane, task_router, task_state, worker
 from runtime.approvals import ApprovalsServer
 from runtime.task_router import Job
 
@@ -62,6 +62,7 @@ COMMANDS = [
     ("new", "Начать разговор заново", "забываю текущий разговор, начинаем с чистого листа"),
     ("codex", "Работать через Codex", "переключаюсь на Codex, когда у Claude кончается лимит"),
     ("claude", "Вернуться к Claude", "обратно на Claude"),
+    ("claude2", "Второй аккаунт Claude", "следующие сообщения через второй аккаунт Claude; вернуться — /claude"),
     ("browser_login", "Войти на сайт в моём браузере", "/browser_login адрес — открою окно, войди сама; пароль я не вижу"),
     ("whoami", "Показать мой Telegram ID", "нужно только при первой настройке бота"),
 ]
@@ -255,6 +256,7 @@ class Gateway:
         chat_id = update.effective_chat.id
         self.sessions.reset(chat_id)
         self.sessions.reset(worker.session_key(chat_id, "codex"))   # у Codex своя сессия — раньше /new её не сбрасывал
+        self.sessions.reset(worker.session_key(chat_id, "claude2"))
         await self._send(context, chat_id, "Хорошо, начинаем с чистого листа 🙂")
 
     async def cmd_stop(self, update, context) -> None:
@@ -320,7 +322,9 @@ class Gateway:
         if not snap["active"] and not snap["queued"] and pending:
             text = f"В работе и в очереди: {pending}.\n" + text
         current = worker.current(str(chat_id))
-        if current.get("runtime") == "codex":
+        if current.get("runtime") == "claude2":
+            text += "\n\nРаботает: второй аккаунт Claude (вернуться к первому — /claude)"
+        elif current.get("runtime") == "codex":
             until = current.get("until")
             text += "\n\nРаботает: 🟢 Codex" + (f" до {_hhmm(until)}, потом вернусь к Claude" if until else
                                                  " (вернуться к Claude — /claude)")
@@ -350,6 +354,15 @@ class Gateway:
             return
         self.router.set_runtime(update.effective_chat.id, "claude")
         await self._send(context, update.effective_chat.id, "Вернулся к Claude, продолжаем 🙂")
+
+    async def cmd_claude2(self, update, context) -> None:
+        if not self._allowed(update):
+            return
+        if not claude2_bridge.available(getattr(self.router, "env", None)):
+            await self._send(context, update.effective_chat.id, "Второй аккаунт ещё не подключён. Сначала нужно войти в него на компьютере.")
+            return
+        self.router.set_runtime(update.effective_chat.id, "claude2")
+        await self._send(context, update.effective_chat.id, "Следующие сообщения — через второй аккаунт Claude. Вернуться к первому — /claude.")
 
     async def cmd_browser_login(self, update, context) -> None:
         if not self._allowed(update):
@@ -650,32 +663,35 @@ class Gateway:
 
     def _offer_text(self, offer: dict) -> str:
         reset = offer.get("resets_at")
-        lines = ["⏳ У Claude закончился лимит" + (f", обновится в {_hhmm(reset)}." if reset else ".")]
+        source = "Codex" if offer.get("source") == "codex" else "Claude"
+        target = "второму аккаунту Claude" if offer.get("runtime") == "claude2" else "Codex"
+        lines = [f"⏳ У {source} закончился лимит" + (f", обновится в {_hhmm(reset)}." if reset else ".")]
         files = offer.get("files") or []
         lines.append(f"Задача «{offer.get('task') or 'задача'}» не доделана"
                      + (": уже изменены " + ", ".join(files[:5]) + ("…" if len(files) > 5 else "") + "." if files else "."))
-        lines.append("Могу передать Codex — он получит сводку и доделает, проверки и кнопки те же. Как тебе?")
+        lines.append(f"Могу передать {target} — он получит сводку и доделает, проверки и кнопки те же. Как тебе?")
         return "\n".join(lines)
 
     def _switch_keyboard(self, chat_id, offer: dict) -> InlineKeyboardMarkup:
         reset = offer.get("resets_at")
         wait = f"Подождать до {_hhmm(reset)}" if reset else "Подождать час"
+        target = offer.get("runtime", "codex")
         return InlineKeyboardMarkup([[
-            InlineKeyboardButton("Продолжить в Codex", callback_data=self.switch_callback_data(chat_id, "codex")),
+            InlineKeyboardButton("Продолжить со вторым Claude" if target == "claude2" else "Продолжить в Codex", callback_data=self.switch_callback_data(chat_id, target)),
             InlineKeyboardButton(wait, callback_data=self.switch_callback_data(chat_id, "wait")),
         ]])
 
     async def _switch_action(self, update, context, query, chat: str, decision: str) -> None:
         generation = self._stop_generation.get(str(chat), 0)
-        if decision == "codex":
-            job = self.router.offer_job(chat)
+        if decision in ("codex", "claude2"):
+            job = self.router.offer_job(chat, runtime="claude2") if decision == "claude2" else self.router.offer_job(chat)
             if job is None:
                 await query.edit_message_text(text="Это предложение уже неактуально.", reply_markup=None)
                 return
-            await query.edit_message_text(text="Хорошо, продолжаю в Codex 🟢", reply_markup=None)
+            await query.edit_message_text(text="Хорошо, продолжаю со вторым аккаунтом Claude" if decision == "claude2" else "Хорошо, продолжаю в Codex 🟢", reply_markup=None)
             if self._stop_generation.get(str(chat), 0) != generation:
                 return
-            await self._run(update, context, job.prompt, task=job.task, runtime="codex")
+            await self._run(update, context, job.prompt, task=job.task, runtime=decision)
             return
         offer = worker.load_offer(chat)
         if not offer:
@@ -1235,6 +1251,7 @@ class Gateway:
         app.add_handler(CommandHandler("today", self.cmd_today))
         app.add_handler(CommandHandler("codex", self.cmd_codex))
         app.add_handler(CommandHandler("claude", self.cmd_claude))
+        app.add_handler(CommandHandler("claude2", self.cmd_claude2))
         app.add_handler(CommandHandler("browser_login", self.cmd_browser_login))
         app.add_handler(MessageHandler((filters.VOICE | filters.AUDIO) & ~filters.UpdateType.EDITED, self.on_voice))
         app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VIDEO_NOTE | filters.ANIMATION) & ~filters.UpdateType.EDITED, self.on_file))

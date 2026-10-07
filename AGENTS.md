@@ -126,6 +126,8 @@ Approvals отдаёт запрос в `Gateway.on_approval_request` → кно�
 
 ## Как здесь работает Autopilot
 
+Второй Claude: `runtime/claude2_bridge.py`, отдельный `CLAUDE_CONFIG_DIR` (по умолчанию `state/secrets/claude2`, явный `JARVIS_CLAUDE2_DIR` приоритетнее). Вход — `.venv\Scripts\python.exe -m scripts.claude2_account --login`, проверка — `--probe` (один короткий запрос; вывод только флаги). Порядок предложений: Claude → Codex → Claude2, переход только кнопкой или `/claude2`. Сессия второго — `<chat>:claude2`; `/new` сбрасывает все три; Guard, стоп и review те же. Папка профиля и данные входа не коммитятся.
+
 Сборка ведётся навыком `/autopilot`. Требования, спецификация и таски — в `.autopilot/`.
 Прогресс — `.autopilot/dashboard.html`. Правило: требование из `manifest.md`
 может снять только пользователь.

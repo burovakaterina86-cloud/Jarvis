@@ -713,7 +713,7 @@ async def test_new_resets_session_and_stop_stops(tmp_path):
     ctx = FakeContext()
     g.sessions.set(OWNER, "sid-old")
     await g.cmd_new(FakeUpdate(OWNER, message=FakeIncoming(text="/new")), ctx)
-    assert g.sessions.resets == [str(OWNER), f"{OWNER}:codex"]
+    assert g.sessions.resets == [str(OWNER), f"{OWNER}:codex", f"{OWNER}:claude2"]
     await g.cmd_stop(FakeUpdate(OWNER, message=FakeIncoming(text="/stop")), ctx)
     assert g.router.stopped == [OWNER]
 
@@ -1005,7 +1005,7 @@ async def test_typing_indicator_while_agent_works(tmp_path):
 
 def test_help_lists_every_registered_command():
     from integrations.telegram.gateway import COMMANDS, HELP
-    assert {n for n, _, _ in COMMANDS} >= {"today", "status", "stop", "new", "codex", "claude"}
+    assert {n for n, _, _ in COMMANDS} >= {"today", "status", "stop", "new", "codex", "claude", "claude2"}
     assert all(f"/{n} —" in HELP for n, _, _ in COMMANDS)
 
 

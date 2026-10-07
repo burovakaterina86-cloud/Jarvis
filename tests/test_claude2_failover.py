@@ -23,19 +23,18 @@ async def ask(router, text=PROMPT, chat=1):
     return await submit(router, task_router.Job(prompt=text, task=text[:30]), chat)
 
 
-async def test_limit_on_first_account_is_answered_by_the_second(router):
+async def test_limit_on_first_account_offers_codex_before_second(router):
     folder = setup_second(router)
     res = await ask(router)
-    assert res.status == "ok" and "второго аккаунта Claude" in res.text
+    assert res.status == "rate_limited" and res.switch_offer.get("runtime", "codex") == "codex"
     rows = calls(router, "claude")
-    assert len(rows) == 2 and rows[0]["config_dir"] is None and rows[1]["config_dir"] == str(folder)
-    assert rows[1]["stdin_len"] > len(PROMPT)                   # второй получил запрос со сводкой, а не пустоту
-    assert worker.current("1")["runtime"] == "claude2"          # чат остаётся на втором до сброса первого
+    assert len(rows) == 1 and rows[0]["config_dir"] is None
+    assert worker.current("1")["runtime"] == "claude"
 
 
 async def test_next_messages_go_straight_to_the_second_account_then_back(router):
     folder = setup_second(router)
-    await ask(router)
+    router.set_runtime(1, "claude2", until=router.clock_.t + 5 * 3600)
     router.env = {**router.env, "FAKE_CLAUDE_SCENARIO": "ok"}
     before = len(calls(router, "claude"))
     res = await ask(router, "а теперь пост")
@@ -73,6 +72,28 @@ async def test_forced_codex_job_is_not_redirected_to_second_account(router):
     job = task_router.Job(prompt=PROMPT, task="x", runtime="codex")
     res = await submit(router, job)
     assert res.runtime == "codex" and calls(router, "claude") == []
+
+
+async def test_codex_limit_offers_second_account_and_resumes_separate_session(router):
+    setup_second(router)
+    router.env["FAKE_CODEX_SCENARIO"] = "rate_limit"
+    router.set_runtime(1, "codex")
+    res = await ask(router)
+    assert res.switch_offer["runtime"] == "claude2"
+    assert res.switch_offer["source"] == "codex"
+    job = router.offer_job(1, runtime="claude2")
+    assert job.runtime == "claude2" and "Codex" in job.prompt
+    res = await submit(router, job)
+    assert res.status == "ok" and res.runtime == "claude2"
+    assert router.sessions.get("1:claude2") and worker.current("1")["runtime"] == "claude2"
+    assert "второго аккаунта Claude" in res.text
+
+
+async def test_old_codex_button_cannot_consume_second_account_offer(router):
+    setup_second(router)
+    worker.save_offer("1", {"runtime": "claude2", "source": "codex", "prompt": "test", "task": "test"})
+    assert router.offer_job(1) is None
+    assert worker.load_offer("1") is not None
 
 
 def test_second_account_needs_an_existing_folder(tmp_path):

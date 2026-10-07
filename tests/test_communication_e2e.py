@@ -3,6 +3,7 @@ import asyncio
 import os
 import json
 import sys
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -125,17 +126,18 @@ async def test_outbox_rechecks_cancellation_after_network_wait(tmp_path, monkeyp
     assert sent == ["first"]
 
 
-async def test_switch_callback_cannot_resume_after_stop(tmp_path):
+@pytest.mark.parametrize("runtime", ["codex", "claude2"])
+async def test_switch_callback_cannot_resume_after_stop(tmp_path, runtime):
     from tests.test_telegram import make_gateway
     g = make_gateway(tmp_path)
-    g.router.offer_job = lambda chat: task_router.Job(prompt="старый запрос")
+    g.router.offer_job = lambda chat, **kwargs: task_router.Job(prompt="старый запрос", runtime=runtime)
     entered, release = asyncio.Event(), asyncio.Event()
     async def edit(**kwargs):
         entered.set()
         await release.wait()
     ctx = FakeContext()
     upd = FakeUpdate(OWNER, message=FakeIncoming())
-    callback = asyncio.create_task(g._switch_action(upd, ctx, SimpleNamespace(edit_message_text=edit), str(OWNER), "codex"))
+    callback = asyncio.create_task(g._switch_action(upd, ctx, SimpleNamespace(edit_message_text=edit), str(OWNER), runtime))
     await entered.wait()
     await g.cmd_stop(upd, ctx)
     release.set()

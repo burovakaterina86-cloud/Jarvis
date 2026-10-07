@@ -267,23 +267,26 @@ class TaskRouter:
         env = self.env if self.env is not None else os.environ
         return str(env.get("JARVIS_CODEX", "on")).lower() not in ("off", "0", "no")
 
-    def offer_job(self, chat_id, until: float | None = None) -> Job | None:
+    def offer_job(self, chat_id, until: float | None = None, *, runtime="codex") -> Job | None:
         """Её кнопка «Продолжить в Codex»: задача из сохранённого предложения + сводка для Codex."""
         key = str(chat_id)
         offer = worker.load_offer(key)
-        if not offer:
+        if not offer or runtime not in ("codex", "claude2") or offer.get("runtime", "codex") != runtime:
             return None
-        self.set_runtime(key, "codex", until=until if until is not None else offer.get("resets_at"))
+        if runtime == "claude2" and not claude2_bridge.available(self.env if self.env is not None else os.environ):
+            return None
+        self.set_runtime(key, runtime, until=until if until is not None else offer.get("resets_at"))
         worker.drop_offer(key)
-        lines = ["[JARVIS] Ты продолжаешь задачу, которую начал Claude: у него кончился лимит подписки. "
+        source = "Codex" if offer.get("source") == "codex" else "Claude"
+        lines = [f"[JARVIS] Ты продолжаешь задачу, которую начал {source}: у него кончился лимит подписки. "
                  "Его разговор тебе не виден — вот что известно.", "", "Запрос владелицы:", offer.get("prompt", "")]
         if offer.get("spec"):
             lines += ["", "Согласованный план:", str(offer["spec"])[:3000]]
         if offer.get("files"):
-            lines += ["", "Claude уже менял эти файлы — проверь их и не делай работу заново:"]
+            lines += ["", f"{source} уже менял эти файлы — проверь их и не делай работу заново:"]
             lines += [f"- {f}" for f in offer["files"][:40]]
         lines += ["", "Доведи задачу до конца и ответь владелице итогом: что сделано и где лежит."]
-        return Job(prompt="\n".join(lines), task=offer.get("task") or "продолжение в Codex", runtime="codex")
+        return Job(prompt="\n".join(lines), task=offer.get("task") or "продолжение задачи", runtime=runtime)
 
     def _pick_runtime(self, key: str, job: Job) -> tuple[str, bool]:
         if job.runtime:
@@ -365,9 +368,9 @@ class TaskRouter:
                 touch(key, self.clock())
         if back and job.session_mode != "brief":
             prompt = self._handoff_back(key) + prompt
-        elif runtime == "codex" and not sid and not isolated and job.runtime is None:
+        elif runtime in ("codex", "claude2") and not sid and not isolated and job.runtime is None:
             # /codex: у Codex своя сессия — без сводки он начал бы разговор с нуля (её поправка 2026-10-05)
-            prompt = self._switch_brief(key) + prompt
+            prompt = self._switch_brief(key).replace("в Codex", "со вторым аккаунтом Claude" if runtime == "claude2" else "в Codex") + prompt
         if not isolated and job.session_mode != "brief":
             corrections = dialogue_context.build(ROOT, key, job.prompt)
             if corrections:
@@ -387,14 +390,6 @@ class TaskRouter:
                                 runtime=runtime)
         if job.cancelled:
             return _stopped()
-        if runtime == "claude" and res.status == "rate_limited" and job.runtime is None \
-                and claude2_bridge.available(self.env if self.env is not None else os.environ):
-            switched = await self._failover_claude2(key, job, res, prompt, limit, options)
-            if switched is not None:       # лимит первого аккаунта: тот же ход повторён на втором
-                res, runtime = switched
-                job.runtime_used = runtime
-                skey = worker.session_key(key, runtime)
-                sid = None
         res.switched_back = back
         if isolated or not sid:
             res.new_session = False   # терять было нечего: «контекст потерялся» — только при сбое resume
@@ -408,9 +403,12 @@ class TaskRouter:
             limits = self.limits_reader(res.session_id)
             if limits:
                 worker.save_limits("codex", limits)
-        if runtime in ("claude", "claude2") and res.status == "rate_limited" and self._codex_enabled():
+        target = "codex" if runtime == "claude" and self._codex_enabled() else None
+        if runtime == "codex" and claude2_bridge.available(self.env if self.env is not None else os.environ):
+            target = "claude2"
+        if target and res.status == "rate_limited":
             res.switch_offer = {"task": job.task, "prompt": job.prompt, "spec": (job.spec or {}).get("text"),
-                                "files": [], "resets_at": res.resets_at}
+                                "files": [], "resets_at": res.resets_at, "runtime": target, "source": runtime}
             worker.save_offer(key, res.switch_offer)
         # Файлы хода: записи Write/Edit плюс то, что git увидел нового (запись командами shell).
         after = await asyncio.to_thread(self.git_status)
@@ -443,44 +441,9 @@ class TaskRouter:
             self._track_spec(key, job, res)
         if runtime == "codex" and res.status == "ok":
             res.text = (res.text or "").rstrip() + "\n\n🟢 Отвечал через Codex"
+        if runtime == "claude2" and res.status == "ok":
+            res.text = (res.text or "").rstrip() + "\n\n🟢 Отвечал со второго аккаунта Claude"
         return res
-
-    def _continue_prompt(self, job: Job, res, spec_text: str | None, who: str) -> str:
-        """Задача для исполнителя, который продолжает за другим: запрос, план и что уже изменено."""
-        lines = [f"[JARVIS] Ты продолжаешь задачу, которую начал {who}: у него кончился лимит подписки. "
-                 "Его разговор тебе не виден — вот что известно.", "", "Запрос владелицы:", job.prompt]
-        if spec_text:
-            lines += ["", "Согласованный план:", str(spec_text)[:3000]]
-        if res.files:
-            lines += ["", "Уже изменены эти файлы — проверь их и не делай работу заново:"]
-            lines += [f"- {f}" for f in res.files[:40]]
-        lines += ["", "Доведи задачу до конца и ответь владелице итогом: что сделано и где лежит."]
-        return "\n".join(lines)
-
-    async def _failover_claude2(self, key: str, job: Job, first, prompt: str, limit: float, options):
-        """Лимит первого аккаунта Claude кончился: тот же ход — на втором. (результат, "claude2") или None, если не вышло.
-
-        Чат остаётся на втором аккаунте до сброса первого (`worker.switch(..., until)`), потом бот возвращается сам.
-        Второй аккаунт не вошёл или тоже без лимита — прежняя схема: результат первого и кнопка Codex."""
-        if not self._take_budget():
-            return None
-        self._refund_budget()              # неудачный ход первого аккаунта запуск не тратит
-        until = first.resets_at or (self.clock() + 5 * 3600)
-        events.emit("error", subtype="failover_claude2", task=job.task, task_id=job.task_id, status="working",
-                    resets_at=first.resets_at)
-        task_state.emit(job.task_id, job.task, "running", chat=key, failover="claude2")
-        handoff = self._continue_prompt(job, first, (job.spec or {}).get("text"), "первый аккаунт Claude")
-        second = await self._timed(key, job, handoff, None, limit, options=options, on_event=job.on_event,
-                                   runtime="claude2")
-        if second.status in ("auth_required", "rate_limited") or (second.status == "error" and not second.attempts):
-            self._refund_budget()
-            events.emit("error", subtype="failover_claude2_failed", task=job.task, task_id=job.task_id,
-                        status=second.status)
-            return None
-        self.set_runtime(key, "claude2", until=until)
-        if second.status == "ok":
-            second.text = (second.text or "").rstrip() + "\n\n🟢 Отвечал со второго аккаунта Claude (на первом кончился лимит)"
-        return second, "claude2"
 
     async def _timed(self, key: str, job: Job, prompt: str, sid, limit: float,
                      options=claude_bridge.DEFAULT_OPTIONS, on_event=None, runtime: str = "claude"):

@@ -57,6 +57,8 @@ def isolated_dialogue_context(tmp_path, monkeypatch):
     """Тестовые ходы не подмешивают поправки из живого разговора владелицы."""
     from runtime import task_router
     monkeypatch.setattr(task_router, "ROOT", tmp_path)
+    from runtime import claude2_bridge
+    monkeypatch.setattr(claude2_bridge, "DEFAULT_CONFIG_DIR", tmp_path / "unconfigured-second-account")
 
 
 @pytest.fixture(autouse=True)

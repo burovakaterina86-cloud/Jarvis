@@ -9,8 +9,9 @@
 
     $env:CLAUDE_CONFIG_DIR = "C:\\Users\\<имя>\\.claude-jarvis2"; claude      # затем /login
 
-Переключение автоматическое: лимит первого кончился → очередь повторяет ход на втором (`task_router`), и чат остаётся
-на нём до сброса первого. Не настроено или не вошли — ничего не меняется, работает прежняя схема (кнопка Codex).
+Переключение выбирает владелица: первый Claude → кнопка Codex → при его лимите кнопка второго Claude.
+Команда /claude2 выбирает второй аккаунт вручную. Без настройки используется отдельный профиль
+state/secrets/claude2; явный JARVIS_CLAUDE2_DIR имеет приоритет.
 """
 from __future__ import annotations
 
@@ -21,12 +22,13 @@ from runtime import claude_bridge
 from runtime.claude_bridge import TurnResult
 
 LIMITS_KEY = "claude2"
+DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[1] / "state" / "secrets" / "claude2"
 
 
 def config_dir(env: dict | None = None) -> Path | None:
     """Папка входа второго аккаунта, если она задана и существует."""
     value = str((os.environ if env is None else env).get("JARVIS_CLAUDE2_DIR") or "").strip()
-    path = Path(value) if value else None
+    path = Path(value) if value else DEFAULT_CONFIG_DIR
     return path if path is not None and path.is_dir() else None
 
 

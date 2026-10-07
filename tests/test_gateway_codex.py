@@ -111,6 +111,36 @@ async def test_codex_and_claude_commands(tmp_path):
     assert router.runtime == "claude" and "Claude" in ctx.bot.sent[-1]["text"]
 
 
+async def test_second_account_command_and_status(tmp_path, monkeypatch):
+    from runtime import claude2_bridge
+    monkeypatch.setattr(claude2_bridge, "available", lambda env=None: True)
+    router = SwitchRouter()
+    g = make_gateway(tmp_path, router=router)
+    ctx = FakeContext()
+    await g.cmd_claude2(FakeUpdate(OWNER, message=FakeIncoming(text="/claude2")), ctx)
+    assert router.runtime == "claude2"
+    await g.cmd_status(FakeUpdate(OWNER, message=FakeIncoming(text="/status")), ctx)
+    assert "Работает: второй аккаунт Claude" in ctx.bot.sent[-1]["text"]
+
+
+async def test_codex_limit_card_offers_second_claude(tmp_path):
+    g = make_gateway(tmp_path, router=SwitchRouter())
+    ctx = FakeContext()
+    res = TurnResult("лимит Codex", None, False, None, "rate_limited")
+    res.switch_offer = {**OFFER, "runtime": "claude2", "source": "codex"}
+    await g._deliver(ctx, OWNER, res)
+    msg = ctx.bot.sent[-1]
+    assert "У Codex закончился лимит" in msg["text"]
+    assert labels(msg)[0] == "Продолжить со вторым Claude"
+
+
+async def test_new_conversation_clears_second_account_session(tmp_path):
+    g = make_gateway(tmp_path)
+    g.sessions.set(worker.session_key(OWNER, "claude2"), "old-second")
+    await g.cmd_new(FakeUpdate(OWNER, message=FakeIncoming()), FakeContext())
+    assert g.sessions.get(worker.session_key(OWNER, "claude2")) is None
+
+
 async def test_status_card_is_marked_in_codex_mode(tmp_path):
     router = SwitchRouter()
     router.runtime = "codex"
