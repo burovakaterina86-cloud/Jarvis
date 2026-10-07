@@ -74,6 +74,14 @@ def test_lock_is_taken_atomically_by_only_one_of_many_builds(tmp_path):
     assert len(wins) == 1 and len(busy) == 11
 
 
+def test_fresh_lock_without_pid_cannot_be_stolen(tmp_path):
+    lock = tmp_path / render.LOCK_NAME
+    lock.write_text("", encoding="utf-8")
+    with pytest.raises(render.BuildBusy):
+        render.acquire_lock(tmp_path, alive=lambda pid: False)
+    assert lock.read_text(encoding="utf-8") == ""
+
+
 def test_frozen_render_is_killed_at_timeout(tmp_path, monkeypatch):
     killed = []
 

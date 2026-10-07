@@ -72,13 +72,27 @@ def acquire_lock(work: Path, alive=pid_alive, now=time.time) -> Path:
         except FileExistsError:
             pid = "?"
             try:
-                pid, started = (lock.read_text(encoding="utf-8").split() + ["0", "0"])[:2]
+                fields = lock.read_text(encoding="utf-8").split()
+                if len(fields) != 2 or int(fields[0]) <= 0:
+                    raise ValueError("замок ещё не записан")
+                pid, started = fields
                 busy = alive(int(pid)) and now() - float(started) < LOCK_STALE_SEC
-            except (OSError, ValueError):
-                busy = False
+            except FileNotFoundError:
+                continue
+            except ValueError:
+                # O_EXCL создаёт файл раньше записи pid. Свежий пустой файл принадлежит победителю.
+                try:
+                    busy = now() - lock.stat().st_mtime < LOCK_STALE_SEC
+                except FileNotFoundError:
+                    continue
+            except OSError:
+                busy = True
             if busy:
                 raise BuildBusy(f"сборка в {Path(work).name} уже идёт (процесс {pid}); дождись её или останови")
-            lock.unlink(missing_ok=True)      # замок мёртвой или зависшей сборки — снимаем и пробуем снова
+            try:
+                lock.unlink(missing_ok=True)  # замок мёртвой или зависшей сборки
+            except OSError as exc:
+                raise BuildBusy(f"замок сборки в {Path(work).name} занят") from exc
             continue
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(f"{os.getpid()} {now()}")
