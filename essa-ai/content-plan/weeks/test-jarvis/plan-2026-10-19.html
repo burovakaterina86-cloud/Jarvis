@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Контент-план · 19–25 октября</title><meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Unbounded:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0B0E13;--card:#12161D;--card2:#171C25;--line:#232A35;--line2:#2E3643;--text:#E8ECF2;--muted:#8A94A6;
+--accent:#FFD84D;--funnel:#FF8A4C;--outlier:#6FD3A0;--strong:#9FB4FF;--tg:#5EC8F2;--hot:#FF8A4C;
+--fh:"Unbounded","Segoe UI",system-ui,sans-serif;--ft:"Golos Text","Segoe UI",system-ui,sans-serif;--fm:"JetBrains Mono",Consolas,monospace;
+--glow:0 0 0 1px #FFD84D55,0 10px 40px -10px #FFD84D33}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ft);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+p{margin:0}
+h1,h2,h3,h4,h5{margin:0;font-family:var(--fh);letter-spacing:-.015em}
+button{font:inherit;color:inherit}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:24px}
+.mono{font-family:var(--fm)}.muted{color:var(--muted)}.small{font-size:13.5px;line-height:1.5}
+::selection{background:#FFD84D;color:#0B0E13}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:50;background:rgba(11,14,19,.8);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;gap:16px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--fh);font-weight:600;font-size:14px;text-decoration:none;white-space:nowrap}
+.brand-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.nav-links{flex:1;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.nav-links::-webkit-scrollbar{display:none}
+.nav-links a{padding:8px 12px;border-radius:999px;font-size:14px;color:var(--muted);text-decoration:none;white-space:nowrap;transition:.2s}
+.nav-links a:hover{color:var(--text);background:var(--card)}
+.nav-links a.active{color:#0B0E13;background:var(--accent)}
+.counter{display:flex;align-items:baseline;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid var(--line2);background:var(--card);font-size:14px;text-decoration:none;white-space:nowrap}
+.counter b{font-family:var(--fm);color:var(--accent);font-size:16px}.counter span{font-family:var(--fm);color:var(--muted);font-size:12px}
+.counter.on{border-color:#FFD84D66;box-shadow:var(--glow)}
+
+/* hero */
+.hero{position:relative;padding-block:72px 24px;overflow:hidden}
+.hero-bg{position:absolute;inset:0;pointer-events:none;
+background:radial-gradient(640px 380px at 78% 26%,rgba(255,216,77,.10),transparent 70%),radial-gradient(520px 320px at 8% 0%,rgba(159,180,255,.08),transparent 70%)}
+.hero-bg::after{content:"";position:absolute;inset:0;background-image:linear-gradient(#232A35 1px,transparent 1px),linear-gradient(90deg,#232A35 1px,transparent 1px);background-size:48px 48px;opacity:.28;-webkit-mask-image:radial-gradient(ellipse 70% 60% at 70% 25%,#000 10%,transparent 70%);mask-image:radial-gradient(ellipse 70% 60% at 70% 25%,#000 10%,transparent 70%)}
+.hero-in{position:relative;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);gap:48px;align-items:center}
+.badge{display:inline-flex;align-items:center;gap:10px;padding:8px 14px;border-radius:999px;border:1px solid var(--line2);background:rgba(18,22,29,.7);font-size:14px;color:var(--muted)}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:var(--outlier);box-shadow:0 0 10px var(--outlier)}
+h1{font-weight:800;font-size:clamp(38px,6.2vw,86px);line-height:1.02;letter-spacing:-.03em;margin:24px 0 32px}
+h1 span{display:block;color:var(--accent);text-shadow:0 0 40px rgba(255,216,77,.25)}
+.summary{list-style:none;margin:0;padding:0;display:grid;gap:16px;max-width:760px}
+.summary li{display:grid;grid-template-columns:40px 1fr;gap:12px;align-items:start}
+.summary b{font-family:var(--fm);font-size:13px;color:var(--accent);padding-top:4px}
+.summary p{font-size:17px;line-height:1.55;color:#C9D0DB}
+.hero-radar{position:relative}
+.radar{width:100%;max-width:420px;display:block;margin-left:auto}
+.sweep{transform-origin:200px 200px;animation:spin 7s linear infinite}
+.ping{transform-box:fill-box;transform-origin:center;animation:ping 2.4s ease-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes ping{0%{transform:scale(.6);opacity:.5}100%{transform:scale(2.2);opacity:0}}
+.hero-eb{margin:56px 0 16px}
+.chain{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;gap:12px;align-items:stretch}
+.ct{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 24px}
+.ct b{display:block;font-family:var(--fm);font-weight:700;font-size:clamp(30px,3.6vw,48px);line-height:1;letter-spacing:-.03em}
+.ct span{display:block;margin-top:8px;color:var(--muted);font-size:14px}
+.ct.hot{border-color:#FFD84D66;box-shadow:var(--glow);background:linear-gradient(180deg,#1A1A14,var(--card))}
+.ct.hot b{color:var(--accent)}
+.arr{display:grid;place-items:center;color:var(--muted);font-family:var(--fm);font-size:20px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 24px}
+.tile b{display:block;font-family:var(--fm);font-weight:700;font-size:30px;line-height:1.1;letter-spacing:-.02em}
+.tile b small{font-size:15px;color:var(--muted);margin-left:6px;font-weight:500;letter-spacing:0}
+.tile span{display:block;margin-top:4px;font-size:15px}
+.tile em{display:block;font-style:normal;color:var(--muted);font-size:13px}
+.inplan{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.pill-link{padding:9px 16px;border-radius:999px;border:1px solid var(--line2);background:rgba(18,22,29,.6);text-decoration:none;font-size:14.5px;transition:.2s}
+.pill-link:hover{border-color:var(--accent);color:var(--accent)}
+
+/* sections */
+.sec{padding-block:88px 8px;scroll-margin-top:60px}
+.sec-head{display:flex;gap:20px;align-items:flex-start;margin-bottom:40px}
+.icon{flex:none;width:64px;height:64px;border-radius:18px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line2);display:grid;place-items:center;font-size:32px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 12px 30px -12px rgba(0,0,0,.6)}
+.eyebrow{font-family:var(--fm);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h2{font-weight:700;font-size:clamp(28px,4vw,46px);line-height:1.08;letter-spacing:-.025em;margin:6px 0 10px}
+.lead{color:var(--muted);max-width:760px;font-size:17px}
+.subhead{margin:56px 0 20px}
+.subhead h3{font-size:22px;font-weight:600}
+.subhead p{color:var(--muted);margin-top:6px;max-width:820px;font-size:15px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px}
+.card.flush{padding:0}
+.rec{box-shadow:var(--glow);border-color:#FFD84D4D}
+.lbl{font-family:var(--fm);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:24px 0 10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:12.5px;font-weight:500;line-height:1.25;color:var(--c,var(--muted));background:color-mix(in srgb,var(--c,#8A94A6) 11%,transparent);border:1px solid color-mix(in srgb,var(--c,#8A94A6) 30%,transparent);white-space:nowrap}
+.chip.star{background:var(--accent);color:#0B0E13;border-color:var(--accent);font-weight:600}
+.word{display:inline-flex;align-items:center;gap:8px;font-family:var(--fm);font-weight:700;font-size:13.5px;letter-spacing:.08em;padding:5px 13px 5px 6px;border-radius:999px;background:var(--accent);color:#0B0E13;white-space:nowrap}
+.word i{font-style:normal;font-weight:500;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;background:rgba(11,14,19,.14);padding:3px 8px;border-radius:999px}
+.word.funnel{background:var(--funnel)}.word.tg{background:var(--tg)}
+.word.none{background:var(--card2);color:var(--muted);border:1px dashed var(--line2);letter-spacing:.02em;font-weight:500;white-space:normal}
+.word.none i{background:var(--line)}
+.was{font-size:12.5px;color:var(--muted);font-family:var(--fm)}
+.wline{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:16px}
+.leads{margin-top:8px;color:#C9D0DB;font-size:14.5px}
+.rchips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rchip{display:inline-flex;gap:6px;align-items:baseline;padding:6px 12px;border-radius:12px;background:var(--card2);border:1px solid var(--line);font-size:13.5px;line-height:1.35}
+.rchip em{font-style:normal;font-family:var(--fm);font-size:11.5px;color:var(--muted)}
+.effort{font-size:13.5px;color:var(--muted)}
+.info{display:flex;gap:12px;margin-top:24px;padding:16px 20px;border-radius:16px;background:var(--card2);border:1px solid var(--line);color:#C9D0DB;font-size:14.5px}
+.tscroll{overflow-x:auto}
+
+/* week */
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:-16px 0 20px;font-size:13px;color:var(--muted)}
+.lg{display:inline-flex;align-items:center;gap:6px}.lg i{width:8px;height:8px;border-radius:3px;background:var(--c)}
+.wk-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+.wk-day{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.wk-day.weekend{background:linear-gradient(180deg,#141A1A,var(--card))}
+.wk-head{display:flex;align-items:baseline;gap:8px;padding:4px 4px 8px;border-bottom:1px solid var(--line)}
+.wk-wd{font-family:var(--fh);font-weight:700;font-size:20px}
+.wk-date{font-family:var(--fm);font-size:12px;color:var(--muted)}
+.wk-n{margin-left:auto;font-family:var(--fm);font-size:11px;color:var(--muted);border:1px solid var(--line2);border-radius:999px;padding:1px 7px}
+.wk-items{display:flex;flex-direction:column;gap:8px}
+.wk-item{display:flex;flex-direction:column;gap:6px;padding:10px 10px 11px;border-radius:12px;background:var(--card2);border:1px solid var(--line);border-left:3px solid var(--c);text-decoration:none;transition:.2s;min-width:0}
+.wk-item:hover{border-color:var(--c);transform:translateY(-1px)}
+.wk-type{font-family:var(--fm);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--c)}
+.wk-title{font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.wk-word{align-self:flex-start;font-family:var(--fm);font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#0B0E13;background:var(--c);padding:2px 7px;border-radius:6px;overflow-wrap:anywhere}
+.wk-item[style*="--hot"]{border-left-color:transparent;border-image:linear-gradient(var(--accent),var(--funnel)) 1 / 0 0 0 3px}
+
+/* tabs */
+.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:6px;border-radius:20px;background:var(--card);border:1px solid var(--line);margin-bottom:24px;position:sticky;top:68px;z-index:20;box-shadow:0 12px 30px -14px rgba(0,0,0,.8)}
+.tab{position:relative;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:baseline;text-align:left;padding:10px 14px;border-radius:14px;border:1px solid transparent;background:transparent;cursor:pointer;transition:.2s}
+.tab:hover{background:var(--card2)}
+.tab-wd{font-family:var(--fh);font-weight:700;font-size:20px;grid-row:1/3;align-self:center}
+.tab-date{font-family:var(--fm);font-size:12px;color:var(--muted)}
+.tab-word{font-family:var(--fm);font-size:11px;color:var(--muted);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab-count{position:absolute;top:8px;right:10px;font-family:var(--fm);font-size:11px;color:var(--outlier)}
+.tab.active{background:var(--card2);border-color:#FFD84D66;box-shadow:inset 0 0 0 1px #FFD84D22}
+.tab.active .tab-wd,.tab.active .tab-word{color:var(--accent)}
+.day-panel{display:none}.day-panel.active{display:block;animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.day-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;margin:8px 0 16px}
+.day-head h3{font-size:24px;font-weight:600}.day-head span{color:var(--muted);font-size:14px}
+.reel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.reel.rec{grid-column:1/-1}
+.reel{display:flex;flex-direction:column;min-width:0;transition:border-color .2s,box-shadow .2s}
+.reel.taken{border-color:var(--outlier);box-shadow:0 0 0 1px #6FD3A055,0 10px 40px -12px #6FD3A033}
+.reel.rec.taken{box-shadow:0 0 0 1px #6FD3A077,0 10px 40px -10px #FFD84D33}
+.reel-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.reel-title{font-weight:600;font-size:19px;line-height:1.3;margin-top:16px;overflow-wrap:anywhere}
+.reel-title.big{font-size:clamp(21px,2.3vw,28px);line-height:1.22;letter-spacing:-.02em}
+.reel-sub{margin-top:8px;color:var(--muted);font-size:14.5px}
+.mrow{margin-top:12px;font-family:var(--fm);font-size:13px;color:#C9D0DB}
+.hook{margin:16px 0 0;padding:12px 16px;border-left:3px solid var(--accent);background:linear-gradient(90deg,rgba(255,216,77,.07),transparent);border-radius:0 12px 12px 0;font-size:16.5px;line-height:1.5;color:#F3F5F8}
+.rec .hook{font-size:18px}
+.why{margin-top:16px;padding:14px 16px;border-radius:14px;background:var(--card2);border:1px solid var(--line)}
+.why-h{font-size:13px;font-weight:600;color:var(--accent);margin-bottom:6px}
+.why p{font-size:14.5px;color:#C9D0DB}
+.rec-body{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:24px}
+.rec-side{display:flex;flex-direction:column;gap:16px;margin-top:16px}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.m{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.m b{display:block;font-family:var(--fm);font-weight:700;font-size:24px;line-height:1.1;letter-spacing:-.02em;white-space:nowrap}
+.m b small{font-size:13px;color:var(--muted);margin-left:4px;font-weight:500;letter-spacing:0}
+.m span{font-size:12.5px;color:var(--muted)}
+.m.big b{font-size:30px}
+.m.acc b{color:var(--accent)}
+.side-word{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px}
+.side-word .lbl{margin:0 0 4px}.side-word .wline{margin-top:6px}
+.take{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 7px;border-radius:999px;border:1px solid var(--line2);background:var(--card2);cursor:pointer;user-select:none;font-size:14px;font-weight:500;transition:.2s;white-space:nowrap}
+.take input{position:absolute;opacity:0;width:1px;height:1px}
+.take .box{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--line2);display:grid;place-items:center;transition:.2s}
+.take .box::after{content:"✓";font-size:14px;font-weight:700;color:#0B0E13;opacity:0}
+.take:hover{border-color:var(--outlier)}
+.take:has(input:checked){background:color-mix(in srgb,var(--outlier) 16%,transparent);border-color:var(--outlier);color:var(--outlier)}
+.take input:checked+.box{background:var(--outlier);border-color:var(--outlier)}
+.take input:checked+.box::after{opacity:1}
+.take input:focus-visible+.box{outline:2px solid var(--accent);outline-offset:2px}
+.note{margin-top:12px;padding:12px 16px;border-radius:14px;border:1px dashed var(--line2);font-size:14px;color:#C9D0DB}
+.note-h{display:block;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:4px}
+.note.ending{border-style:solid;border-color:#9FB4FF44;background:rgba(159,180,255,.06)}
+.note.ending .note-h{color:var(--strong)}
+.note.warn .note-h{color:var(--funnel)}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:12px;border:1px solid var(--line2);background:var(--card2);cursor:pointer;font-size:14px;font-weight:500;transition:.2s;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--text);color:#0B0E13;border-color:var(--text)}
+.btn.primary:hover{background:#fff}
+.btn.on{border-color:var(--accent);color:var(--accent)}
+.btn.primary.on{background:var(--accent);border-color:var(--accent);color:#0B0E13}
+.btn.ok{border-color:var(--outlier);color:var(--outlier)}
+.btn-meta{font-family:var(--fm);font-size:12px;opacity:.7}
+.by{font-family:var(--fm);font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.orig{font-size:12.5px;color:var(--muted);text-decoration:none;white-space:nowrap;border-bottom:1px solid transparent}
+.orig:hover{color:var(--text);border-bottom-color:var(--muted)}
+.panel{margin-top:12px;padding:20px 22px;border-radius:16px;background:var(--card2);border:1px solid var(--line);animation:fade .3s ease}
+.panel-h{font-family:var(--fm);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.panel p+p{margin-top:12px}
+.script p{font-size:16px;line-height:1.65;max-width:760px}
+.script .en{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:13.5px;color:var(--muted)}
+.shoot{margin:0;padding-left:18px;display:grid;gap:8px;font-size:14.5px;color:#C9D0DB}
+.shoot li::marker{color:var(--accent)}
+.pot+.pot{margin-top:14px}.pot b{font-size:14px}.pot p{font-size:14.5px;color:#C9D0DB;margin-top:4px}
+.src[hidden]{display:none}
+
+/* carousels */
+.stack{display:grid;gap:24px}.stack>*,.car,.slides-wrap,.lm-grid>*,.yt-others>*,.res-grid>*,.how-grid>*,.trends>*{min-width:0}
+.car-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px}
+.car-side .why{margin-top:16px}
+.slides-wrap{margin-top:24px}
+.slides-h{display:flex;justify-content:space-between;font-family:var(--fm);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.slides{display:grid;grid-auto-flow:column;grid-auto-columns:280px;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:10px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.slide{scroll-snap-align:start;aspect-ratio:1/1;border-radius:16px;background:linear-gradient(160deg,#1B212C,#141820);border:1px solid var(--line2);padding:16px;display:flex;flex-direction:column;min-width:0;overflow:hidden;position:relative}
+.slide.cover{background:radial-gradient(120% 90% at 100% 0%,rgba(255,216,77,.22),transparent 60%),linear-gradient(160deg,#20242B,#12161D);border-color:#FFD84D55}
+.slide.final{background:radial-gradient(120% 90% at 0% 100%,rgba(255,138,76,.22),transparent 60%),linear-gradient(160deg,#1E1C1C,#12161D);border-color:#FF8A4C55}
+.sl-top{display:flex;justify-content:space-between;font-family:var(--fm);font-size:11px;color:var(--muted);margin-bottom:10px}
+.save{color:var(--accent)}
+.sl-body{flex:1;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;padding-right:2px}
+.sl-head{font-family:var(--fh);font-weight:600;font-size:14px;line-height:1.3;margin-bottom:8px;color:var(--accent)}
+.sl-text{font-size:13px;line-height:1.45;color:#DDE2EA}
+.s-xl .sl-text{font-family:var(--fh);font-weight:600;font-size:21px;line-height:1.28;color:var(--text)}
+.s-lg .sl-text{font-family:var(--fh);font-weight:600;font-size:16px;line-height:1.33;color:var(--text)}
+.sl-more{display:none;color:var(--accent)}.slide.more .sl-more{display:inline}
+.slide.more .sl-body{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 36px),transparent)}
+.s-sm .sl-text{font-size:12px}
+.sl-code{margin-top:8px;border-radius:10px;border:1px solid var(--line2);background:#0D1016;overflow:hidden}
+.sl-bar{display:flex;align-items:center;gap:5px;padding:6px 8px;border-bottom:1px solid var(--line);font-family:var(--fm);font-size:10px;color:var(--muted)}
+.sl-bar i{width:7px;height:7px;border-radius:50%;background:var(--line2)}.sl-bar i:first-child{background:#FF8A4C99}.sl-bar i:nth-child(2){background:#FFD84D99}.sl-bar i:nth-child(3){background:#6FD3A099;margin-right:4px}
+.sl-pr{padding:8px 10px;font-family:var(--fm);font-size:10.5px;line-height:1.5;color:#C9D0DB}
+.vnote{display:block;margin:6px 0;font-family:var(--ft);font-weight:400;font-size:11.5px;line-height:1.4;font-style:italic;color:var(--muted);text-transform:none}
+mark{background:var(--accent);color:#0B0E13;border-radius:4px;padding:0 4px;font-family:var(--fm);font-weight:700}
+
+/* warmup */
+.warm{position:relative;border-radius:24px;padding:32px;background:radial-gradient(900px 300px at 0% 0%,rgba(255,138,76,.10),transparent 60%),radial-gradient(700px 260px at 100% 0%,rgba(255,216,77,.08),transparent 60%),var(--card);border:1px solid var(--line);overflow:hidden}
+.warm::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(180deg,var(--accent),var(--funnel))}
+.warm-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.hotchip{background:linear-gradient(90deg,var(--accent),var(--funnel));color:#0B0E13;border:0;font-weight:600}
+.warm-title{font-weight:700;font-size:clamp(24px,3.2vw,38px);line-height:1.15;margin-top:18px;letter-spacing:-.02em}
+.warm-title span{display:block;margin-top:8px;font-family:var(--ft);font-weight:500;font-size:clamp(17px,1.8vw,21px);color:#C9D0DB;letter-spacing:0;line-height:1.4}
+.warm-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px}
+.wbox{padding:18px 20px;border-radius:16px;background:rgba(23,28,37,.8);border:1px solid var(--line)}
+.wbox .lbl{margin-top:0}.wbox p{font-size:15px;color:#C9D0DB}
+.reveal{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.reveal li{display:flex;gap:12px;padding:16px;border-radius:16px;background:rgba(23,28,37,.8);border:1px solid var(--line)}
+.dbadge{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-family:var(--fh);font-weight:700;font-size:13px;color:#0B0E13;background:linear-gradient(135deg,var(--accent),var(--funnel))}
+.reveal b{display:block;font-size:15px;margin-bottom:4px}
+.reveal p{font-size:14px;color:#C9D0DB}
+.warm-leads .wline{margin-top:12px}
+.checklog{margin-top:8px}
+.ctable{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;min-width:760px}
+.ctable th,.ctable td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.ctable thead th{font-family:var(--fm);font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ctable tbody th{font-weight:500;width:230px;min-width:200px;color:#C9D0DB}
+.ctable tr.ok th{color:var(--text)}
+.ver{display:inline-block;font-family:var(--fm);font-size:11px;color:var(--muted);border:1px solid var(--line2);border-radius:6px;padding:0 5px;margin-right:8px}
+.ck{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;font-size:12px;font-weight:700;margin-right:6px;vertical-align:-4px}
+.ck.yes{background:#6FD3A022;color:var(--outlier)}.ck.no{background:#FF8A4C22;color:var(--funnel)}.ck.part{background:#FFD84D22;color:var(--accent)}
+.ck-t{color:var(--muted);font-size:12px}
+.verdict{display:inline-block;font-family:var(--fm);font-size:11.5px;color:var(--funnel)}.verdict.ok{color:#0B0E13;background:var(--outlier);padding:2px 8px;border-radius:6px}
+
+/* youtube */
+.yt-rec{padding:32px}
+.yt-title{font-weight:700;font-size:clamp(24px,3vw,36px);line-height:1.18;margin-top:18px;letter-spacing:-.02em}
+.yt-angle{margin-top:14px;font-size:17px;color:#C9D0DB;max-width:900px}
+.yt-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:32px}
+.timeline{list-style:none;margin:0;padding:0;position:relative}
+.timeline::before{content:"";position:absolute;left:17px;top:10px;bottom:10px;width:2px;background:linear-gradient(var(--strong),var(--line))}
+.timeline li{position:relative;display:grid;grid-template-columns:36px 1fr;gap:14px;padding:6px 0}
+.tn{font-family:var(--fm);font-size:11.5px;font-weight:700;color:var(--muted)}
+.timeline .tn{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--card);border:1.5px solid var(--strong);color:var(--strong);position:relative;z-index:1}
+.timeline li:first-child .tn{background:var(--strong);color:#0B0E13}
+.timeline p{font-size:15px;padding-top:6px;color:#DDE2EA}
+.yt-why{font-size:15px;color:#C9D0DB}
+.srcs{display:grid;gap:8px;margin-bottom:12px}
+.src{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"x main link" "x meta link";column-gap:12px;row-gap:2px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--card2);border:1px solid var(--line)}
+.panel .src+.src{margin-top:8px}
+.src .xb{grid-area:x}.src-main{grid-area:main;min-width:0}.src-meta{grid-area:meta;font-family:var(--fm);font-size:11.5px;color:var(--muted)}.src .orig{grid-area:link;font-size:16px}
+.src-main b{font-size:14px;margin-right:8px}.src-main span{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.xb{display:inline-grid;place-items:center;min-width:58px;padding:5px 8px;border-radius:10px;font-family:var(--fm);font-weight:700;font-size:13px;white-space:nowrap}
+.x-hi{background:var(--accent);color:#0B0E13}.x-mid{background:#6FD3A022;color:var(--outlier);border:1px solid #6FD3A055}.x-lo,.x-none{background:var(--card);color:var(--muted);border:1px solid var(--line2)}
+.bridges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.bridge{padding:14px 16px;border-radius:14px;background:var(--card2);border:1px solid var(--line)}
+.bridge.rec-b{border-color:#9FB4FF44}
+.bridge-h{font-weight:600;font-size:14px;margin-bottom:6px}.bridge-h em{font-style:normal;font-family:var(--fm);font-size:11.5px;color:var(--muted)}
+.bridge p{font-size:14px;color:#C9D0DB}
+.yt-others{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.yt-mini{display:flex;flex-direction:column}
+.yt-mini-top{display:flex;justify-content:space-between;align-items:center}
+.yt-mini h4{font-weight:600;font-size:18px;line-height:1.3;margin-top:12px}
+.yt-mini .clamp{margin-top:10px;font-size:14.5px;color:#C9D0DB;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.yt-meta{margin-top:12px;font-size:13.5px;color:var(--muted)}
+.yt-link{margin-top:8px;font-size:13.5px;color:var(--strong)}
+.yt-mini .actions{margin-top:auto;padding-top:16px}
+.yt-mini .actions{border-top:0}
+.plain{margin:0 0 12px;padding-left:20px;display:grid;gap:6px;font-size:14px;color:#C9D0DB}
+.trends{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.trend{padding:18px 20px;border-radius:18px;background:var(--card);border:1px solid var(--line)}
+.trend .tn{display:block;color:var(--strong);margin-bottom:8px}
+.trend b{display:block;font-size:15px;line-height:1.35;margin-bottom:6px}
+.trend p{font-size:14px;color:var(--muted)}
+
+/* telegram */
+.lm-grid{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:16px}
+.lm{display:flex;flex-direction:column;border-radius:22px;background:var(--card);border:1px solid var(--line);overflow:hidden;min-width:0}
+.lm-cover{position:relative;height:210px;padding:18px;display:flex;flex-direction:column;justify-content:space-between;color:#0B0E13;background:
+linear-gradient(135deg,var(--g1),var(--g2));overflow:hidden}
+.lm-cover::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.09) 0 2px,transparent 2px 14px);pointer-events:none}
+.lm-cover::after{content:"";position:absolute;left:0;top:0;bottom:0;width:18px;background:linear-gradient(90deg,rgba(0,0,0,.22),rgba(0,0,0,0))}
+.lm-cover-top{position:relative;display:flex;justify-content:space-between;align-items:flex-start}
+.lm-emoji{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;font-size:36px;background:rgba(255,255,255,.35);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 10px 20px -8px rgba(0,0,0,.35)}
+.lm-format{font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:rgba(11,14,19,.85);color:#fff;padding:4px 9px;border-radius:999px}
+.lm-cover-word{position:relative;font-family:var(--fh);font-weight:800;font-size:clamp(24px,2.3vw,32px);letter-spacing:-.01em;line-height:1;overflow-wrap:anywhere}
+.lm-cover-foot{position:relative;display:flex;justify-content:space-between;font-family:var(--fm);font-size:12px;font-weight:700;opacity:.8}
+.lm-body{padding:22px;display:flex;flex-direction:column;flex:1}
+.lm-body h4{font-weight:600;font-size:19px;line-height:1.3}
+.lm-promise{margin-top:10px;font-size:15px;color:#C9D0DB}
+.checks{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.checks li{position:relative;padding-left:28px;font-size:14px;line-height:1.45;color:#DDE2EA}
+.checks li::before{content:"✓";position:absolute;left:0;top:1px;width:19px;height:19px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:700;background:#6FD3A022;color:var(--outlier)}
+.lm-foot{margin-top:auto;padding-top:8px}
+.lm-foot .small{margin-top:14px}
+.res-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.lm-res{border-style:dashed}
+.lm-res h4{font-weight:600;font-size:18px;line-height:1.3;margin:14px 0 8px}
+.lm-res>p{font-size:14.5px;color:#C9D0DB;margin-bottom:12px}
+.pod{margin-top:0;border-radius:24px;padding:32px;background:radial-gradient(800px 300px at 100% 0%,rgba(94,200,242,.12),transparent 60%),var(--card);border:1px solid #5EC8F233;scroll-margin-top:80px}
+.pod-top{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.pod-icon{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;font-size:34px;background:linear-gradient(135deg,#5EC8F2,#9FB4FF);box-shadow:0 10px 30px -10px #5EC8F288}
+.pod-title{font-weight:700;font-size:clamp(22px,2.8vw,34px);line-height:1.2;margin-top:20px;letter-spacing:-.02em}
+.wave{display:flex;align-items:center;gap:3px;height:72px;margin:24px 0}
+.wave i{flex:1;min-width:2px;height:var(--h);border-radius:3px;background:linear-gradient(180deg,var(--tg),var(--strong));opacity:.85;animation:wave 1.6s ease-in-out infinite alternate;animation-delay:var(--d);transform-origin:center}
+@keyframes wave{from{transform:scaleY(.35)}to{transform:scaleY(1)}}
+.pod-why{font-size:15.5px;color:#C9D0DB;max-width:960px}
+.pblocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.pblock{padding:16px 18px;border-radius:16px;background:var(--card2);border:1px solid var(--line)}
+.pblock .tn{color:var(--tg)}
+.pblock h5{font-weight:600;font-size:15px;line-height:1.3;margin:6px 0 8px}
+.pblock ul{margin:0;padding-left:16px;display:grid;gap:4px;font-size:13.5px;color:#C9D0DB}
+.pblock li::marker{color:var(--tg)}
+.pod-cta{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:20px;align-items:center;margin-top:20px;padding:18px 20px;border-radius:16px;background:rgba(94,200,242,.07);border:1px solid #5EC8F233}
+.pod-cta .lbl{margin-top:0}.pod-cta p{font-size:16px}
+.pod-cta-side{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.pod>.small{margin-top:14px}
+
+/* funnel */
+.chainflow{display:flex;align-items:stretch}
+.cstep{flex:1 1 0;display:flex;flex-direction:column;gap:6px;padding:18px 16px;border-radius:18px;background:var(--card);border:1px solid var(--line);min-width:0;position:relative}
+.carr{flex:0 0 28px}
+.cstep i{font-style:normal;font-weight:400;color:var(--muted)}
+.fvar{display:block;margin-top:4px;font-size:12px;color:var(--accent);font-family:var(--fm);letter-spacing:.02em}
+.froute.variant{border-style:dashed}
+.cstep{border-top:3px solid var(--c)}
+.cemo{font-size:28px;line-height:1}
+.cstep b{font-size:15px;line-height:1.3}
+.cstep span:last-child{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.carr{display:grid;place-items:center;color:var(--muted)}
+.froutes{display:grid;gap:10px}
+.froute{display:grid;grid-template-columns:72px minmax(0,1.3fr) 28px minmax(0,.7fr) 28px auto 28px minmax(0,1.3fr);align-items:center;gap:0;padding:10px;border-radius:16px;background:var(--card);border:1px solid var(--line)}
+.fday{font-family:var(--fm);font-size:12px;color:var(--muted);padding-left:6px}
+.fnode{padding:10px 12px;border-radius:12px;background:var(--card2);border:1px solid var(--line);font-size:14px;line-height:1.35;min-width:0;overflow-wrap:anywhere}
+.wordnode{font-family:var(--fm);font-weight:700;letter-spacing:.05em;color:#0B0E13;background:var(--accent);border-color:var(--accent);text-align:center}
+.botnode{color:var(--tg);border-color:#5EC8F244;white-space:nowrap}
+.getnode{border-color:#FF8A4C44;background:rgba(255,138,76,.07)}
+.reelnode.car{border-color:#6FD3A044}
+.farr{height:2px;margin:0 4px;background:var(--line2);position:relative}
+.farr::after{content:"";position:absolute;right:-1px;top:-4px;border:5px solid transparent;border-left:7px solid var(--line2);border-right:0}
+.fmerge{position:relative;margin-top:16px;display:grid;gap:12px}
+.fm-card{display:flex;gap:16px;align-items:flex-start;padding:20px 22px;border-radius:18px;background:var(--card);border:1px solid var(--line);text-decoration:none}
+.fm-card b{display:block;font-size:15px;margin-bottom:4px}.fm-card p{font-size:14.5px;color:#C9D0DB}
+.warmc{border-color:transparent;background:linear-gradient(var(--card),var(--card)) padding-box,linear-gradient(90deg,var(--accent),var(--funnel)) border-box;border:1px solid transparent}
+.fm-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.podc{border-color:#5EC8F244}.ytc{border-color:#9FB4FF44}
+.podc:hover,.ytc:hover{transform:translateY(-1px)}
+
+/* no speech */
+.ask{display:inline-flex;margin-bottom:16px;padding:12px 18px;border-radius:14px;background:rgba(111,211,160,.08);border:1px solid #6FD3A044;color:var(--outlier);font-size:15px}
+.ntable{width:100%;border-collapse:collapse;font-size:14.5px;min-width:720px}
+.ntable th{font-family:var(--fm);font-weight:500;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:14px 16px;border-bottom:1px solid var(--line)}
+.ntable td{padding:14px 16px;border-bottom:1px solid var(--line);vertical-align:top;color:#DDE2EA}
+.ntable tr:last-child td{border-bottom:0}
+.ntable td.mono{font-size:13px;color:var(--text);white-space:nowrap}
+.ntable td.num{color:var(--accent)}
+
+/* how */
+.how-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.how-h{display:flex;align-items:center;gap:10px;margin-bottom:18px}.how-h span{font-size:24px}.how-h b{font-family:var(--fh);font-weight:600;font-size:18px}
+.fb+.fb{margin-top:14px}
+.fb-l{display:flex;justify-content:space-between;gap:12px;font-size:14px;color:#C9D0DB;margin-bottom:6px}
+.fb-l b{font-family:var(--fm);color:var(--text)}
+.fb.last .fb-l b{color:var(--accent)}
+.fb-t{height:10px;border-radius:999px;background:var(--card2);overflow:hidden}
+.fb-t i{display:block;height:100%;border-radius:999px;background:color-mix(in srgb,var(--c) 55%,#232A35)}
+.fb.last .fb-t i{background:var(--c);box-shadow:0 0 12px var(--c)}
+.how-foot{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.rej{margin-top:16px}
+.rej-h{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin-bottom:18px}.rej-h b{font-family:var(--fh);font-weight:600;font-size:18px}.rej-h span{color:var(--muted);font-size:13px}
+.rb{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr) 40px;gap:16px;align-items:center;padding:6px 0}
+.rb-l{font-size:14px;color:#C9D0DB}
+.rb-t{height:12px;border-radius:999px;background:var(--card2);overflow:hidden}
+.rb-t i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#FF8A4C66,var(--funnel))}
+.rb b{font-family:var(--fm);text-align:right}
+.foot{padding-block:72px 48px;color:var(--muted);font-size:13.5px;text-align:center}
+.foot b{font-family:var(--fh);font-weight:600;color:var(--text)}
+
+@media (max-width:1100px){
+.hero-in{grid-template-columns:1fr}.hero-radar{display:none}
+.chain{grid-template-columns:1fr 1fr;}.arr{display:none}.tiles{grid-template-columns:1fr 1fr}
+.wk-grid{grid-template-columns:1fr}.wk-day{display:grid;grid-template-columns:110px 1fr;gap:12px;align-items:start}
+.wk-head{flex-direction:column;align-items:flex-start;gap:2px;border-bottom:0;border-right:1px solid var(--line);height:100%}.wk-n{margin-left:0;margin-top:6px}
+.wk-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.chainflow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}.carr{display:none}
+.froute{grid-template-columns:64px minmax(0,1fr) 20px auto;row-gap:8px}
+.froute .farr:nth-of-type(3){display:none}
+.froute .botnode{display:none}.froute .farr:nth-of-type(4){display:none}
+.froute .getnode{grid-column:2/-1}
+.trends{grid-template-columns:1fr 1fr}.lm-grid{grid-template-columns:1fr 1fr}.reveal{grid-template-columns:1fr 1fr}
+.how-grid{grid-template-columns:1fr}
+}
+@media (max-width:860px){
+.rec-body,.car-grid,.yt-grid,.warm-grid,.pod-cta{grid-template-columns:1fr}
+.reel-grid{grid-template-columns:1fr}.yt-others,.res-grid,.bridges,.fm-two{grid-template-columns:1fr}
+.tabs{top:64px}.tab{grid-template-columns:1fr;padding:8px 10px}.tab-wd{grid-row:auto;font-size:17px}.tab-word{display:none}
+.rb{grid-template-columns:1fr 40px}.rb-t{grid-column:1/-1;grid-row:2}
+}
+@media (max-width:640px){
+.wrap{padding-inline:16px}
+.nav-in{gap:8px;height:56px}.brand{display:none}.nav-links a{padding:7px 10px;font-size:13.5px}.counter{padding:7px 10px;font-size:13px}.counter span{display:none}
+.hero{padding-block:40px 16px}h1{margin:18px 0 24px}.summary li{grid-template-columns:28px 1fr;gap:8px}.summary p{font-size:15.5px}
+.hero-eb{margin-top:40px}.ct{padding:14px 16px}.tile{padding:14px 16px}.tile b{font-size:24px}
+.sec{padding-block:64px 8px}.sec-head{gap:14px;margin-bottom:28px}.icon{width:48px;height:48px;font-size:24px;border-radius:14px}
+.lead{font-size:15.5px}
+.wk-day{grid-template-columns:1fr}.wk-head{flex-direction:row;align-items:baseline;gap:8px;border-right:0;border-bottom:1px solid var(--line)}
+.ntable{min-width:0}.ntable thead{display:none}
+.ntable tr{display:grid;grid-template-columns:auto auto 1fr auto auto;column-gap:14px;row-gap:6px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+.ntable tr:last-child{border-bottom:0}.ntable td{padding:0;border:0!important}
+.ntable td:nth-child(1){grid-row:1;grid-column:1/4}.ntable td:nth-child(5){grid-row:1;grid-column:4}.ntable td:nth-child(6){grid-row:1;grid-column:5}
+.ntable td:nth-child(2){grid-row:2;grid-column:1/-1}.ntable td:nth-child(3){grid-row:3;grid-column:1}.ntable td:nth-child(4){grid-row:3;grid-column:2}
+.ntable td:nth-child(3)::before{content:"💬 "}.ntable td:nth-child(4)::before{content:"▶ "}.wk-n{margin-left:auto;margin-top:0}
+.wk-items{grid-template-columns:1fr}
+.card{padding:18px;border-radius:18px}.yt-rec,.warm,.pod{padding:22px 18px}
+.tabs{gap:4px;padding:4px;border-radius:16px}.tab{padding:8px 4px;text-align:center;border-radius:12px}.tab-date{font-size:10.5px}.tab-count{top:3px;right:4px;font-size:9.5px}
+.m b{font-size:20px}.m.big b{font-size:22px}
+.actions .spacer{display:none}.btn{padding:8px 11px;font-size:13.5px}
+.chainflow{grid-template-columns:1fr 1fr}
+.froute{grid-template-columns:1fr;padding:12px}.froute .farr{display:none}.froute .getnode{grid-column:auto}.fday{padding-left:2px}
+.wordnode{justify-self:start}
+.trends,.lm-grid,.reveal{grid-template-columns:1fr}
+.slides{grid-auto-columns:78%}
+.warm::before{width:4px}
+.pblocks{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+@media print{
+:root{--bg:#fff;--card:#fff;--card2:#F5F6F8;--line:#DDE1E7;--line2:#CBD1DA;--text:#1F2430;--muted:#5C6677;--accent:#C99A00;--glow:none}
+body{background:#fff;color:#1F2430;font-size:12px}
+.nav,.hero-radar,.tabs,.actions,.take,.hero-bg,.wave,.slides-h .hint{display:none!important}
+.day-panel{display:block!important;break-inside:auto}.panel[hidden]{display:block!important}
+.card,.warm,.pod,.lm,.trend,.wk-day,.ct,.tile{box-shadow:none!important;background:#fff!important;break-inside:avoid}
+.summary p,.why p,.hook,.note,.script p,.shoot,.pot p,.lead,.yt-angle,.yt-why,.pod-why,.reveal p,.wbox p,.checks li,.fm-card p,.ntable td,.rb-l,.fb-l,.bridge p,.pblock ul,.trend p,.sl-text,.sl-pr{color:#1F2430!important}
+.hook{background:#FFF8D6}.slides{grid-auto-flow:row;grid-template-columns:repeat(3,1fr);overflow:visible}.slide{aspect-ratio:auto;background:#fff!important;color:#1F2430}.sl-body{overflow:visible}
+.sl-head,h1 span,.m.acc b{color:#8A6A00!important;text-shadow:none}.s-xl .sl-text{color:#1F2430}
+.sec{padding-block:24px}.reel-grid{grid-template-columns:1fr}
+a{text-decoration:none}
+}
+</style></head><body>
+<nav class="nav" aria-label="Разделы"><div class="wrap nav-in">
+<a class="brand" href="#top"><span class="brand-dot"></span>19.10–25.10</a>
+<div class="nav-links"><a href="#week">Неделя</a><a href="#reels">Рилсы</a><a href="#stories">Сторис</a><a href="#carousels">Карусели</a><a href="#warmup">Прогрев</a><a href="#telegram">Telegram</a><a href="#funnel">Воронка</a><a href="#nospeech">Без речи</a><a href="#how">Как собрано</a></div>
+<a class="counter" href="#reels" title="Отмеченные рилсы">✅ Беру <b data-count>0</b><span>/6</span></a></div></nav><header class="hero" id="top"><div class="hero-bg" aria-hidden="true"></div>
+<div class="wrap hero-in"><div class="hero-text">
+<div class="badge"><span class="dot"></span>Контент-план · для Катерины</div>
+<h1>Контент-план<span>19–25 октября</span></h1>
+<ol class="summary"><li><b>01</b><p>Главная тема недели: убрать недопонимание между тобой и нейросетью. Рилсы про агентов в ChatGPT, про «допрос» перед задачей в Claude и про то, как научить нейросеть писать без роботского тона.</p></li><li><b>02</b><p>Подкреплено цифрами: 5 543 комментария у рейтинга нейросетей, 1 346 у «допроса», 1 258 у агентов в ChatGPT и 6 310 у карусели про систему-помощника.</p></li><li><b>03</b><p>Всё ведёт в две инструкции («Допрос идеи» и «Нейросеть пишет голосом человека»), в подкаст про то, как ставить задачу, и через прогрев в сторис к AI-аудиту контент-рутины.</p></li></ol></div>
+<div class="hero-radar"><svg class="radar" viewBox="0 0 400 400" role="img" aria-label="Радар недели">
+<defs><linearGradient id="sw" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFD84D" stop-opacity="0"/><stop offset="1" stop-color="#FFD84D" stop-opacity=".32"/></linearGradient>
+<radialGradient id="rg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFD84D" stop-opacity=".08"/><stop offset="1" stop-color="#FFD84D" stop-opacity="0"/></radialGradient></defs>
+<circle cx="200" cy="200" r="190" fill="url(#rg)"/><circle cx="200" cy="200" r="48" fill="none" stroke="#232A35" stroke-width="1"/><circle cx="200" cy="200" r="96" fill="none" stroke="#232A35" stroke-width="1"/><circle cx="200" cy="200" r="144" fill="none" stroke="#232A35" stroke-width="1"/><circle cx="200" cy="200" r="190" fill="none" stroke="#232A35" stroke-width="1"/><line x1="384.0" y1="200.0" x2="390.0" y2="200.0" stroke="#3A4453"/><line x1="381.2" y1="232.0" x2="387.1" y2="233.0" stroke="#3A4453"/><line x1="372.9" y1="262.9" x2="378.5" y2="265.0" stroke="#3A4453"/><line x1="359.3" y1="292.0" x2="364.5" y2="295.0" stroke="#3A4453"/><line x1="341.0" y1="318.3" x2="345.5" y2="322.1" stroke="#3A4453"/><line x1="318.3" y1="341.0" x2="322.1" y2="345.5" stroke="#3A4453"/><line x1="292.0" y1="359.3" x2="295.0" y2="364.5" stroke="#3A4453"/><line x1="262.9" y1="372.9" x2="265.0" y2="378.5" stroke="#3A4453"/><line x1="232.0" y1="381.2" x2="233.0" y2="387.1" stroke="#3A4453"/><line x1="200.0" y1="384.0" x2="200.0" y2="390.0" stroke="#3A4453"/><line x1="168.0" y1="381.2" x2="167.0" y2="387.1" stroke="#3A4453"/><line x1="137.1" y1="372.9" x2="135.0" y2="378.5" stroke="#3A4453"/><line x1="108.0" y1="359.3" x2="105.0" y2="364.5" stroke="#3A4453"/><line x1="81.7" y1="341.0" x2="77.9" y2="345.5" stroke="#3A4453"/><line x1="59.0" y1="318.3" x2="54.5" y2="322.1" stroke="#3A4453"/><line x1="40.7" y1="292.0" x2="35.5" y2="295.0" stroke="#3A4453"/><line x1="27.1" y1="262.9" x2="21.5" y2="265.0" stroke="#3A4453"/><line x1="18.8" y1="232.0" x2="12.9" y2="233.0" stroke="#3A4453"/><line x1="16.0" y1="200.0" x2="10.0" y2="200.0" stroke="#3A4453"/><line x1="18.8" y1="168.0" x2="12.9" y2="167.0" stroke="#3A4453"/><line x1="27.1" y1="137.1" x2="21.5" y2="135.0" stroke="#3A4453"/><line x1="40.7" y1="108.0" x2="35.5" y2="105.0" stroke="#3A4453"/><line x1="59.0" y1="81.7" x2="54.5" y2="77.9" stroke="#3A4453"/><line x1="81.7" y1="59.0" x2="77.9" y2="54.5" stroke="#3A4453"/><line x1="108.0" y1="40.7" x2="105.0" y2="35.5" stroke="#3A4453"/><line x1="137.1" y1="27.1" x2="135.0" y2="21.5" stroke="#3A4453"/><line x1="168.0" y1="18.8" x2="167.0" y2="12.9" stroke="#3A4453"/><line x1="200.0" y1="16.0" x2="200.0" y2="10.0" stroke="#3A4453"/><line x1="232.0" y1="18.8" x2="233.0" y2="12.9" stroke="#3A4453"/><line x1="262.9" y1="27.1" x2="265.0" y2="21.5" stroke="#3A4453"/><line x1="292.0" y1="40.7" x2="295.0" y2="35.5" stroke="#3A4453"/><line x1="318.3" y1="59.0" x2="322.1" y2="54.5" stroke="#3A4453"/><line x1="341.0" y1="81.7" x2="345.5" y2="77.9" stroke="#3A4453"/><line x1="359.3" y1="108.0" x2="364.5" y2="105.0" stroke="#3A4453"/><line x1="372.9" y1="137.1" x2="378.5" y2="135.0" stroke="#3A4453"/><line x1="381.2" y1="168.0" x2="387.1" y2="167.0" stroke="#3A4453"/>
+<line x1="10" y1="200" x2="390" y2="200" stroke="#232A35"/><line x1="200" y1="10" x2="200" y2="390" stroke="#232A35"/>
+<g class="sweep"><path d="M200 200 L200 10 A190 190 0 0 1 334.4 65.6 Z" fill="url(#sw)"/><line x1="200" y1="200" x2="334.4" y2="65.6" stroke="#FFD84D" stroke-opacity=".7"/></g>
+<circle cx="262" cy="118" r="16" fill="#FFD84D" opacity=".12" class="ping"/><circle cx="262" cy="118" r="5" fill="#FFD84D"/><text x="274" y="108" fill="#FFD84D" font-size="12" font-family="JetBrains Mono, Consolas, monospace">×82,4 к норме</text><circle cx="128" cy="250" r="16" fill="#6FD3A0" opacity=".12" class="ping"/><circle cx="128" cy="250" r="5" fill="#6FD3A0"/><text x="140" y="240" fill="#6FD3A0" font-size="12" font-family="JetBrains Mono, Consolas, monospace">💬 5,5 тыс.</text><circle cx="286" cy="282" r="16" fill="#9FB4FF" opacity=".12" class="ping"/><circle cx="286" cy="282" r="5" fill="#9FB4FF"/><text x="298" y="272" fill="#9FB4FF" font-size="12" font-family="JetBrains Mono, Consolas, monospace">▶ 267 тыс.</text><circle cx="200" cy="200" r="4" fill="#FFD84D"/></svg></div></div>
+<div class="wrap"><div class="eyebrow hero-eb">Как отбирали · 2026</div><div class="chain"><div class="ct"><b>437</b><span>рилсов в пуле</span></div><div class="arr" aria-hidden="true">→</div><div class="ct"><b>437</b><span>свежих</span></div><div class="arr" aria-hidden="true">→</div><div class="ct"><b>399</b><span>расшифровано</span></div><div class="arr" aria-hidden="true">→</div><div class="ct hot"><b>6</b><span>в плане</span></div></div>
+<div class="tiles"><div class="tile"><b>1</b><span>каруселей</span><em>из 0 постов</em></div><div class="tile"><b>10,3<small>тыс.</small></b><span>комментариев</span><em>у 6 отобранных рилсов</em></div><div class="tile"><b>465<small>тыс.</small></b><span>просмотров</span><em>у тех же рилсов</em></div></div><div class="inplan"><a class="pill-link" href="#reels">🎬 6 рилсов</a><a class="pill-link" href="#carousels">🗂 1 карусель</a><a class="pill-link" href="#stories">📱 сторис в дни рилсов</a><a class="pill-link" href="#warmup">🔥 прогрев в сторис · Ср</a><a class="pill-link" href="#telegram">🧲 2 лид-магнита + 2 запасных</a><a class="pill-link" href="#podcast">🎙 подкаст</a></div></div></header><main><section class="sec" id="week"><div class="wrap">
+<div class="sec-head"><div class="icon" aria-hidden="true">🗓</div><div><div class="eyebrow">01 · Календарь</div><h2>Неделя на ладони</h2><p class="lead">Что и когда выходит. Нажмите на карточку, чтобы перейти к деталям.</p></div></div>
+<div class="legend"><span class="lg" style="--c:var(--accent)"><i></i>🎬 Рилс</span><span class="lg" style="--c:var(--hot)"><i></i>📱 Сторис</span><span class="lg" style="--c:var(--outlier)"><i></i>🗂 Карусель</span><span class="lg" style="--c:var(--funnel)"><i></i>🧲 Лид-магнит</span><span class="lg" style="--c:var(--tg)"><i></i>🎙 Подкаст</span><span class="lg" style="--c:var(--hot)"><i></i>🔥 Сторис-прогрев</span></div><div class="wk-grid"><div class="wk-day"><div class="wk-head"><span class="wk-wd">Пн</span><span class="wk-date">19.10</span><span class="wk-n">3</span></div><div class="wk-items"><a class="wk-item" href="#reels" data-goto-day="day-2026-10-19" style="--c:var(--accent)"><span class="wk-type">🎬 Рилс</span><span class="wk-title">В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт</span></a><a class="wk-item" href="#stories" style="--c:var(--hot)"><span class="wk-type">📱 Сторис</span><span class="wk-title">Сторис в день рилса: агент в ChatGPT</span></a><a class="wk-item" href="#telegram" style="--c:var(--funnel)"><span class="wk-type">🧲 Лид-магнит</span><span class="wk-title">Нейросеть пишет голосом человека («ЧЕЛОВЕК»)</span></a></div></div><div class="wk-day"><div class="wk-head"><span class="wk-wd">Вт</span><span class="wk-date">20.10</span><span class="wk-n">1</span></div><div class="wk-items"><a class="wk-item" href="#carousels" style="--c:var(--outlier)"><span class="wk-type">🗂 Карусель</span><span class="wk-title">Собери систему-помощника: один промпт ставит её, дальше она ведёт твой день</span></a></div></div><div class="wk-day"><div class="wk-head"><span class="wk-wd">Ср</span><span class="wk-date">21.10</span><span class="wk-n">4</span></div><div class="wk-items"><a class="wk-item" href="#reels" data-goto-day="day-2026-10-21" style="--c:var(--accent)"><span class="wk-type">🎬 Рилс</span><span class="wk-title">Этот парень запретил Claude писать код и получил 150 тысяч звёзд</span></a><a class="wk-item" href="#stories" style="--c:var(--hot)"><span class="wk-type">📱 Сторис</span><span class="wk-title">Сторис в день рилса: допрос вместо промпта</span></a><a class="wk-item" href="#telegram" style="--c:var(--funnel)"><span class="wk-type">🧲 Лид-магнит</span><span class="wk-title">Допрос идеи: навык, который сначала спрашивает («ДОПРОС»)</span></a><a class="wk-item" href="#warmup" style="--c:var(--hot)"><span class="wk-type">🔥 Сторис-прогрев</span><span class="wk-title">Ты тоже не знаешь, чего хочешь от нейросети</span></a></div></div><div class="wk-day"><div class="wk-head"><span class="wk-wd">Чт</span><span class="wk-date">22.10</span><span class="wk-n">0</span></div><div class="wk-items"></div></div><div class="wk-day"><div class="wk-head"><span class="wk-wd">Пт</span><span class="wk-date">23.10</span><span class="wk-n">1</span></div><div class="wk-items"><a class="wk-item" href="#podcast" style="--c:var(--tg)"><span class="wk-type">🎙 Подкаст</span><span class="wk-title">Нейросеть делает не то? Дело в задании</span></a></div></div><div class="wk-day weekend"><div class="wk-head"><span class="wk-wd">Сб</span><span class="wk-date">24.10</span><span class="wk-n">0</span></div><div class="wk-items"></div></div><div class="wk-day weekend"><div class="wk-head"><span class="wk-wd">Вс</span><span class="wk-date">25.10</span><span class="wk-n">0</span></div><div class="wk-items"></div></div></div></div></section><section class="sec" id="reels"><div class="wrap">
+<div class="sec-head"><div class="icon" aria-hidden="true">🎬</div><div><div class="eyebrow">02 · Instagram · рилсы</div><h2>Рилсы по дням</h2><p class="lead">6 рилсов, по три на день. Первый в каждом дне рекомендуем, два других — замены. Отмечайте «Беру»: счётчик наверху, выбор сохраняется в браузере.</p></div></div>
+<div class="tabs" role="tablist"><button class="tab active" type="button" role="tab" aria-selected="true" data-target="day-2026-10-19" data-codes="Dd_qNppsYVK,DeCOT9bBsEu,DeDLCRVIAxj"><span class="tab-wd">Пн</span><span class="tab-date">19.10</span><span class="tab-word">ДОТС</span><span class="tab-count"></span></button><button class="tab" type="button" role="tab" aria-selected="false" data-target="day-2026-10-21" data-codes="DeGw4aVMugL,Dd_uQDIIB8A,DdlKnAqOHgQ"><span class="tab-wd">Ср</span><span class="tab-date">21.10</span><span class="tab-word">ДОПРОС</span><span class="tab-count"></span></button></div><div class="day-panel active" id="day-2026-10-19" role="tabpanel"><div class="day-head"><h3>Понедельник, 19 октября</h3><span>3 рилса · ⭐ рекомендуемый первым</span></div><div class="reel-grid"><article class="card reel rec" data-code="Dd_qNppsYVK">
+<div class="reel-top"><div class="chips"><span class="chip star" style="--c:var(--accent)">⭐ Рекомендуем</span><span class="chip " style="--c:var(--funnel)">🧲 воронка</span><span class="chip " style="--c:var(--muted)">🏷 📰 тренд</span></div><label class="take"><input type="checkbox" data-code="Dd_qNppsYVK"><span class="box" aria-hidden="true"></span><span class="take-l">Беру</span></label></div>
+<div class="rec-body"><div class="rec-main">
+<h4 class="reel-title big">В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт</h4>
+<blockquote class="hook">«В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт.»</blockquote>
+<div class="why"><div class="why-h">⭐ Почему рекомендуем</div><p>Про это надо сказать сейчас: агенты внутри ChatGPT только вышли, а твоя тема как раз про рутину, которую делают без тебя. Воронка 1258 комментариев, и это ChatGPT-день: рекомендуемый рилс среды будет про Claude.</p></div></div>
+<aside class="rec-side"><div class="mgrid"><div class="m acc"><b>×1,1</b><span>к норме автора</span></div><div class="m "><b>1 258 комментариев за 3 дня</b><span>в ленте</span></div></div>
+<div class="side-word"><span class="lbl">Кодовое слово</span><div class="wline"><span class="word "><i>слово</i>ДОТС</span></div><div class="leads">→ Запасной лид-магнит «Агент в ChatGPT: первая задача», затем прогрев и AI-аудит</div></div></aside></div>
+<div class="actions">
+<button class="btn primary" type="button" data-toggle="scr-Dd_qNppsYVK" aria-expanded="false">📜 Сценарий <span class="btn-meta">1:35</span></button>
+<button class="btn" type="button" data-copy="src-Dd_qNppsYVK">📋 Скопировать</button>
+<button class="btn" type="button" data-toggle="sh-Dd_qNppsYVK" aria-expanded="false">🎥 Для съёмки</button>
+<button class="btn" type="button" data-toggle="pt-Dd_qNppsYVK" aria-expanded="false">✨ Потенциал</button>
+<span class="spacer"></span><span class="by">@mcdenil</span>
+<a class="orig" href="https://www.instagram.com/reel/Dd_qNppsYVK/" target="_blank" rel="noopener">оригинал ↗</a></div>
+<textarea class="src" id="src-Dd_qNppsYVK" hidden>В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт.
+
+Называются «доты». У каждого свой облачный компьютер с браузером и выходом в интернет, так что твой им не нужен.
+
+Как это выглядит. Ставишь цель: разобрать отзывы клиентов, нарезать эфир на посты или превратить макет в сайт. Закрываешь ноутбук и идёшь по своим делам.
+
+Агент сам берётся за задачу через подключённые приложения и возвращается с результатом. Важные действия, по описанию, делает только после твоего «да».
+
+Проще говоря, чат отвечает на вопросы, а агент сам двигает задачу, пока ты занята другим.
+
+Если нужна инструкция про тарифы и первую задачу для агента, напиши «ДОТС» в комментариях, пришлю.</textarea>
+<div class="panel script" id="scr-Dd_qNppsYVK" hidden><div class="panel-h">📜 Сценарий · 1:35 · 6 абз.</div><p>В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт.</p><p>Называются «доты». У каждого свой облачный компьютер с браузером и выходом в интернет, так что твой им не нужен.</p><p>Как это выглядит. Ставишь цель: разобрать отзывы клиентов, нарезать эфир на посты или превратить макет в сайт. Закрываешь ноутбук и идёшь по своим делам.</p><p>Агент сам берётся за задачу через подключённые приложения и возвращается с результатом. Важные действия, по описанию, делает только после твоего «да».</p><p>Проще говоря, чат отвечает на вопросы, а агент сам двигает задачу, пока ты занята другим.</p><p>Если нужна инструкция про тарифы и первую задачу для агента, напиши «ДОТС» в комментариях, пришлю.</p>
+<p class="en"><b>Хук оригинала (EN):</b> Это меняет абсолютно все: вышло грандиозное обновление чата GPT за всю историю (оригинал на русском)</p></div>
+<div class="panel" id="sh-Dd_qNppsYVK" hidden><div class="panel-h">🎥 Для съёмки</div><ul class="shoot"><li>На экране: чат ChatGPT, раздел с агентами, постановка одной задачи.</li><li>До съёмки проверь: что функция есть в твоём аккаунте, на каких тарифах работает, и цифру «больше 4000 приложений» (так говорит автор, не проверено).</li><li>Для рынка: уточни доступность в России и способ оплаты.</li><li>Фразу автора про «людей без заработка» не берём.</li></ul></div>
+<div class="panel" id="pt-Dd_qNppsYVK" hidden><div class="panel-h">✨ Потенциал ролика</div><div class="pot"><b>🧲 Лид-магнит</b><p>Инструкция «Агент в ChatGPT: что умеет, на каком тарифе, первая задача». В плане это запасной лид-магнит: если берёшь рилс, соберём материал, иначе замени призыв на «сохрани».</p></div></div></article><article class="card reel" data-code="DeCOT9bBsEu">
+<div class="reel-top"><div class="chips"><span class="chip " style="--c:var(--funnel)">🧲 воронка</span><span class="chip " style="--c:var(--muted)">🏷 📋 список</span></div><label class="take"><input type="checkbox" data-code="DeCOT9bBsEu"><span class="box" aria-hidden="true"></span><span class="take-l">Беру</span></label></div>
+<h4 class="reel-title">Пять вещей, которые стоит собрать в Claude за выходные</h4>
+<div class="mrow">⏱ 971 комментарий за 2 дня · 🎞 1:37</div>
+<blockquote class="hook">«Пять вещей, которые стоит собрать в Claude за выходные. Собираешь один раз, и каждый день они работают лучше.»</blockquote>
+<div class="wline"><span class="word "><i>слово</i>ВЫХОДНЫЕ</span></div><div class="leads">→ Чек-лист первых шагов (в запасе); связь с каруселью про систему-помощника</div>
+<div class="actions">
+<button class="btn primary" type="button" data-toggle="scr-DeCOT9bBsEu" aria-expanded="false">📜 Сценарий <span class="btn-meta">1:37</span></button>
+<button class="btn" type="button" data-copy="src-DeCOT9bBsEu">📋 Скопировать</button>
+<button class="btn" type="button" data-toggle="sh-DeCOT9bBsEu" aria-expanded="false">🎥 Для съёмки</button>
+<button class="btn" type="button" data-toggle="pt-DeCOT9bBsEu" aria-expanded="false">✨ Потенциал</button>
+<span class="spacer"></span><span class="by">@taki.gpt</span>
+<a class="orig" href="https://www.instagram.com/reel/DeCOT9bBsEu/" target="_blank" rel="noopener">оригинал ↗</a></div>
+<textarea class="src" id="src-DeCOT9bBsEu" hidden>Хук: «Пять вещей, которые стоит собрать в Claude за выходные». Дальше по пунктам: 1) страница дня, где собраны календарь, почта и задачи, утром она обновляется сама; 2) «второй мозг», то есть папка со всеми твоими документами, к которой подключена нейросеть; 3) личный ассистент, который утром даёт план, а вечером итог дня; 4) агент для контента, который смотрит соцсети и подсказывает, какие ролики снимать; 5) команда агентов, где один раздаёт задачи остальным. Призыв: напиши «ВЫХОДНЫЕ», пришлю список первых шагов.</textarea>
+<div class="panel script" id="scr-DeCOT9bBsEu" hidden><div class="panel-h">📜 Сценарий · 1:37 · 1 абз.</div><p>Хук: «Пять вещей, которые стоит собрать в Claude за выходные». Дальше по пунктам: 1) страница дня, где собраны календарь, почта и задачи, утром она обновляется сама; 2) «второй мозг», то есть папка со всеми твоими документами, к которой подключена нейросеть; 3) личный ассистент, который утром даёт план, а вечером итог дня; 4) агент для контента, который смотрит соцсети и подсказывает, какие ролики снимать; 5) команда агентов, где один раздаёт задачи остальным. Призыв: напиши «ВЫХОДНЫЕ», пришлю список первых шагов.</p>
+<p class="en"><b>Хук оригинала (EN):</b> five things I would build inside of Claude in one weekend</p></div>
+<div class="panel" id="sh-DeCOT9bBsEu" hidden><div class="panel-h">🎥 Для съёмки</div><ul class="shoot"><li>Автор зовёт в свою платную группу и называет ассистента «Hermes»: не повторяем, призыв заменён.</li><li>Для твоей аудитории полезнее всего пункты 1, 4 и 5.</li><li>На экране покажи одну свою сборку, если решишь снимать.</li><li>Проверь, что не обещаешь результат заранее.</li></ul></div>
+<div class="panel" id="pt-DeCOT9bBsEu" hidden><div class="panel-h">✨ Потенциал ролика</div><div class="pot"><b>🧲 Лид-магнит</b><p>Чек-лист «первая сборка в Claude». В плане не берём, годится в запас.</p></div></div></article><article class="card reel" data-code="DeDLCRVIAxj">
+<div class="reel-top"><div class="chips"><span class="chip " style="--c:var(--outlier)">🚀 аутлаер</span><span class="chip " style="--c:var(--muted)">🏷 🛠 инструкция</span></div><label class="take"><input type="checkbox" data-code="DeDLCRVIAxj"><span class="box" aria-hidden="true"></span><span class="take-l">Беру</span></label></div>
+<h4 class="reel-title">Антиплагиат показал 80% ИИ в твоём тексте? Вот как научить нейросеть писать иначе</h4>
+<div class="mrow">⏱ ×7,5 к обычным просмотрам автора за 2 дня · ×7,5 · 🎞 1:12</div>
+<blockquote class="hook">«Антиплагиат опять показал 80% ИИ в твоём тексте? Вот как это исправить.»</blockquote>
+<div class="wline"><span class="word "><i>слово</i>ЧЕЛОВЕК</span></div><div class="leads">→ Лид-магнит «Нейросеть пишет голосом человека»</div>
+<div class="note"><span class="note-h">🧲 Лид-магнит</span><p>Рилс про хьюманайзер в понедельник; можно показать на экране твой навык humaniser.</p></div><div class="actions">
+<button class="btn primary" type="button" data-toggle="scr-DeDLCRVIAxj" aria-expanded="false">📜 Сценарий <span class="btn-meta">1:12</span></button>
+<button class="btn" type="button" data-copy="src-DeDLCRVIAxj">📋 Скопировать</button>
+<button class="btn" type="button" data-toggle="sh-DeDLCRVIAxj" aria-expanded="false">🎥 Для съёмки</button>
+<button class="btn" type="button" data-toggle="pt-DeDLCRVIAxj" aria-expanded="false">✨ Потенциал</button>
+<span class="spacer"></span><span class="by">@justuserr99</span>
+<a class="orig" href="https://www.instagram.com/reel/DeDLCRVIAxj/" target="_blank" rel="noopener">оригинал ↗</a></div>
+<textarea class="src" id="src-DeDLCRVIAxj" hidden>Хук: «Антиплагиат опять показал 80% ИИ в твоём тексте? Вот как это исправить». Шаги: 1) скажи нейросети: пиши все мои тексты так, чтобы они не звучали как ИИ; 2) найди в Википедии страницу про признаки текста, написанного нейросетью, выпиши оттуда каждый приём и попроси так больше не делать (длинные тире, слова-паразиты, роботский тон); 3) в Claude набери слэш, выбери скилл-креатор и попроси сделать личный навык-хьюманайзер; в ChatGPT то же самое делается через «Мои GPT» → создать → вставить список; 4) перед любым текстом пиши короткую команду, и нейросеть применяет правила. Призыв: напиши «ЧЕЛОВЕК», пришлю пошаговую инструкцию.</textarea>
+<div class="panel script" id="scr-DeDLCRVIAxj" hidden><div class="panel-h">📜 Сценарий · 1:12 · 1 абз.</div><p>Хук: «Антиплагиат опять показал 80% ИИ в твоём тексте? Вот как это исправить». Шаги: 1) скажи нейросети: пиши все мои тексты так, чтобы они не звучали как ИИ; 2) найди в Википедии страницу про признаки текста, написанного нейросетью, выпиши оттуда каждый приём и попроси так больше не делать (длинные тире, слова-паразиты, роботский тон); 3) в Claude набери слэш, выбери скилл-креатор и попроси сделать личный навык-хьюманайзер; в ChatGPT то же самое делается через «Мои GPT» → создать → вставить список; 4) перед любым текстом пиши короткую команду, и нейросеть применяет правила. Призыв: напиши «ЧЕЛОВЕК», пришлю пошаговую инструкцию.</p>
+<p class="en"><b>Хук оригинала (EN):</b> Антиплагиат опять показал 80% ИИ в твоём тексте (оригинал на русском)</p></div>
+<div class="panel" id="sh-DeDLCRVIAxj" hidden><div class="panel-h">🎥 Для съёмки</div><ul class="shoot"><li>Покажи на экране свой навык humaniser в работе (он у тебя уже есть).</li><li>Автор говорит «детектор показал 0%», это его результат: не обещай такого же.</li><li>Подпись автора («Пиши человек») годится как кодовое слово.</li><li>Работает в обоих инструментах, это плюс к балансу дня.</li></ul></div>
+<div class="panel" id="pt-DeDLCRVIAxj" hidden><div class="panel-h">✨ Потенциал ролика</div><div class="pot"><b>🧲 Лид-магнит</b><p>Гайд «Нейросеть пишет голосом человека»: основной лид-магнит недели, список признаков, навык для Claude и GPT для ChatGPT.</p></div></div></article></div></div><div class="day-panel" id="day-2026-10-21" role="tabpanel"><div class="day-head"><h3>Среда, 21 октября</h3><span>3 рилса · ⭐ рекомендуемый первым</span></div><div class="reel-grid"><article class="card reel rec" data-code="DeGw4aVMugL">
+<div class="reel-top"><div class="chips"><span class="chip star" style="--c:var(--accent)">⭐ Рекомендуем</span><span class="chip " style="--c:var(--funnel)">🧲 воронка</span><span class="chip " style="--c:var(--muted)">🏷 💡 инсайт</span></div><label class="take"><input type="checkbox" data-code="DeGw4aVMugL"><span class="box" aria-hidden="true"></span><span class="take-l">Беру</span></label></div>
+<div class="rec-body"><div class="rec-main">
+<h4 class="reel-title big">Этот парень запретил Claude писать код и получил больше 150 тысяч звёзд на GitHub</h4>
+<blockquote class="hook">«Этот парень запретил Claude писать код и получил больше 150 тысяч звёзд на GitHub.»</blockquote>
+<div class="why"><div class="why-h">⭐ Почему рекомендуем</div><p>Уникальная подача: нейросеть сначала допрашивает тебя, и хук «этот парень запретил Claude писать код» из твоих любимых. Рилс совсем свежий, воронка 1346 комментариев, ×5,5 к обычным просмотрам автора. Рекомендуемый рилс дня про Claude, а в понедельник рекомендован ChatGPT.</p></div></div>
+<aside class="rec-side"><div class="mgrid"><div class="m acc"><b>×5,5</b><span>к норме автора</span></div><div class="m "><b>1 346 комментариев за день, ×5,5 к обычным просмотрам</b><span>в ленте</span></div></div>
+<div class="side-word"><span class="lbl">Кодовое слово</span><div class="wline"><span class="word "><i>слово</i>ДОПРОС</span></div><div class="leads">→ Лид-магнит «Допрос идеи», подкаст «Нейросеть делает не то?»</div></div></aside></div>
+<div class="note"><span class="note-h">🧲 Лид-магнит</span><p>Рилс в среду, материал выходит в тот же день.</p></div><div class="actions">
+<button class="btn primary" type="button" data-toggle="scr-DeGw4aVMugL" aria-expanded="false">📜 Сценарий <span class="btn-meta">1:42</span></button>
+<button class="btn" type="button" data-copy="src-DeGw4aVMugL">📋 Скопировать</button>
+<button class="btn" type="button" data-toggle="sh-DeGw4aVMugL" aria-expanded="false">🎥 Для съёмки</button>
+<button class="btn" type="button" data-toggle="pt-DeGw4aVMugL" aria-expanded="false">✨ Потенциал</button>
+<span class="spacer"></span><span class="by">@mcdenil</span>
+<a class="orig" href="https://www.instagram.com/reel/DeGw4aVMugL/" target="_blank" rel="noopener">оригинал ↗</a></div>
+<textarea class="src" id="src-DeGw4aVMugL" hidden>Этот парень запретил Claude писать код и получил больше 150 тысяч звёзд на GitHub.
+
+Знакомо? Объясняешь задачу, нейросеть кивает, а выдаёт совсем не то. Переделываешь, а лимиты уже съедены. Кажется, что модель слабая.
+
+Чаще дело в другом: половина задачи осталась у тебя в голове.
+
+Мэтт Покок сделал навык Grill Me, «допрос». Правило одно: Claude нельзя ничего делать, пока он тебя не расспросит.
+
+Кидаешь идею и вместо результата получаешь вопросы. Для кого это? Что будет, если пойдёт не так? Какой сценарий? К каждому вопросу он сразу предлагает свои варианты ответа: жмёшь «да», «нет» или поправляешь. Никаких простыней текста.
+
+Минут десять допроса, и наружу выходит то, что ты бы сама в первый промпт не написала. Дальше он берётся за работу уже с понятным заданием.
+
+Проще говоря, проблема была в задании, а не в модели.
+
+Навык, судя по описанию, бесплатный. Напиши «ДОПРОС» в комментариях, пришлю инструкцию и ссылку.</textarea>
+<div class="panel script" id="scr-DeGw4aVMugL" hidden><div class="panel-h">📜 Сценарий · 1:42 · 8 абз.</div><p>Этот парень запретил Claude писать код и получил больше 150 тысяч звёзд на GitHub.</p><p>Знакомо? Объясняешь задачу, нейросеть кивает, а выдаёт совсем не то. Переделываешь, а лимиты уже съедены. Кажется, что модель слабая.</p><p>Чаще дело в другом: половина задачи осталась у тебя в голове.</p><p>Мэтт Покок сделал навык Grill Me, «допрос». Правило одно: Claude нельзя ничего делать, пока он тебя не расспросит.</p><p>Кидаешь идею и вместо результата получаешь вопросы. Для кого это? Что будет, если пойдёт не так? Какой сценарий? К каждому вопросу он сразу предлагает свои варианты ответа: жмёшь «да», «нет» или поправляешь. Никаких простыней текста.</p><p>Минут десять допроса, и наружу выходит то, что ты бы сама в первый промпт не написала. Дальше он берётся за работу уже с понятным заданием.</p><p>Проще говоря, проблема была в задании, а не в модели.</p><p>Навык, судя по описанию, бесплатный. Напиши «ДОПРОС» в комментариях, пришлю инструкцию и ссылку.</p>
+<p class="en"><b>Хук оригинала (EN):</b> Вот этот парень запретил Клоду писать код вообще и получил больше 150 тысяч звезд на гитхабе (оригинал на русском)</p></div>
+<div class="panel" id="sh-DeGw4aVMugL" hidden><div class="panel-h">🎥 Для съёмки</div><ul class="shoot"><li>На экране покажи допрос на твоей задаче (например, бриф на карусель): вопрос, варианты, «да/нет».</li><li>Проверь до съёмки: что навык Grill Me существует и ставится так, как описано, фамилию автора (Мэтт Покок) и цифру «150 тысяч звёзд» (слова автора ролика).</li><li>Автор говорит про код, а в твоей аудитории это тексты и контент: убедись, что на текстовой задаче навык работает, и только тогда снимай.</li></ul></div>
+<div class="panel" id="pt-DeGw4aVMugL" hidden><div class="panel-h">✨ Потенциал ролика</div><div class="pot"><b>🧲 Лид-магнит</b><p>Инструкция «Допрос идеи»: установка навыка и пример брифа на карусель. Основной лид-магнит недели.</p></div></div></article><article class="card reel" data-code="Dd_uQDIIB8A">
+<div class="reel-top"><div class="chips"><span class="chip " style="--c:var(--funnel)">🧲 воронка</span><span class="chip " style="--c:var(--muted)">🏷 📋 рейтинг</span></div><label class="take"><input type="checkbox" data-code="Dd_uQDIIB8A"><span class="box" aria-hidden="true"></span><span class="take-l">Беру</span></label></div>
+<h4 class="reel-title">Рейтинг нейросетей: что для чего (ChatGPT, Codex, Nano Banana и другие)</h4>
+<div class="mrow">⏱ 5 543 комментария за 3 дня, ×82 к обычным просмотрам · ×82,4 · 🎞 1:39</div>
+<blockquote class="hook">«Рейтинг нейросетей: какая для чего.»</blockquote>
+<div class="wline"><span class="word "><i>слово</i>ШПАРГАЛКА</span></div><div class="leads">→ Запасной лид-магнит «какая нейросеть для чего»</div>
+<div class="actions">
+<button class="btn primary" type="button" data-toggle="scr-Dd_uQDIIB8A" aria-expanded="false">📜 Сценарий <span class="btn-meta">1:39</span></button>
+<button class="btn" type="button" data-copy="src-Dd_uQDIIB8A">📋 Скопировать</button>
+<button class="btn" type="button" data-toggle="sh-Dd_uQDIIB8A" aria-expanded="false">🎥 Для съёмки</button>
+<button class="btn" type="button" data-toggle="pt-Dd_uQDIIB8A" aria-expanded="false">✨ Потенциал</button>
+<span class="spacer"></span><span class="by">@solo.marketing.ai</span>
+<a class="orig" href="https://www.instagram.com/reel/Dd_uQDIIB8A/" target="_blank" rel="noopener">оригинал ↗</a></div>
+<textarea class="src" id="src-Dd_uQDIIB8A" hidden>Хук: «Рейтинг нейросетей: какая для чего». Дальше идут места с одной фразой на каждое: у автора на первом месте Codex (код, проекты, автоматизация), на пятом ChatGPT (тексты, изображения, анализ, файлы), на четвёртом Nano Banana (изображения и сохранение персонажа), на третьем Higgsfield (контент, картинки и видео), на седьмом Whisper Flow (диктовка вместо печати), на десятом Apple Intelligence. Остальные названия на экране ролика: сверь их с оригиналом. Призыв: напиши «ШПАРГАЛКА», пришлю шпаргалку, какую нейросеть для чего брать.</textarea>
+<div class="panel script" id="scr-Dd_uQDIIB8A" hidden><div class="panel-h">📜 Сценарий · 1:39 · 1 абз.</div><p>Хук: «Рейтинг нейросетей: какая для чего». Дальше идут места с одной фразой на каждое: у автора на первом месте Codex (код, проекты, автоматизация), на пятом ChatGPT (тексты, изображения, анализ, файлы), на четвёртом Nano Banana (изображения и сохранение персонажа), на третьем Higgsfield (контент, картинки и видео), на седьмом Whisper Flow (диктовка вместо печати), на десятом Apple Intelligence. Остальные названия на экране ролика: сверь их с оригиналом. Призыв: напиши «ШПАРГАЛКА», пришлю шпаргалку, какую нейросеть для чего брать.</p>
+<p class="en"><b>Хук оригинала (EN):</b> Чат GPT. Пятое место. (оригинал на русском)</p></div>
+<div class="panel" id="sh-Dd_uQDIIB8A" hidden><div class="panel-h">🎥 Для съёмки</div><ul class="shoot"><li>Рейтинг у автора личный: свои места расставь сама, по тому, чем пользуешься.</li><li>В речи ролика пропущены названия нескольких позиций, их надо взять с экрана оригинала.</li><li>Проверь доступность Higgsfield и Apple Intelligence в России.</li><li>Не копируй места автора как свои.</li></ul></div>
+<div class="panel" id="pt-Dd_uQDIIB8A" hidden><div class="panel-h">✨ Потенциал ролика</div><div class="pot"><b>🧲 Лид-магнит</b><p>Шпаргалка «какая нейросеть для чего». В плане запасной лид-магнит.</p></div></div></article><article class="card reel" data-code="DdlKnAqOHgQ">
+<div class="reel-top"><div class="chips"><span class="chip " style="--c:var(--funnel)">🧲 воронка</span><span class="chip " style="--c:var(--muted)">🏷 🧠 теория</span></div><label class="take"><input type="checkbox" data-code="DdlKnAqOHgQ"><span class="box" aria-hidden="true"></span><span class="take-l">Беру</span></label></div>
+<h4 class="reel-title">В 2026 появился тип контента, который забирает охваты у остальных</h4>
+<div class="mrow">⏱ 946 комментариев, ×4,9 к обычным просмотрам · ×4,9 · 🎞 1:40</div>
+<blockquote class="hook">«В 2026 появился тип контента, который забирает охваты у остальных. Называется «прикладной».»</blockquote>
+<div class="wline"><span class="word "><i>слово</i>ФОРМАТЫ</span></div><div class="leads">→ Материала нет: призыв заменить на «сохрани»</div>
+<div class="actions">
+<button class="btn primary" type="button" data-toggle="scr-DdlKnAqOHgQ" aria-expanded="false">📜 Сценарий <span class="btn-meta">1:40</span></button>
+<button class="btn" type="button" data-copy="src-DdlKnAqOHgQ">📋 Скопировать</button>
+<button class="btn" type="button" data-toggle="sh-DdlKnAqOHgQ" aria-expanded="false">🎥 Для съёмки</button>
+<button class="btn" type="button" data-toggle="pt-DdlKnAqOHgQ" aria-expanded="false">✨ Потенциал</button>
+<span class="spacer"></span><span class="by">@mama_mozg</span>
+<a class="orig" href="https://www.instagram.com/reel/DdlKnAqOHgQ/" target="_blank" rel="noopener">оригинал ↗</a></div>
+<textarea class="src" id="src-DdlKnAqOHgQ" hidden>Хук: «В 2026 появился тип контента, который забирает охваты у остальных». Суть: обучающий контент разделился на три. Первый, «эдуслоп»: слова без твоего мнения, быстрая еда, в большинстве ниш почти перестал работать. Второй, тактическое обучение: туториал или разбор, работает, но только на свежей теме. Третий, прикладной: кейсы, «а что если», сборка вживую, то есть навык доказывается прямо в ролике. Вывод: если нужны заявки, снимай сторителлинг, тактику и прикладной. Призыв: напиши «ФОРМАТЫ».</textarea>
+<div class="panel script" id="scr-DdlKnAqOHgQ" hidden><div class="panel-h">📜 Сценарий · 1:40 · 1 абз.</div><p>Хук: «В 2026 появился тип контента, который забирает охваты у остальных». Суть: обучающий контент разделился на три. Первый, «эдуслоп»: слова без твоего мнения, быстрая еда, в большинстве ниш почти перестал работать. Второй, тактическое обучение: туториал или разбор, работает, но только на свежей теме. Третий, прикладной: кейсы, «а что если», сборка вживую, то есть навык доказывается прямо в ролике. Вывод: если нужны заявки, снимай сторителлинг, тактику и прикладной. Призыв: напиши «ФОРМАТЫ».</p>
+<p class="en"><b>Хук оригинала (EN):</b> Появился новый тип контента, и он сейчас разрывает соцсети (оригинал на русском)</p></div>
+<div class="panel" id="sh-DdlKnAqOHgQ" hidden><div class="panel-h">🎥 Для съёмки</div><ul class="shoot"><li>Покажи на экране свой пример «прикладного» ролика: монтаж или сборку прямо в кадре.</li><li>Ролику 14 дней, это граница свежести.</li><li>Периоды («2021–2024») автора пересчитывать не надо, но «2026» оставь как есть.</li><li>Нейтральная тема по инструменту: дополняет день, не про Claude и не про ChatGPT.</li></ul></div>
+<div class="panel" id="pt-DdlKnAqOHgQ" hidden><div class="panel-h">✨ Потенциал ролика</div><div class="pot"><b>🧲 Лид-магнит</b><p>Мини-книга форматов у автора: у тебя такого материала нет, призыв в плане не берём, замени на «сохрани».</p></div></div></article></div></div></div></section><section class="sec" id="stories"><div class="wrap">
+<div class="sec-head"><div class="icon" aria-hidden="true">📱</div><div><div class="eyebrow">02+ · Instagram · сторис</div><h2>Сторис в дни рилсов</h2><p class="lead">Те же дни, что и рилсы: в сторис повторяется суть рилса. Кадры по порядку, снимается за 10–15 минут.</p></div></div>
+<article class="card stories-day"><div class="reel-top"><div class="chips"><span class="chip " style="--c:var(--hot)">📱 Сторис · Пн 19.10</span><span class="chip " style="--c:var(--muted)">🗂 5 кадров</span></div><span class="word "><i>слово</i>ДОТС</span></div><h4 class="reel-title">Агент в ChatGPT работает, пока ноутбук закрыт</h4><div class="rchips"><span class="rchip">🎬 В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт <em>Пн</em></span></div><ol class="reveal"><li><span class="dbadge">1</span><div><b>тизер</b><p>В ChatGPT появились агенты, которые работают, пока ноутбук закрыт</p><p class="muted small">🎥 Заголовок на тёмном фоне, ты в кадре</p></div></li><li><span class="dbadge">2</span><div><b>как это работает</b><p>У агента свой облачный компьютер: ставишь цель, закрываешь ноутбук, он делает через подключённые приложения</p><p class="muted small">🎥 Экран с разделом агентов</p></div></li><li><span class="dbadge">3</span><div><b>результат</b><p>Вот что он вернул (покажи реальный результат своей задачи; если не проверяла, пропусти кадр)</p><p class="muted small">🎥 Скриншот результата</p></div></li><li><span class="dbadge">4</span><div><b>вопрос</b><p>Какую рутину ты бы отдала такому агенту?</p><p class="muted small">🎛 вопрос с ответом</p></div></li><li><span class="dbadge">5</span><div><b>призыв</b><p>Напиши ДОТС в комментариях под рилсом, пришлю инструкцию</p><p class="muted small">🎛 ссылка на рилс</p></div></li></ol><p class="muted small">10–15 минут съёмки; кадры повторяют суть рекомендуемого рилса. Материал «ДОТС» пока в запасе: берёшь этот рилс, и он становится третьим основным лид-магнитом; не берёшь материал, замени призыв в рилсе и в кадре 5 на «сохрани».</p></article><article class="card stories-day"><div class="reel-top"><div class="chips"><span class="chip " style="--c:var(--hot)">📱 Сторис · Ср 21.10</span><span class="chip " style="--c:var(--muted)">🗂 5 кадров</span></div><span class="word "><i>слово</i>ДОПРОС</span></div><h4 class="reel-title">Допрос вместо промпта</h4><div class="rchips"><span class="rchip">🎬 Этот парень запретил Claude писать код и получил 150 тысяч звёзд <em>Ср</em></span></div><ol class="reveal"><li><span class="dbadge">1</span><div><b>тизер</b><p>Этот парень запретил Claude писать код и получил больше 150 тысяч звёзд</p><p class="muted small">🎥 Заголовок, ты в кадре</p></div></li><li><span class="dbadge">2</span><div><b>как это работает</b><p>Навык «допрос»: Claude сначала задаёт вопросы с вариантами ответов, а потом делает</p><p class="muted small">🎥 Экран с вопросами и кнопками «да/нет»</p></div></li><li><span class="dbadge">3</span><div><b>результат</b><p>Что получилось после десяти минут вопросов (покажи свой пример)</p><p class="muted small">🎥 Итоговый бриф</p></div></li><li><span class="dbadge">4</span><div><b>вопрос</b><p>Как часто нейросеть делает не то, что ты просила?</p><p class="muted small">🎛 опрос: часто / иногда / почти никогда</p></div></li><li><span class="dbadge">5</span><div><b>призыв</b><p>Напиши ДОПРОС, пришлю инструкцию и ссылку на навык</p><p class="muted small">🎛 ссылка на рилс</p></div></li></ol><p class="muted small">Утром сторисы-дубль рилса, вечером прогрев (он расширяет тему, а не повторяет).</p></article></div></section><section class="sec" id="carousels"><div class="wrap">
+<div class="sec-head"><div class="icon" aria-hidden="true">🗂</div><div><div class="eyebrow">03 · Instagram · карусели</div><h2>Карусели</h2><p class="lead">1 карусель недели, 1 в календаре (Вт 20.10). Слайды переведены: только текст, без картинок оригинала.</p></div></div>
+<div class="stack"><article class="card car rec">
+<div class="reel-top"><div class="chips"><span class="chip star" style="--c:var(--accent)">⭐ В плане · Вт 20.10</span><span class="chip " style="--c:var(--muted)">🏷 🛠 инструкция</span><span class="chip " style="--c:var(--outlier)">🗂 9 слайдов</span></div><a class="orig" href="https://www.instagram.com/p/DdpdeD-HPsJ/" target="_blank" rel="noopener">@chase.h.ai · оригинал ↗</a></div>
+<div class="car-grid"><div><h4 class="reel-title big">Собери свою систему-помощника: один промпт ставит её, дальше она ведёт твой день</h4>
+<div class="mrow">💬 6 310 · ♥ 5 579 · ⏱ 12 дн.</div><blockquote class="hook">«Собери свой JARVIS OS 2.0: один промпт ставит всё, система ведёт твой день.»</blockquote></div>
+<div class="car-side"><div class="why"><div class="why-h">⭐ Почему в плане</div><p>6 310 комментариев при пороге 1000, и это единственная свежая карусель в твоей нише на этой неделе. Тема совпадает с твоим AgentOS: один помощник, память в заметках, голос и панель.</p></div>
+<div class="wline"><span class="word "><i>слово</i>ДЖАРВИС</span></div><div class="leads">→ Лид-магнит «Допрос идеи» в среду и подкаст в пятницу</div></div></div>
+<div class="slides-wrap"><div class="slides-h"><span>Слайды текстом</span><span class="hint">листайте →</span></div><div class="slides"><div class="slide cover s-md"><div class="sl-top"><span>01/09 <span class="sl-more">· листайте ↓</span></span></div><div class="sl-body"><div class="sl-head">1. Собери свой JARVIS OS 2.</div><div class="sl-text">0 (версия 2). Один промпт ставит систему, она ведёт твой день. Теперь с маршрутизатором Jev. Пять частей: Claude Code и Codex (двигатель), Obsidian (память), локальный голос (уши и рот), Jev (сортировщик, новинка), две панели (лицо).</div></div></div><div class="slide s-sm"><div class="sl-top"><span>02/09 <span class="sl-more">· листайте ↓</span></span></div><div class="sl-body"><div class="sl-head">2. Что на самом деле делает Jev.</div><div class="sl-text">Новая модель типа «Система один» от TypeSafe. Не пишет текст, а выбирает один ответ из готового списка. Здесь это сортировщик: каждый голосовой запрос уходит на уровень 1, 2 или 3. Выбор пути сжимается с ~5 секунд до секунды. $0,042 за миллион входных токенов, ответ бесплатный. Без Jev: главная модель сама выбирает путь, ~5 с. С Jev: сортировщик, меньше секунды. Цифры TypeSafe: до ~200 раз быстрее и ~400 раз дешевле, чем обычная языковая модель на такой задаче.</div></div></div><div class="slide s-sm"><div class="sl-top"><span>03/09 <span class="sl-more">· листайте ↓</span></span></div><div class="sl-body"><div class="sl-head">3. Как это работает.</div><div class="sl-text">1) Ты говоришь или нажимаешь кнопку в Obsidian или панели. 2) Jev определяет уровень задачи и отправляет куда надо. 3) Claude Code или Codex делает работу и сохраняет её в хранилище. Плюсы: одни и те же кнопки в обоих приложениях, один и тот же голос, без базы данных, только текстовые файлы. Приходи с готовыми ответами, а не с кучей открытых вкладок. На схеме: ты → два входа (плагин Obsidian и веб-панель) → мост для двух приложений → Jev → три уровня → общее хранилище заметок.</div></div></div><div class="slide s-md"><div class="sl-top"><span>04/09 <span class="sl-more">· листайте ↓</span></span></div><div class="sl-body"><div class="sl-head">4. Пять частей, которые нужны.</div><div class="sl-text">Claude Code и Codex: двигатель, делает работу, можно переключаться. Хранилище Obsidian: память, каждый отчёт ложится файлом. Whisper и Kokoro: уши и рот, звук остаётся на твоём компьютере. Jev (новинка): сортирует запросы по уровням. Панель и HUD: лицо, два вида одной системы. Делай сейчас: эффект накапливается.</div></div></div><div class="slide s-sm"><div class="sl-top"><span>05/09 <span class="sl-more">· листайте ↓</span></span></div><div class="sl-body"><div class="sl-head">5. Шаг 1.</div><div class="sl-text">Подключи мозг. Это Claude Code или Codex и папка с навыками: каждый навык это один файл SKILL.md, каждая кнопка панели запускает один. Стартовые кнопки: «План на сегодня» (три главных дела и расписание), «Разбор почты» (письма по важности), «Новости ИИ», «Глубокое исследование» (отчёт в хранилище), «Обзор недели». Правило: каждая кнопка ведёт к реальному, проверенному файлу навыка. Навыки это клетки мозга. Выбери до десяти, оба приложения обновятся.</div></div></div><div class="slide s-sm"><div class="sl-top"><span>06/09 <span class="sl-more">· листайте ↓</span></span></div><div class="sl-body"><div class="sl-head">6. Шаг 2.</div><div class="sl-text">Построй память. Правило: если нет в хранилище, значит не было. Папки: inbox (всё пойманное), projects (что в работе), content (что выпустила), wiki (чему научилась). 1) Каждый отчёт ложится файлом. Без базы данных. 2) В ежедневных заметках план, расписание и топ-3. 3) Команда /harvest превращает законченный проект в статью вики. 4) Обе панели читают одни и те же файлы. Заметки, отчёты и разговоры связываются в один граф: его читает и твой агент, и ты.</div></div></div><div class="slide s-sm"><div class="sl-top"><span>07/09 <span class="sl-more">· листайте ↓</span></span></div><div class="sl-body"><div class="sl-head">7. Шаг 3.</div><div class="sl-text">Добавь голос. Твой звук не покидает компьютер. Круг показывает состояния: слушает, работает, говорит. Уровень 1: правила и сохранённые данные, мгновенно («Какие у меня приоритеты?»). Уровень 2: маленькая быстрая модель («Перескажи новости ИИ за сегодня»). Уровень 3: настоящая работа, открывается терминал Claude Code или Codex. Нажми Ctrl+Alt+J в любом приложении, скажи и сделай паузу, Whisper распознает, Kokoro ответит вслух. Jev не пишет ответы, он выбирает уровень: без него ~5 секунд на выбор.</div></div></div><div class="slide s-md"><div class="sl-top"><span>08/09 <span class="sl-more">· листайте ↓</span></span></div><div class="sl-body"><div class="sl-head">8. Шаг 4.</div><div class="sl-text">Поставь «лицо». Открой Claude Code или Codex и вставь: «Склонируй репозиторий Agentic OS V2 в ~/agentic-os и настрой его для меня». Он докачает недостающее, ты выберешь кнопки, если что-то сломалось, скажи «Запусти доктора». Одна команда, две панели. На экране панель в Obsidian: расход лимита, метрики, одно-кликовые сценарии и план на сегодня, всё из твоего хранилища.</div></div></div><div class="slide final s-md"><div class="sl-top"><span>09/09 <span class="sl-more">· листайте ↓</span></span></div><div class="sl-body"><div class="sl-head">9. Призыв.</div><div class="sl-text">Напиши в комментариях «JARVIS», чтобы получить репозиторий и промпт для установки. Сохрани на потом. Подпишись на автора (Chase AI, про агентов и Claude Code).</div></div></div></div></div>
+<div class="note"><span class="note-h">🧲 Правка под лид-магнит</span><p>Карусель про систему-помощника во вторник подводит к теме: задача сначала формулируется, потом отдаётся помощнику.</p></div><div class="note warn"><span class="note-h">⚠️ Доступ и правки</span><p>Все 9 слайдов скачались и прочитаны. Оригинал технический (терминал, репозиторий): для твоей аудитории оставь идею (один помощник, память, голос, кнопки) и убери установку. Свежая карусель в нише на неделе одна, вторую честно не добиваем. Своего материала под слово «ДЖАРВИС» пока нет: замени призыв на «сохрани» или собери инструкцию.</p></div>
+<div class="actions"><button class="btn" type="button" data-toggle="vn-DdpdeD_HPsJ" aria-expanded="false">🎨 Как оформить свою версию</button>
+<button class="btn" type="button" data-toggle="lm-DdpdeD_HPsJ" aria-expanded="false">🧲 Лид-магнит</button></div>
+<div class="panel" id="vn-DdpdeD_HPsJ" hidden><div class="panel-h">🎨 Визуал</div><p>Светло-бежевый бумажный фон, сине-чёрные заголовки с курсивом, стикеры-бумажки с рукописными заметками, тёмные скриншоты панелей, пиктограммы в рамках, нумерация шагов, внизу строка «Говори. Направляй. Помни. Повторяй». Все 9 кадров статичные, пустых нет.</p></div>
+<div class="panel" id="lm-DdpdeD_HPsJ" hidden><div class="panel-h">🧲 Лид-магнит</div><p>Связана с лид-магнитом «Допрос идеи»: после допроса задача формулируется чётко, и из неё собирается такая система помощника. Своё кодовое слово: ДЖАРВИС.</p></div>
+</article></div></div></section><section class="sec" id="warmup"><div class="wrap">
+<div class="sec-head"><div class="icon" aria-hidden="true">🔥</div><div><div class="eyebrow">04 · Instagram · сторис</div><h2>Прогрев в сторис</h2><p class="lead">Люди приходят с рилсов за инструментом, а в сторис получают продолжение, которого нет в ленте.</p></div></div>
+<article class="warm"><div class="warm-top"><span class="chip hotchip">🔥 Прогрев · один день · 6 сторис</span><span class="mono muted">Среда, 21 октября · в этот день рилс, сторис и лид-магнит</span></div>
+<h3 class="warm-title">Ты тоже не знаешь, чего хочешь от нейросети<span></span></h3>
+<div class="warm-grid"><div class="wbox"><div class="lbl">🎯 Неожиданный угол</div><p>Нейросеть допрашивает тебя, а те же вопросы можно задать себе про свою рутину: прежде чем отдавать задачу, ответь, что в ней повторяется, сколько занимает и что раздражает.</p></div>
+<div class="wbox"><div class="lbl">📈 Почему сейчас</div><p>Тема растёт из рилса про допрос, но уходит глубже: от «как говорить с нейросетью» к «что вообще отдавать». Ведёт к AI-аудиту контент-рутины (слово «АУДИТ»), то есть к бесплатному первому результату, без продажи.</p></div></div>
+<div class="lbl">Что показать в сторис · по порядку</div><ol class="reveal"><li><span class="dbadge">1–2</span><div><b>Рилс показал, как нейросеть задаёт тебе вопросы</b><p>А когда ты в последний раз сама задала их себе?</p></div></li><li><span class="dbadge">3</span><div><b>Три вопроса про любую рутину</b><p>Как часто, сколько времени, насколько бесит (рамка «Частота × Время × Раздражение»).</p></div></li><li><span class="dbadge">4</span><div><b>Примерь на своей рутине</b><p>Что набрало больше всего? Это первый кандидат на автоматизацию.</p></div></li><li><span class="dbadge">5</span><div><b>Пример из подтверждённого кейса</b><p>Монтаж у бухгалтера занимал до 3 часов, после перестройки процесса около 20 минут вместе с правками. Не гарантия, у каждого по-разному.</p></div></li><li><span class="dbadge">6</span><div><b>Опрос</b><p>Какую рутину ты бы убрала первой?</p></div></li></ol>
+<div class="warm-leads"><div class="lbl">Куда ведёт</div><div class="rchips"><span class="rchip">🎬 Этот парень запретил Claude писать код и получил 150 тысяч звёзд <em>Ср</em></span></div>
+<div class="wline"><span class="word "><i>финал</i>ДОПРОС</span><span class="muted small">AI-аудит контент-рутины, слово «АУДИТ»</span></div></div>
+<div class="checklog"><div class="lbl">Проверка темы: 2 версии до «принято»</div>
+<div class="tscroll"><table class="ctable"><thead><tr><th>Версия темы</th><th>востребована</th><th>глубже рилса</th><th>неожиданный угол</th><th>не банальна</th><th>Итог</th></tr></thead><tbody><tr class=""><th><span class="ver">v1</span>Как писать идеальный промпт</th><td><span class="ck yes" title="да, есть в рилсе про допрос">✓</span><span class="ck-t">да, есть в рилсе про допрос</span></td><td><span class="ck no" title="нет, пересказывает рилс">✕</span><span class="ck-t">нет, пересказывает рилс</span></td><td><span class="ck no" title="нет">✕</span><span class="ck-t">нет</span></td><td><span class="ck no" title="нет, слишком общая">✕</span><span class="ck-t">нет, слишком общая</span></td><td><span class="verdict ">отклонено, переписано</span></td></tr><tr class="ok"><th><span class="ver">v2</span>Ты тоже не знаешь, чего хочешь от нейросети</th><td><span class="ck yes" title="да, в рилсе про допрос и в подкасте">✓</span><span class="ck-t">да, в рилсе про допрос и в подкасте</span></td><td><span class="ck yes" title="да, переходит от промпта к выбору задач">✓</span><span class="ck-t">да, переходит от промпта к выбору задач</span></td><td><span class="ck yes" title="да, допрос применяется к себе">✓</span><span class="ck-t">да, допрос применяется к себе</span></td><td><span class="ck yes" title="да, не «ИИ не заменит тебя»">✓</span><span class="ck-t">да, не «ИИ не заменит тебя»</span></td><td><span class="verdict ok">принято</span></td></tr></tbody></table></div></div>
+</article></div></section><section class="sec" id="telegram"><div class="wrap">
+<div class="sec-head"><div class="icon" aria-hidden="true">✈️</div><div><div class="eyebrow">06 · Telegram</div><h2>Лид-магниты и подкаст</h2><p class="lead">Всё, что бот присылает по кодовому слову из комментариев.</p></div></div>
+<div class="lm-grid" style="--cols:2"><article class="lm" style="--g1:#FFD84D;--g2:#FF8A4C">
+<div class="lm-cover"><div class="lm-cover-top"><span class="lm-emoji">🧭</span><span class="lm-format">гайд</span></div>
+<div class="lm-cover-word">ЧЕЛОВЕК</div><div class="lm-cover-foot"><span>✈️ Telegram</span><span>Пн 19.10</span></div></div>
+<div class="lm-body"><h4>Нейросеть пишет голосом человека</h4><p class="lm-promise">Короткая инструкция, как научить Claude и ChatGPT писать твои тексты без роботского тона: один раз настраиваешь, дальше запускаешь одной командой.</p>
+<div class="lbl">Что внутри</div><ul class="checks"><li>Признаки текста, написанного нейросетью (длинные тире, слова-паразиты, роботский тон)</li><li>Готовая фраза для нейросети: «пиши мои тексты так, чтобы они не звучали как ИИ»</li><li>Как собрать личный навык-хьюманайзер в Claude (слэш → скилл-креатор)</li><li>Как сделать то же в ChatGPT («Мои GPT» → создать)</li><li>Короткая команда, которую пишешь перед любым текстом</li><li>Проверка руками: прочитай вслух и поправь то, что звучит не по-твоему</li></ul>
+<div class="lm-foot"><div class="wline"><span class="word funnel"><i>слово</i>ЧЕЛОВЕК</span><span class="effort">⏳ 2–3 часа (оценка, не замер)</span></div>
+<div class="lbl">Кто ведёт</div><div class="rchips"><span class="rchip">🎬 Антиплагиат показал 80% ИИ в твоём тексте? Вот как научить нейросеть писать иначе <em>Пн</em></span></div>
+<p class="muted small">Рилс-образец: 22 тыс. просмотров, в 7,5 раза выше обычных у автора; тема про тексты эксперта. Результат вроде «0% ИИ» не обещаем.</p></div></div></article><article class="lm" style="--g1:#FF8A4C;--g2:#9FB4FF">
+<div class="lm-cover"><div class="lm-cover-top"><span class="lm-emoji">🧭</span><span class="lm-format">инструкция</span></div>
+<div class="lm-cover-word">ДОПРОС</div><div class="lm-cover-foot"><span>✈️ Telegram</span><span>Ср 21.10</span></div></div>
+<div class="lm-body"><h4>Допрос идеи</h4><p class="lm-promise">Навык, который перед работой задаёт тебе вопросы: нейросеть задаёт вопросы до начала работы и собирает бриф, а результат ты проверяешь сама.</p>
+<div class="lbl">Что внутри</div><ul class="checks"><li>Что делает навык Grill Me и почему он помогает</li><li>Как установить (бесплатно), пошагово</li><li>Пример допроса на брифе для карусели: вопросы, варианты ответов</li><li>Список вопросов-образцов (для кого, что если пойдёт не так, какой сценарий)</li><li>Куда вставить итоговый бриф и как проверить результат</li><li>Что делать, если вопросов слишком много</li></ul>
+<div class="lm-foot"><div class="wline"><span class="word funnel"><i>слово</i>ДОПРОС</span><span class="effort">⏳ 2–3 часа, нужен твой тест на текстовой задаче (оценка)</span></div>
+<div class="lbl">Кто ведёт</div><div class="rchips"><span class="rchip">🎬 Этот парень запретил Claude писать код и получил 150 тысяч звёзд <em>Ср</em></span><span class="rchip">🗂 Собери свою систему-помощника <em>Вт</em></span></div>
+<p class="muted small">Рилс-образец: 1346 комментариев и 82 тыс. просмотров за день, ×5,5 к обычным у автора.</p></div></div></article></div>
+<div class="info"><span>ℹ️</span><p>Выбранные рилсы дают больше лид-магнитов, чем в паспорте: возьмёшь рилсы про рейтинг и про агентов в ChatGPT, выйдет 4. Кодовые слова недели не повторяют прошлые и не повторяются между собой.</p></div>
+<div class="subhead"><h3>Запасные лид-магниты</h3><p>Добавьте, если возьмёте рилс, который на них ведёт, или найдётся время на ещё один материал.</p></div><div class="res-grid"><article class="card lm-res"><div class="reel-top"><div class="chips"><span class="chip " style="--c:var(--muted)">🧲 запасной</span><span class="chip " style="--c:var(--muted)">📦 подборка</span></div><span class="word funnel"><i>слово</i>ШПАРГАЛКА</span></div>
+<h4>🧲 Шпаргалка: какая нейросеть для чего</h4><p>Одна страница: инструмент, для чего брать, где ограничения.</p>
+<div class="rchips"><span class="rchip">🎬 Рейтинг нейросетей <em>Ср</em></span><span class="effort">⏳ около 2 часов (оценка)</span></div>
+<div class="actions"><button class="btn" type="button" data-toggle="res-ШПАРГАЛКА" aria-expanded="false">✓ Что внутри</button></div>
+<div class="panel" id="res-ШПАРГАЛКА" hidden><ul class="checks"><li>ChatGPT</li><li>Codex</li><li>Claude</li><li>Nano Banana</li><li>Higgsfield</li><li>голосовая диктовка</li></ul><p class="muted small">Рилс-образец: 5543 комментария, ×82 к обычным у автора.</p></div></article><article class="card lm-res"><div class="reel-top"><div class="chips"><span class="chip " style="--c:var(--muted)">🧲 запасной</span><span class="chip " style="--c:var(--muted)">📦 инструкция</span></div><span class="word funnel"><i>слово</i>ДОТС</span></div>
+<h4>🧭 Агент в ChatGPT: первая задача</h4><p>Что умеет агент в ChatGPT, на каком тарифе он есть и как поставить первую задачу.</p>
+<div class="rchips"><span class="rchip">🎬 В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт <em>Пн</em></span><span class="effort">⏳ около 3 часов, сначала проверить функцию (оценка)</span></div>
+<div class="actions"><button class="btn" type="button" data-toggle="res-ДОТС" aria-expanded="false">✓ Что внутри</button></div>
+<div class="panel" id="res-ДОТС" hidden><ul class="checks"><li>Что такое доты</li><li>Тарифы и доступность (сначала проверить)</li><li>Первая задача: разбор отзывов</li><li>Что агент делает только после твоего «да»</li></ul><p class="muted small">Рилс-образец: 1258 комментариев за 3 дня.</p></div></article></div>
+<div class="subhead"><h3>🎙 Подкаст недели</h3></div><article class="pod" id="podcast"><div class="pod-top"><div class="pod-icon">🎙</div>
+<div class="chips"><span class="chip " style="--c:var(--tg)">✈️ Telegram</span><span class="chip " style="--c:var(--tg)">🎙 Подкаст · Пт 23.10</span><span class="chip " style="--c:var(--muted)">⏱ 15–20 минут (ориентир)</span></div></div>
+<h3 class="pod-title">Нейросеть делает не то? Дело в задании</h3>
+<div class="wave" aria-hidden="true"><i style="--h:37%;--d:0.00s"></i><i style="--h:66%;--d:0.11s"></i><i style="--h:46%;--d:0.22s"></i><i style="--h:57%;--d:0.33s"></i><i style="--h:64%;--d:0.44s"></i><i style="--h:84%;--d:0.55s"></i><i style="--h:76%;--d:0.66s"></i><i style="--h:60%;--d:0.77s"></i><i style="--h:66%;--d:0.88s"></i><i style="--h:68%;--d:0.00s"></i><i style="--h:98%;--d:0.11s"></i><i style="--h:57%;--d:0.22s"></i><i style="--h:64%;--d:0.33s"></i><i style="--h:51%;--d:0.44s"></i><i style="--h:80%;--d:0.55s"></i><i style="--h:59%;--d:0.66s"></i><i style="--h:67%;--d:0.77s"></i><i style="--h:45%;--d:0.88s"></i><i style="--h:44%;--d:0.00s"></i><i style="--h:49%;--d:0.11s"></i><i style="--h:41%;--d:0.22s"></i><i style="--h:40%;--d:0.33s"></i><i style="--h:33%;--d:0.44s"></i><i style="--h:43%;--d:0.55s"></i><i style="--h:39%;--d:0.66s"></i><i style="--h:73%;--d:0.77s"></i><i style="--h:49%;--d:0.88s"></i><i style="--h:55%;--d:0.00s"></i><i style="--h:55%;--d:0.11s"></i><i style="--h:80%;--d:0.22s"></i><i style="--h:81%;--d:0.33s"></i><i style="--h:75%;--d:0.44s"></i><i style="--h:63%;--d:0.55s"></i><i style="--h:60%;--d:0.66s"></i><i style="--h:90%;--d:0.77s"></i><i style="--h:60%;--d:0.88s"></i><i style="--h:85%;--d:0.00s"></i><i style="--h:50%;--d:0.11s"></i><i style="--h:62%;--d:0.22s"></i><i style="--h:55%;--d:0.33s"></i><i style="--h:73%;--d:0.44s"></i><i style="--h:53%;--d:0.55s"></i><i style="--h:42%;--d:0.66s"></i><i style="--h:40%;--d:0.77s"></i><i style="--h:40%;--d:0.88s"></i><i style="--h:44%;--d:0.00s"></i><i style="--h:37%;--d:0.11s"></i><i style="--h:41%;--d:0.22s"></i><i style="--h:39%;--d:0.33s"></i><i style="--h:69%;--d:0.44s"></i><i style="--h:50%;--d:0.55s"></i><i style="--h:74%;--d:0.66s"></i><i style="--h:52%;--d:0.77s"></i><i style="--h:64%;--d:0.88s"></i><i style="--h:76%;--d:0.00s"></i><i style="--h:84%;--d:0.11s"></i></div>
+<p class="pod-why">Голосом лучше: тема про то, как сформулировать задачу, это разговор с примерами, а не схема. Вырастает из рилса про допрос и подкрепляется рилсом про хьюманайзер.</p>
+<div class="lbl">План выпуска · 6 блоков</div><div class="pblocks"><div class="pblock"><span class="tn">01</span><h5>Знакомая ситуация</h5><ul><li>Объясняешь задачу, нейросеть кивает, а выдаёт не то</li><li>Лимиты уже потрачены, переделывать нечем</li></ul></div><div class="pblock"><span class="tn">02</span><h5>Где на самом деле проблема</h5><ul><li>Половина задачи осталась в голове</li><li>Модель тут чаще ни при чём</li></ul></div><div class="pblock"><span class="tn">03</span><h5>Допрос вместо промпта</h5><ul><li>Как работает навык Grill Me</li><li>Вопросы с вариантами ответов: «да», «нет», поправка</li></ul></div><div class="pblock"><span class="tn">04</span><h5>Твоя рамка</h5><ul><li>Задача → Процесс → ИИ → Контроль</li><li>Допрос помогает на первом шаге</li></ul></div><div class="pblock"><span class="tn">05</span><h5>Когда текст звучит как робот</h5><ul><li>Признаки текста нейросети</li><li>Свой навык, чтобы не объяснять заново</li></ul></div><div class="pblock"><span class="tn">06</span><h5>Что сделать сегодня</h5><ul><li>Одна задача, десять минут вопросов</li><li>Проверить результат руками</li></ul></div></div>
+<div class="pod-cta"><div><div class="lbl">Концовка рилса</div><p>«Хочешь разбор целиком, с примерами: напиши «БРИФ» в комментариях.»</p></div>
+<div class="pod-cta-side"><span class="word tg"><i>слово</i>БРИФ</span><div class="rchips"><span class="rchip">🎬 Этот парень запретил Claude писать код и получил 150 тысяч звёзд <em>Ср</em></span></div></div></div>
+<p class="muted small"></p></article></div></section><section class="sec" id="funnel"><div class="wrap">
+<div class="sec-head"><div class="icon" aria-hidden="true">🔗</div><div><div class="eyebrow">07 · Схема</div><h2>Воронка недели</h2><p class="lead">Путь человека от ролика к продукту «AI-Мастерская, 990 ₽ в месяц»: настоящие слова и материалы этой недели.</p></div></div>
+<div class="chainflow"><div class="cstep" style="--c:var(--accent)"><span class="cemo">🎬</span><b>Рилс-воронка</b><span>6 рилсов Пн–Ср</span></div><div class="carr" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12h14m-5-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cstep" style="--c:var(--tg)"><span class="cemo">💬</span><b>Слово → бот в Telegram</b><span>ДОТС · ВЫХОДНЫЕ <i>(вариант)</i> · ЧЕЛОВЕК <i>(вариант)</i> · ДОПРОС · ШПАРГАЛКА <i>(вариант)</i> · ФОРМАТЫ <i>(вариант)</i></span></div><div class="carr" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12h14m-5-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cstep" style="--c:var(--funnel)"><span class="cemo">🧲</span><b>2 лид-магнита</b><span>«Нейросеть пишет голосом человека» · «Допрос идеи»</span></div><div class="carr" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12h14m-5-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cstep" style="--c:var(--hot)"><span class="cemo">🔥</span><b>Прогрев в сторис · Ср</b><span>Ты тоже не знаешь, чего хочешь от нейросети</span></div><div class="carr" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12h14m-5-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cstep" style="--c:var(--accent)"><span class="cemo">📘</span><b>AI-аудит контент-рутины: бесплатный первый результат</b><span>последние сторис прогрева ведут сюда</span></div><div class="carr" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12h14m-5-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cstep" style="--c:var(--outlier)"><span class="cemo">🏆</span><b>AI-Мастерская, 990 ₽ в месяц</b><span>следующий шаг после первой покупки</span></div></div>
+<div class="subhead"><h3>Маршруты по дням</h3></div><div class="froutes"><div class="froute"><span class="fday">Пн 19.10</span><div class="fnode reelnode">🎬 В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт</div><span class="farr" aria-hidden="true"></span><div class="fnode wordnode">💬 ДОТС</div><span class="farr" aria-hidden="true"></span><div class="fnode botnode">🤖 бот</div><span class="farr" aria-hidden="true"></span><div class="fnode getnode">🎁 Запасной лид-магнит «Агент в ChatGPT: первая задача», затем прогрев и AI-аудит</div></div><div class="froute variant"><span class="fday">Пн 19.10</span><div class="fnode reelnode">🎬 Пять вещей, которые стоит собрать в Claude за выходные<span class="fvar">вариант дня · вместо ⭐ «В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт»</span></div><span class="farr" aria-hidden="true"></span><div class="fnode wordnode">💬 ВЫХОДНЫЕ</div><span class="farr" aria-hidden="true"></span><div class="fnode botnode">🤖 бот</div><span class="farr" aria-hidden="true"></span><div class="fnode getnode">🎁 Чек-лист первых шагов (в запасе); связь с каруселью про систему-помощника</div></div><div class="froute variant"><span class="fday">Пн 19.10</span><div class="fnode reelnode">🎬 Антиплагиат показал 80% ИИ в твоём тексте? Вот как научить нейросеть писать иначе<span class="fvar">вариант дня · вместо ⭐ «В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт»</span></div><span class="farr" aria-hidden="true"></span><div class="fnode wordnode">💬 ЧЕЛОВЕК</div><span class="farr" aria-hidden="true"></span><div class="fnode botnode">🤖 бот</div><span class="farr" aria-hidden="true"></span><div class="fnode getnode">🎁 Лид-магнит «Нейросеть пишет голосом человека»</div></div><div class="froute"><span class="fday">Ср 21.10</span><div class="fnode reelnode">🎬 Этот парень запретил Claude писать код и получил 150 тысяч звёзд</div><span class="farr" aria-hidden="true"></span><div class="fnode wordnode">💬 ДОПРОС</div><span class="farr" aria-hidden="true"></span><div class="fnode botnode">🤖 бот</div><span class="farr" aria-hidden="true"></span><div class="fnode getnode">🎁 Лид-магнит «Допрос идеи», подкаст «Нейросеть делает не то?»</div></div><div class="froute variant"><span class="fday">Ср 21.10</span><div class="fnode reelnode">🎬 Рейтинг нейросетей<span class="fvar">вариант дня · вместо ⭐ «Этот парень запретил Claude писать код и получил 150 тысяч звёзд»</span></div><span class="farr" aria-hidden="true"></span><div class="fnode wordnode">💬 ШПАРГАЛКА</div><span class="farr" aria-hidden="true"></span><div class="fnode botnode">🤖 бот</div><span class="farr" aria-hidden="true"></span><div class="fnode getnode">🎁 Запасной лид-магнит «какая нейросеть для чего»</div></div><div class="froute variant"><span class="fday">Ср 21.10</span><div class="fnode reelnode">🎬 В 2026 появился тип контента, который забирает охваты у остальных<span class="fvar">вариант дня · вместо ⭐ «Этот парень запретил Claude писать код и получил 150 тысяч звёзд»</span></div><span class="farr" aria-hidden="true"></span><div class="fnode wordnode">💬 ФОРМАТЫ</div><span class="farr" aria-hidden="true"></span><div class="fnode botnode">🤖 бот</div><span class="farr" aria-hidden="true"></span><div class="fnode getnode">🎁 Материала нет: призыв заменить на «сохрани»</div></div><div class="froute"><span class="fday">Вт 20.10</span><div class="fnode reelnode car">🗂 Собери свою систему-помощника</div><span class="farr" aria-hidden="true"></span><div class="fnode wordnode">💬 ДЖАРВИС</div><span class="farr" aria-hidden="true"></span><div class="fnode botnode">🤖 бот</div><span class="farr" aria-hidden="true"></span><div class="fnode getnode">🎁 Лид-магнит «Допрос идеи» в среду и подкаст в пятницу</div></div></div>
+<div class="fmerge"><div class="fm-line" aria-hidden="true"></div>
+<div class="fm-card warmc"><span class="cemo">🔥</span><div><b>Прогрев в сторис · Ср 21.10 догревает все маршруты</b><p>Ты тоже не знаешь, чего хочешь от нейросети</p></div></div>
+<div class="fm-two"><a class="fm-card podc" href="#podcast"><span class="cemo">🎙</span><div><b>Подкаст · Пт 23.10</b><p>Нейросеть делает не то? Дело в задании</p></div></a>
+</div></div>
+</div></section><section class="sec" id="how"><div class="wrap">
+<div class="sec-head"><div class="icon" aria-hidden="true">🧪</div><div><div class="eyebrow">09 · Методика</div><h2>Как собрано</h2><p class="lead">Воронка отбора цифрами: сколько нашли, сколько прочитали, сколько дошло до плана.</p></div></div>
+<div class="how-grid"><div class="card how-col"><div class="how-h"><span>🎬</span><b>Рилсы</b></div><div class="fb"><div class="fb-l"><span>в пуле</span><b>437</b></div><div class="fb-t"><i style="width:100.0%;--c:var(--accent)"></i></div></div><div class="fb"><div class="fb-l"><span>свежих англоязычных</span><b>437</b></div><div class="fb-t"><i style="width:100.0%;--c:var(--accent)"></i></div></div><div class="fb"><div class="fb-l"><span>расшифровано</span><b>399</b></div><div class="fb-t"><i style="width:91.3%;--c:var(--accent)"></i></div></div><div class="fb last"><div class="fb-l"><span>в плане</span><b>6</b></div><div class="fb-t"><i style="width:4.0%;--c:var(--accent)"></i></div></div><div class="how-foot">без речи: 0 · отсеяно: 0</div></div><div class="card how-col"><div class="how-h"><span>🗂</span><b>Карусели</b></div><div class="fb"><div class="fb-l"><span>постов собрано</span><b>0</b></div><div class="fb-t"><i style="width:4.0%;--c:var(--outlier)"></i></div></div><div class="fb"><div class="fb-l"><span>каруселей</span><b>1</b></div><div class="fb-t"><i style="width:100.0%;--c:var(--outlier)"></i></div></div><div class="fb"><div class="fb-l"><span>от порог 1000 комментариев; ниже порога в пуле нет, но в нише свежая только одна комментариев</span><b>0</b></div><div class="fb-t"><i style="width:4.0%;--c:var(--outlier)"></i></div></div><div class="fb last"><div class="fb-l"><span>отобрано</span><b>1</b></div><div class="fb-t"><i style="width:100.0%;--c:var(--outlier)"></i></div></div><div class="how-foot">в календаре: 1 · отклонено с причиной: 5</div></div></div>
+<div class="card rej"><div class="rej-h"><b>Почему рилсы не прошли</b><span class="mono">0 из 399 расшифрованных</span></div><div class="rb"><span class="rb-l">not_niche</span><div class="rb-t"><i style="width:100.0%"></i></div><b>4</b></div><div class="rb"><span class="rb-l">history</span><div class="rb-t"><i style="width:75.0%"></i></div><b>3</b></div><div class="rb"><span class="rb-l">advert</span><div class="rb-t"><i style="width:50.0%"></i></div><b>2</b></div><div class="rb"><span class="rb-l">duplicate</span><div class="rb-t"><i style="width:50.0%"></i></div><b>2</b></div><div class="rb"><span class="rb-l">личный опыт автора</span><div class="rb-t"><i style="width:25.0%"></i></div><b>1</b></div></div>
+</div></section></main><footer class="foot"><b>Контент-план</b><br>19–25 октября 2026 · для Катерины · собрано 6 октября 2026<br>Ссылки на оригиналы только для сверки. Картинок чужих роликов на странице нет.</footer>
+<script>
+(function(){
+var KEY='cp2-take-2026-10-19';var taken={};
+try{taken=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(taken))}catch(e){}}
+var boxes=[].slice.call(document.querySelectorAll('.take input'));
+function refresh(){var n=0;boxes.forEach(function(b){var on=!!taken[b.dataset.code];b.checked=on;var c=b.closest('.reel');if(c)c.classList.toggle('taken',on);if(on)n++;});
+document.querySelectorAll('[data-count]').forEach(function(e){e.textContent=n});
+var ctr=document.querySelector('.counter');if(ctr)ctr.classList.toggle('on',n>0);
+document.querySelectorAll('.tab').forEach(function(t){var k=t.dataset.codes.split(',').filter(function(c){return taken[c]}).length;t.querySelector('.tab-count').textContent=k?('✓'+k):'';});}
+boxes.forEach(function(b){b.addEventListener('change',function(){if(b.checked)taken[b.dataset.code]=1;else delete taken[b.dataset.code];save();refresh();});});
+refresh();
+var tabs=[].slice.call(document.querySelectorAll('.tab'));
+function show(id){tabs.forEach(function(t){var on=t.dataset.target===id;t.classList.toggle('active',on);t.setAttribute('aria-selected',on?'true':'false');});
+document.querySelectorAll('.day-panel').forEach(function(p){p.classList.toggle('active',p.id===id)});}
+tabs.forEach(function(t,i){t.addEventListener('click',function(){show(t.dataset.target)});
+t.addEventListener('keydown',function(e){var j=e.key==='ArrowRight'?i+1:e.key==='ArrowLeft'?i-1:-9;if(j>-9){j=(j+tabs.length)%tabs.length;tabs[j].focus();show(tabs[j].dataset.target);}});});
+document.querySelectorAll('[data-goto-day]').forEach(function(a){a.addEventListener('click',function(){show(a.dataset.gotoDay)});});
+document.querySelectorAll('[data-toggle]').forEach(function(b){b.addEventListener('click',function(){var p=document.getElementById(b.dataset.toggle);if(!p)return;var open=p.hidden;p.hidden=!open;b.setAttribute('aria-expanded',open?'true':'false');b.classList.toggle('on',open);});});
+document.querySelectorAll('[data-copy]').forEach(function(b){b.addEventListener('click',function(){var t=document.getElementById(b.dataset.copy).value;
+function done(){var o=b.innerHTML;b.innerHTML='✓ Скопировано';b.classList.add('ok');setTimeout(function(){b.innerHTML=o;b.classList.remove('ok')},1600);}
+function fallback(){var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}ta.remove();done();}
+if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(done,fallback)}else{fallback()}});});
+var links=[].slice.call(document.querySelectorAll('.nav-links a'));var navl=document.querySelector('.nav-links');
+if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(l){var on=l.getAttribute('href')==='#'+e.target.id;l.classList.toggle('active',on);
+if(on&&navl){navl.scrollTo({left:l.offsetLeft-navl.clientWidth/2+l.clientWidth/2,behavior:'smooth'})}});}});},{rootMargin:'-40% 0px -55% 0px'});
+document.querySelectorAll('section[id]').forEach(function(s){io.observe(s)});}
+function marks(){document.querySelectorAll('.slide').forEach(function(s){var b=s.querySelector('.sl-body');s.classList.toggle('more',b.scrollHeight>b.clientHeight+4);});}
+marks();window.addEventListener('load',marks);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(marks);
+document.querySelectorAll('.sl-body').forEach(function(b){b.addEventListener('scroll',function(){if(b.scrollTop+b.clientHeight>=b.scrollHeight-6)b.parentNode.classList.remove('more');});});
+window.addEventListener('beforeprint',function(){document.querySelectorAll('.panel[hidden]').forEach(function(p){p.dataset.ph='1';p.hidden=false});});
+window.addEventListener('afterprint',function(){document.querySelectorAll('.panel[data-ph]').forEach(function(p){p.hidden=true;delete p.dataset.ph});});
+})();
+</script></body></html>

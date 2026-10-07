@@ -1,0 +1,25 @@
+{
+ "top": [
+  {"code":"Dd_qNppsYVK","url":"https://www.instagram.com/reel/Dd_qNppsYVK/","author":"@mcdenil","age_days":3,"comments":1258,"views":16171,"x_author":1.1,"slot":"воронка","format":"📰 тренд","topic_ru":"Агенты «доты» внутри ChatGPT работают на своём облачном компьютере, пока твой закрыт","hook_ru":"В ChatGPT появились агенты, которые работают, пока твой ноутбук закрыт","why":"Воронка выше порога 1000, ChatGPT-день, новость «агент заменяет рутину»","lead_magnet_idea":"Инструкция: что умеют агенты в ChatGPT, на каких тарифах, как поставить первую задачу"},
+  {"code":"DeCOT9bBsEu","url":"https://www.instagram.com/reel/DeCOT9bBsEu/","author":"@taki.gpt","age_days":2,"comments":971,"views":48847,"x_author":null,"slot":"воронка","format":"📋 список","topic_ru":"Пять вещей, которые можно собрать в Claude за выходные","hook_ru":"Пять вещей, которые стоит собрать в Claude за выходные","why":"Запасной порог воронки 600+, список 5 проектов, Claude-день","lead_magnet_idea":"Чек-лист «первая сборка в Claude»"},
+  {"code":"DeDLCRVIAxj","url":"https://www.instagram.com/reel/DeDLCRVIAxj/","author":"@justuserr99","age_days":2,"comments":258,"views":22197,"x_author":7.5,"slot":"аутлаер","format":"🛠 инструкция","topic_ru":"Как научить Claude и ChatGPT писать так, чтобы текст не звучал как написанный нейросетью","hook_ru":"Антиплагиат показал 80% ИИ в твоём тексте? Вот как это убрать","why":"Аутлаер ×7.5 от обычных просмотров автора, работает в обоих инструментах, прямая польза для текстов эксперта","lead_magnet_idea":"Гайд «Нейросеть пишет голосом человека»"},
+  {"code":"DeGw4aVMugL","url":"https://www.instagram.com/reel/DeGw4aVMugL/","author":"@mcdenil","age_days":0,"comments":1346,"views":82312,"x_author":5.5,"slot":"воронка","format":"💡 инсайт","topic_ru":"Навык «допрос»: Claude сначала расспрашивает тебя и только потом делает","hook_ru":"Этот парень запретил Claude писать код и получил больше 150 тысяч звёзд на GitHub","why":"Воронка выше порога 1000, ×5.5, хук из её любимых («этот парень запретил Claude…»)","lead_magnet_idea":"Инструкция по установке навыка «допрос» + пример для брифа на карусель"},
+  {"code":"Dd_uQDIIB8A","url":"https://www.instagram.com/reel/Dd_uQDIIB8A/","author":"@solo.marketing.ai","age_days":3,"comments":5543,"views":267299,"x_author":82.4,"slot":"воронка","format":"📋 рейтинг","topic_ru":"Рейтинг нейросетей: какая для чего (ChatGPT, Codex, Nano Banana и другие)","hook_ru":"Рейтинг нейросетей: что где работает лучше","why":"Самые сильные цифры недели: 5543 комментария, ×82","lead_magnet_idea":"Шпаргалка «какая нейросеть для чего»"},
+  {"code":"DdlKnAqOHgQ","url":"https://www.instagram.com/reel/DdlKnAqOHgQ/","author":"@mama_mozg","age_days":14,"comments":946,"views":28627,"x_author":4.9,"slot":"воронка","format":"🧠 теория","topic_ru":"Прикладной контент: показываешь навык прямо в ролике","hook_ru":"В 2026 появился тип контента, который забирает охваты у остальных","why":"Запасной порог 600+, ×4.9, методика контента для экспертов (любимый формат)","lead_magnet_idea":"Мини-книга форматов (в плане не берём)"}
+ ],
+ "no_speech": [],
+ "rejected": [
+  {"code":"Dd9fZsHSRy-","author":"@damianodesu","comments":16380,"reason":"advert: реклама чужого приложения как суть"},
+  {"code":"Dd_8M34ysiN","author":"@damianodesu","comments":3999,"reason":"advert: реклама чужого приложения"},
+  {"code":"Dd8Sv4tsJuX","author":"@mcdenil","comments":5432,"reason":"history: ChatGPT-монтаж уже был 12 октября"},
+  {"code":"DeBhOJ6T1Ja","author":"@visionaryclown.tv","comments":2932,"reason":"history: анимация Claude уже была"},
+  {"code":"DeEH5Z9OkGk","author":"@nocodealex","comments":12603,"reason":"history: ИИ-суд уже был"},
+  {"code":"DeC3-Geybey","author":"@nocodealex","comments":1278,"reason":"duplicate: тот же приём «Claude спорит с идеей», что суд прошлой недели"},
+  {"code":"Dd1LKIxoj3E","author":"@shedoesai","comments":605,"reason":"duplicate: ChatGPT-монтаж, тема прошлой недели"},
+  {"code":"DeFXZBcMlx5","author":"@lemelson_a","comments":3174,"reason":"not_niche: сборка для разработчиков"},
+  {"code":"DdpbPSyJ0cU","author":"@chase.h.ai","comments":4850,"reason":"not_niche: терминальная система для разработчиков"},
+  {"code":"DeCQVIcRviF","author":"@krudd.jr","comments":3301,"reason":"not_niche: фитнес и макросы"},
+  {"code":"DduLsN7geK6","author":"@sabrina_ramonov","comments":1373,"reason":"личный опыт автора (41,9 млн просмотров) не повторить"},
+  {"code":"DeBpVxSoH5G","author":"@victoria.nartdinova","comments":2091,"reason":"not_niche: новость о блокировках, не адаптировать"}
+ ]
+}
