@@ -11,6 +11,7 @@ REPO = Path(__file__).resolve().parents[1]
 # не понять, что делал сам JARVIS (до 2026-10-05 там было 470 строк шума от тестов).
 LIVE_JOURNALS = (
     REPO / "state" / "events.jsonl",
+    REPO / "state" / "jarvis.log",              # лог бота (gateway.setup_logging)
     REPO / "state" / "errors.jsonl",            # журнал ошибок (runtime/errorlog.py)
     REPO / "state" / "errors_index.json",
     REPO / "state" / "approvals.jsonl",
@@ -49,6 +50,25 @@ def isolated_worker_state(tmp_path, monkeypatch):
     """Кто работает (Claude/Codex), лимиты, предложения и отложенные задачи — во временной папке."""
     from runtime import worker
     monkeypatch.setattr(worker, "STATE_DIR", tmp_path / "worker-state")
+
+
+@pytest.fixture(autouse=True)
+def isolated_logging(tmp_path, monkeypatch):
+    """Лог бота в тестах — во временной папке. Тест `gateway.main` зовёт `setup_logging()` с путём по умолчанию, и
+    к корневому логгеру цепляется файловый обработчик боевого `state/jarvis.log`: трассировки тестов попадали в
+    живой журнал бота. Обработчики, добавленные тестом, после него снимаются."""
+    import logging
+
+    from integrations.telegram import gateway
+    real = gateway.setup_logging
+    monkeypatch.setattr(gateway, "setup_logging", lambda path=None: real(path or tmp_path / "state" / "jarvis.log"))
+    root = logging.getLogger()
+    before = list(root.handlers)
+    yield
+    for handler in list(root.handlers):
+        if handler not in before:
+            root.removeHandler(handler)
+            handler.close()
 
 
 @pytest.fixture(autouse=True)
