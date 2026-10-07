@@ -28,3 +28,6 @@ essa-ai/content-plan/weeks/*/_phone.html
 
 # очередь фоновых работ бота (запросы агента)
 /jobs/
+
+# чужой вложенный репозиторий (копия навыка creating-skills), не часть JARVIS
+/claude2/
