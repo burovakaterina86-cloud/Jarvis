@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -43,6 +44,14 @@ def _utf8_output() -> None:
             pass
 
 
+def _save_raw(out_dir: Path, raw_reels) -> None:
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "raw.json").write_text(json.dumps(raw_reels, ensure_ascii=False, default=str), encoding="utf-8")
+    except (OSError, TypeError, ValueError):
+        pass
+
+
 def run(config: RadarConfig, apify_client, groq_client, out_dir: Path,
         now: datetime | None = None) -> int:
     """`now` — момент, от которого считаются окна свежести; без него — текущее время."""
@@ -50,6 +59,7 @@ def run(config: RadarConfig, apify_client, groq_client, out_dir: Path,
     try:
         raw_reels = apify.fetch_recent_reels(apify_client, budget, config.competitors,
                                               config.window_days, config.reels_per_account, now=now)
+        _save_raw(out_dir, raw_reels)   # Apify уже оплачен: сбой дальше не должен стоить этих данных
         relevant = filter_mod.filter_relevant(raw_reels, config.keywords)
         top = rank.rank_composite(relevant, config.top_k)
         transcripts = transcribe.transcribe_top(groq_client, top, out_dir / "transcripts")

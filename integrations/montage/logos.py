@@ -116,7 +116,12 @@ def _remember(dest: Path, name: str, url: str) -> None:
     f = dest / "_sources.json"
     try:
         doc = json.loads(f.read_text(encoding="utf-8"))
-    except Exception:
+    except FileNotFoundError:
+        doc = {}
+    except Exception as exc:  # noqa: BLE001 — битый файл не стираем молча: история источников пропала бы
+        from runtime import errorlog
+        errorlog.record("montage.logos_sources", exc, file=f.name)
+        f.replace(f.with_name(f.name + ".bad"))
         doc = {}
     doc[name] = url
     f.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")

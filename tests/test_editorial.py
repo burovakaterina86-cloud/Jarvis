@@ -83,3 +83,11 @@ def test_canvas_class_does_not_clash_with_block_classes():
     # 2026-09-25: холст с классом «cards» подхватывал сетку .cards и ломал слайд пополам
     html = ed.build_slide({"type": "cards", "hook": "x", "cards": [{"title": "a"}]}, 1, 1, "dark")
     assert 'class="canvas k-cards"' in html and 'class="canvas cards"' not in html
+
+
+def test_focus_value_cannot_break_out_of_the_style_attribute():
+    from integrations.visuals.editorial import _focus
+    assert _focus("70% 30%", "50% 50%") == "70% 30%" and _focus(None, "50% 15%") == "50% 15%"
+    assert _focus("left top", "x") == "left top" and _focus("-10px 20.5%", "x") == "-10px 20.5%"
+    for bad in ('50%;background:url(//evil/x)', '50%" onerror="x', "50% 20%;}</style><script>", "url(x)"):
+        assert _focus(bad, "DEFAULT") == "DEFAULT"

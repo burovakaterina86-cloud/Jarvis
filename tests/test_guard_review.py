@@ -222,3 +222,20 @@ def test_dev_mode_only_applies_hard_denies(tmp_path):
                   ev("Write", file_path="tests/conftest.py", content="x")):
         code, _ = guard.run(event, root=REPO, mode="dev", env={})
         assert code == 0
+
+
+# ---------- названия кнопок с уловками ----------
+
+@pytest.mark.parametrize("label", ["P a y   n o w", "Pay\u200b now", "ＰＡＹ ＮＯＷ", "B u y", "C o m p l e t e   o r d e r"])
+def test_button_names_cannot_hide_a_purchase_by_spacing_or_invisible_characters(label):
+    assert shape(ev("mcp__playwright__browser_click", element=label, ref="e1")) == ("deny", "purchase"), label
+
+
+@pytest.mark.parametrize("label", ["Confirm", "Подтвердить", "Я подтверждаю"])
+def test_confirm_buttons_need_a_button_press(label):
+    assert shape(ev("mcp__playwright__browser_click", element=label, ref="e1")) == ("ask", "send_message")
+
+
+def test_folding_does_not_break_ordinary_names():
+    assert decide(ev("mcp__playwright__browser_click", element="Add to cart", ref="e1")).action == "allow"
+    assert decide(ev("mcp__playwright__browser_click", element="Next page", ref="e1")).action == "allow"

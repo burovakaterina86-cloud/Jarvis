@@ -17,6 +17,7 @@ import argparse
 import json
 import re
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -183,6 +184,12 @@ def main(argv=None) -> int:
         return 0
     except (specmod.SpecError, RuntimeError, FileNotFoundError, words.AsrError) as e:
         print("ОШИБКА:", e, file=sys.stderr)
+        return 2
+    except (subprocess.CalledProcessError, ValueError, OSError) as e:
+        # ffmpeg/ffprobe упал, spec.json не разбирается, `--work` на другом диске (relpath) — понятная ошибка вместо трейсбека
+        from runtime import errorlog
+        errorlog.record("montage.run", e, cmd=getattr(a, "cmd", "?"))
+        print(f"ОШИБКА: {type(e).__name__}: {str(e)[:300]}", file=sys.stderr)
         return 2
 
 

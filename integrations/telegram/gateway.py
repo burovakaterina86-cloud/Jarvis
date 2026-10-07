@@ -572,9 +572,7 @@ class Gateway:
         for item in worker.due_deferred(now):
             job = Job(prompt=item["prompt"], task=item["task"], uses_browser=False, on_event=_ignore_event,
                       runtime="claude")
-            if not hasattr(self, "_schedule_runs"):
-                self._schedule_runs = []
-            self._schedule_runs.append(asyncio.ensure_future(self._run_scheduled(job)))
+            self._track_run(asyncio.ensure_future(self._run_scheduled(job)))
             started.append(item["task"])
         return started
 
@@ -722,6 +720,33 @@ class Gateway:
         except OSError as exc:
             log.warning("не смог запомнить показанные черновики: %s", type(exc).__name__, exc_info=True)
 
+    def _hashes_path(self) -> Path:
+        return self.root / "state" / "draft-hashes.json"
+
+    def _load_hashes(self) -> dict:
+        try:
+            data = json.loads(self._hashes_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _remember_hash(self, key: str, value: str | None) -> None:
+        """Какой версией черновика владелица видела кнопку (None — забыть)."""
+        data = self._load_hashes()
+        if value is None:
+            if data.pop(key, None) is None:
+                return
+        else:
+            data[key] = value
+        path = self._hashes_path()
+        tmp = path.with_suffix(".json.tmp")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text(json.dumps(data), encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError as exc:
+            log.warning("не смог запомнить версию черновика: %s", type(exc).__name__, exc_info=True)
+
     def _forget_draft(self, key: str) -> None:
         """Черновик исчез (включён или удалён) — снова появится под тем же именем, снова покажем."""
         seen = self._load_seen()
@@ -747,6 +772,7 @@ class Gateway:
                 log.warning("не удалось показать черновик %s: %s", key, type(exc).__name__, exc_info=True)
                 continue
             seen.add(key)
+            self._remember_hash(key, activation.fingerprint(draft.kind, draft.name, self.root))
             fresh.append(draft)
         if fresh:
             self._save_seen(seen)
@@ -795,8 +821,7 @@ class Gateway:
             state[task["id"]] = slot.isoformat()
             schedule_mod.save_state(state, self.root)
             if handler:   # делает Python; Claude — только если обработчик вернул задание
-                self._schedule_runs = getattr(self, "_schedule_runs", [])
-                self._schedule_runs.append(asyncio.ensure_future(self._run_handler(task, slot, now)))
+                self._track_run(asyncio.ensure_future(self._run_handler(task, slot, now)))
                 started.append(task["id"])
                 continue
             header = (f"Это задача по расписанию «{task['id']}» ({slot:%Y-%m-%d %H:%M}), владелица сейчас "
@@ -808,9 +833,7 @@ class Gateway:
                       context="isolated", timeout_sec=float(minutes) * 60 if minutes else None,
                       browser=False,      # расписанию браузер не нужен: минус ~17 тыс. токенов на ход
                       queue="schedule")   # своя очередь: долгий радар не задерживает её сообщения
-            if not hasattr(self, "_schedule_runs"):
-                self._schedule_runs = []
-            self._schedule_runs.append(asyncio.ensure_future(self._run_scheduled(job)))
+            self._track_run(asyncio.ensure_future(self._run_scheduled(job)))
             started.append(task["id"])
         return started
 
@@ -834,6 +857,10 @@ class Gateway:
             await self._run_scheduled(job)
         elif out.text:
             outbox.post(self.root, out.text, out.files)
+
+    def _track_run(self, future) -> None:
+        """Запоминает фоновую задачу расписания; завершённые выбрасываем сразу, список не растёт за весь срок жизни бота."""
+        self._schedule_runs = [f for f in getattr(self, "_schedule_runs", []) if not f.done()] + [future]
 
     async def _run_scheduled(self, job) -> None:
         try:
@@ -888,12 +915,13 @@ class Gateway:
         kind, _, name = value.partition(":")
         if decision == "on":
             try:
-                activation.activate(kind, name, self.root)
+                activation.activate(kind, name, self.root, expected=self._load_hashes().get(value))
             except activation.ActivationError as exc:
                 await query.edit_message_text(text=f"Не включил {name}: {exc}", reply_markup=None)
                 return
             self._tokens.pop(token, None)
             self._forget_draft(value)
+            self._remember_hash(value, None)
             word = "Навык" if kind == "skill" else "Помощник"
             await query.edit_message_text(
                 text=f"{word} {name} включён — доступен со следующего хода.", reply_markup=None)
@@ -929,6 +957,7 @@ class Gateway:
                      for rel in activation.code_files(kind, name, self.root)[:MAX_CODE_FILES_SHOWN]]
         else:
             docs = [(path, f"{name}.md")]
+        everything_shown = kind != "skill" or len(activation.code_files(kind, name, self.root)) <= MAX_CODE_FILES_SHOWN
         sent = 0
         for doc, filename in docs:
             try:
@@ -945,6 +974,8 @@ class Gateway:
         if not sent:
             await query.edit_message_text(text=f"Не нашёл черновик {name} — похоже, его уже нет.",
                                           reply_markup=None)
+        elif everything_shown:   # теперь «Активировать» включит ровно эту, просмотренную версию
+            self._remember_hash(f"{kind}:{name}", activation.fingerprint(kind, name, self.root))
 
     async def on_callback(self, update, context) -> None:
         query = update.callback_query

@@ -90,6 +90,17 @@ EXTRA_ICONS = {
 }
 
 
+_FOCUS_TOKEN = r"(?:-?\d+(?:\.\d+)?(?:%|px)?|left|center|right|top|bottom)"
+_FOCUS_RE = re.compile(rf"^\s*{_FOCUS_TOKEN}(?:\s+{_FOCUS_TOKEN}){{0,3}}\s*$", re.IGNORECASE)
+
+
+def _focus(value, default: str) -> str:
+    """`object-position` из данных слайда. Идёт в атрибут `style`: допускаем только числа, %, px и стороны света —
+    `50%;background:url(…)` или кавычка не должны выйти из значения."""
+    value = str(value if value is not None else default)
+    return value.strip() if _FOCUS_RE.match(value) else default
+
+
 def _icon(name: str, size: int, color: str) -> str:
     path = (EXTRA_ICONS.get(name) or templates.ICONS.get(name)
             or templates.ICONS[templates.DEFAULT_STEP_ICON])
@@ -130,7 +141,7 @@ def build_slide(slide: dict, index: int, total: int, theme: str, notes: list | N
 
     if kind == "photo":
         src = _photo_src(slide.get("photo", ""), notes)
-        focus = slide.get("focus", "70% 30%")
+        focus = _focus(slide.get("focus"), "70% 30%")
         # сдвиг и приближение кадра: человек уходит вправо, текст не ложится на лицо (её §11)
         zoom, shift = float(slide.get("zoom", 1)), float(slide.get("shift_x", 0))
         move = f"transform:scale({zoom}) translateX({shift}%);" if zoom != 1 or shift else ""

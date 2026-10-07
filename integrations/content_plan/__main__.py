@@ -76,12 +76,29 @@ def cmd_digest(week_dir: Path) -> int:
     return 0
 
 
-def cmd_collect(profile, week_dir: Path, client, budget: UsdBudget, today: dt.date, trial: bool = False) -> int:
-    counts = collect.collect_reels(profile, client, budget, week_dir, today, trial=trial)
+COLLECT_DONE = "collect.done"
+
+
+def collect_finished(profile, week_dir: Path) -> bool:
+    """Сбор недели закончен: есть метка, либо (недели до метки) рилсы собраны и слой каруселей тоже, если он нужен."""
+    if (week_dir / "raw" / COLLECT_DONE).exists():
+        return True
+    return bool(_load_raw(week_dir, "reels")) and (not profile.carousels_per_week or bool(_load_raw(week_dir, "carousels")))
+
+
+def cmd_collect(profile, week_dir: Path, client, budget: UsdBudget, today: dt.date, trial: bool = False,
+                resume: bool = False) -> int:
+    """`resume` — недельная цепочка после сбоя: уже собранный слой (оплаченный) заново не берём."""
+    counts = {}
+    if not (resume and _load_raw(week_dir, "reels")):
+        counts = collect.collect_reels(profile, client, budget, week_dir, today, trial=trial)
     authors = json.loads((week_dir / "authors.json").read_text(encoding="utf-8")) \
         if (week_dir / "authors.json").exists() else list(profile.seed_authors)
-    if profile.carousels_per_week and authors and not trial:
+    if profile.carousels_per_week and authors and not trial and not (resume and _load_raw(week_dir, "carousels")):
         counts["carousels"] = collect.collect_carousels(profile, client, budget, week_dir, today, authors)
+    if not trial:
+        (week_dir / "raw").mkdir(parents=True, exist_ok=True)
+        (week_dir / "raw" / COLLECT_DONE).write_text(dt.datetime.now().isoformat(timespec="seconds"), encoding="utf-8")
     print(f"собрано: {counts}; потрачено ≈ ${budget.spent:.2f} из ${budget.limit:.2f}")
     return 0
 
@@ -100,10 +117,10 @@ def cmd_weekly(profile, week_dir: Path, client, today: dt.date) -> int:
     """Недельная цепочка без Claude. Каждый этап пропускается, если уже сделан: после сбоя или лимита можно
     запускать снова и не платить дважды. Расшифровка упёрлась в потолок — идём дальше с тем, что есть."""
     total = float(profile.budget_usd)
-    if _load_raw(week_dir, "reels"):
+    if collect_finished(profile, week_dir):
         print("сбор уже был, пропускаю")
-    else:
-        cmd_collect(profile, week_dir, client, UsdBudget(round(total * 0.6, 2)), today)
+    else:   # рилсы могли собраться, а слой каруселей упасть (402 у Apify): добираем только недостающее
+        cmd_collect(profile, week_dir, client, UsdBudget(round(total * 0.6, 2)), today, resume=True)
     cmd_pool(profile, week_dir, dt.datetime.now(dt.timezone.utc))
     try:
         cmd_transcribe(profile, week_dir, client, UsdBudget(round(total * 0.4, 2)))
@@ -230,6 +247,11 @@ def main(argv: list[str] | None = None) -> int:
                if exc.code in (402, 403) else "сервис ответил ошибкой")
         (week_dir / "STOPPED.md").write_text(f"# Остановлено\n\nApify: HTTP {exc.code}. {why}.\n", encoding="utf-8")
         print(f"остановлено: Apify HTTP {exc.code}. {why}", file=sys.stderr)
+        return 3
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        (week_dir / "STOPPED.md").write_text(f"# Остановлено\n\nНет связи с Apify: {type(exc).__name__}. "
+                                             "Запусти снова: собранное не оплачивается второй раз.\n", encoding="utf-8")
+        print(f"остановлено: нет связи с Apify ({type(exc).__name__})", file=sys.stderr)
         return 3
     except (BudgetExceeded, ApifyRunError) as exc:
         (week_dir / "STOPPED.md").write_text(f"# Остановлено\n\n{exc}\n", encoding="utf-8")

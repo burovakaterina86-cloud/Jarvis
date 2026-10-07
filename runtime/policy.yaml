@@ -308,5 +308,6 @@ rules:
 
   # --- деньги в браузере: слова, которых не было ---
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(\bbuy\b|complete (your )?(order|purchase)|place (your )?order|confirm (order|purchase|payment)|submit order|к оплате|заказать|оформить заказ|в один клик|one.click|pay with|apple pay|google pay)', level: DENY, kind: purchase, reason: "оплату и покупку делает только владелица сама (её решение 2026-09-25): JARVIS только кладёт в корзину"}
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(\bconfirm\b|подтвердить|подтверждаю|подтверждение)', level: EXTERNAL, kind: send_message, reason: "подтверждение действия на сайте: за ним может стоять оплата или отправка"}
   # Номер карты (13–19 цифр подряд) в любом поле — отказ, даже если у поля нет подписи «карта».
   - {tool: "mcp__playwright__browser_(type|fill_form)", match: '(?<!\d)(?:\d[ -]?){13,19}(?!\d)', level: DENY, kind: secret_field, reason: "похоже на номер карты"}

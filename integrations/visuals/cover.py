@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 from . import render, tokens
-from .editorial import _icon, _rich, fit_headline
+from .editorial import _focus, _icon, _rich, fit_headline
 
 W, H = tokens.CANVAS["carousel"]
 ROOT = Path(__file__).resolve().parents[2]
@@ -213,7 +213,7 @@ def build_cover(data: dict, theme: str, notes: list | None = None) -> str:
         if src:
             # photo_width — доля ширины под фото: её лицо не должно заходить под заголовок
             width = f'width:{round(float(data.get("photo_width", 0.66)) * 100)}%;'
-            photo = (f'<img class="photo" src="{src}" style="{width}object-position:{data.get("focus", "50% 15%")}">')
+            photo = (f'<img class="photo" src="{src}" style="{width}object-position:{_focus(data.get("focus"), "50% 15%")}">')
     pill = (f'<div class="top"><div class="pill">{_rich(data["pill"])}</div><div class="pill-line"></div>'
             f'<i class="node"></i></div>') if data.get("pill") else ""
     # с её фото справа строка «ТЕСТИРУЮ…» ложится на волосы — в её референсах с фото её нет

@@ -492,3 +492,46 @@ async def test_show_button_also_sends_the_code(tmp_path):
     names = [d["filename"] for d in bot.documents]
     assert names == ["post-checker-SKILL.md", "post-checker-TEST.md", "post-checker-scripts-build.py"]
     assert "собираю".encode("utf-8") in bot.documents[2]["document"]
+
+
+# ---------- подмена черновика между показом кнопки и нажатием (ревью 2026-10-07) ----------
+
+def test_fingerprint_changes_when_any_file_changes(tmp_path):
+    folder = make_skill(tmp_path)
+    before = activation.fingerprint("skill", "post-checker", tmp_path)
+    assert before == activation.fingerprint("skill", "post-checker", tmp_path)
+    (folder / "run.py").write_text("print(1)", encoding="utf-8")
+    after_new_file = activation.fingerprint("skill", "post-checker", tmp_path)
+    (folder / "run.py").write_text("print(2)", encoding="utf-8")
+    assert len({before, after_new_file, activation.fingerprint("skill", "post-checker", tmp_path)}) == 3
+
+
+def test_activate_refuses_a_draft_changed_after_it_was_shown(tmp_path):
+    folder = make_skill(tmp_path)
+    shown = activation.fingerprint("skill", "post-checker", tmp_path)
+    (folder / "evil.py").write_text("print('подменили')", encoding="utf-8")
+    with pytest.raises(activation.ActivationError, match="изменился"):
+        activation.activate("skill", "post-checker", tmp_path, expected=shown)
+    assert (folder / "SKILL.md").exists()                       # черновик остался на месте
+    activation.activate("skill", "post-checker", tmp_path,
+                        expected=activation.fingerprint("skill", "post-checker", tmp_path))
+
+
+async def test_button_activates_only_the_version_the_owner_saw(tmp_path):
+    folder = make_skill(tmp_path)
+    g = make_gateway(tmp_path)
+    bot = FakeBot()
+    g.attach(bot)
+    await g.check_drafts()
+    data = [b.callback_data for row in bot.sent[-1]["reply_markup"].inline_keyboard for b in row][0]
+    (folder / "evil.py").write_text("print('подменили')", encoding="utf-8")     # после показа кнопки
+    cb = FakeCallback(data)
+    await g.on_callback(FakeUpdate(OWNER, callback_query=cb), FakeContext())
+    assert "изменился" in cb.edits[-1]["text"] and (folder / "SKILL.md").exists()
+    assert not (tmp_path / ".claude" / "skills" / "post-checker").exists()
+    # «Посмотреть» показывает новую версию и обновляет отпечаток: теперь активация возможна
+    show = [b.callback_data for row in bot.sent[-1]["reply_markup"].inline_keyboard for b in row][1]
+    await g.on_callback(FakeUpdate(OWNER, callback_query=FakeCallback(show)), FakeContext(bot))
+    cb2 = FakeCallback(data)
+    await g.on_callback(FakeUpdate(OWNER, callback_query=cb2), FakeContext())
+    assert "включён" in cb2.edits[-1]["text"]

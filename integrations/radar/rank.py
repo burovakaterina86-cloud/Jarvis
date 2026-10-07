@@ -9,13 +9,20 @@ from __future__ import annotations
 from typing import Any
 
 
+def _count(reel: dict[str, Any], *keys: str) -> int:
+    """Счётчик из ответа Apify: None и отрицательные значения (Instagram прячет лайки как -1) считаем нулём."""
+    for key in keys:
+        value = reel.get(key)
+        if isinstance(value, (int, float)) and value > 0:
+            return value
+    return 0
+
+
 def engagement_rate(reel: dict[str, Any]) -> float:
-    views = reel.get("videoPlayCount") or reel.get("videoViewCount") or 0
+    views = _count(reel, "videoPlayCount", "videoViewCount")
     if not views:
         return 0.0
-    likes = reel.get("likesCount", 0)
-    comments = reel.get("commentsCount", 0)
-    return (likes + comments) / views
+    return (_count(reel, "likesCount") + _count(reel, "commentsCount")) / views
 
 
 def _places(reels: list[dict[str, Any]], key) -> dict[int, int]:
@@ -27,8 +34,8 @@ def rank_composite(reels: list[dict[str, Any]], top_k: int) -> list[dict[str, An
     """Копии рилсов, топ-K по композитному рангу (добавляет `_composite_rank`, `_er`)."""
     if not reels:
         return []
-    by_views = _places(reels, lambda r: r.get("videoPlayCount") or r.get("videoViewCount") or 0)
-    by_comments = _places(reels, lambda r: r.get("commentsCount", 0))
+    by_views = _places(reels, lambda r: _count(r, "videoPlayCount", "videoViewCount"))
+    by_comments = _places(reels, lambda r: _count(r, "commentsCount"))
     by_er = _places(reels, engagement_rate)
     scored = []
     for i, reel in enumerate(reels):

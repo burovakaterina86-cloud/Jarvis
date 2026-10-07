@@ -6,10 +6,11 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
-from runtime import secretenv
+from runtime import procutil, secretenv
 
 from . import config
 
@@ -35,6 +36,7 @@ def env_for(html: Path, frames: Path, dur: float, fps: int = config.FPS, t0=None
 
 LOCK_NAME = ".build.lock"
 LOCK_STALE_SEC = 2 * 60 * 60
+RENDER_TIMEOUT_SEC = 60 * 60     # покадровый рендер дольше часа — завис
 FRAME_TOLERANCE = 3          # допустимый недобор кадров из-за округления длительности
 
 
@@ -63,16 +65,25 @@ class BuildBusy(RuntimeError):
 def acquire_lock(work: Path, alive=pid_alive, now=time.time) -> Path:
     """Замок сборки: два рендера в одну папку стирали друг другу кадры (2026-10-06). Чужой живой — отказ, мёртвый — снимаем."""
     lock = Path(work) / LOCK_NAME
-    if lock.exists():
+    for _ in range(3):
         try:
-            pid, started = (lock.read_text(encoding="utf-8").split() + ["0", "0"])[:2]
-            busy = alive(int(pid)) and now() - float(started) < LOCK_STALE_SEC
-        except (OSError, ValueError):
-            busy = False
-        if busy:
-            raise BuildBusy(f"сборка в {Path(work).name} уже идёт (процесс {pid}); дождись её или останови")
-    lock.write_text(f"{os.getpid()} {now()}", encoding="utf-8")
-    return lock
+            # O_EXCL: создание и проверка — одна операция, две сборки не пройдут замок одновременно
+            fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+        except FileExistsError:
+            pid = "?"
+            try:
+                pid, started = (lock.read_text(encoding="utf-8").split() + ["0", "0"])[:2]
+                busy = alive(int(pid)) and now() - float(started) < LOCK_STALE_SEC
+            except (OSError, ValueError):
+                busy = False
+            if busy:
+                raise BuildBusy(f"сборка в {Path(work).name} уже идёт (процесс {pid}); дождись её или останови")
+            lock.unlink(missing_ok=True)      # замок мёртвой или зависшей сборки — снимаем и пробуем снова
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(f"{os.getpid()} {now()}")
+        return lock
+    raise BuildBusy(f"не удалось взять замок сборки в {Path(work).name}")
 
 
 def rmtree_retry(path: Path, tries: int = 6, pause: float = 1.0, sleep=time.sleep) -> None:
@@ -135,12 +146,30 @@ def render_frames(work: Path, dur: float, fps: int = config.FPS, t0=None, t1=Non
             rmtree_retry(frames)
         proc = subprocess.Popen(["node", str(MJS)], env=env_for(work / "overlay.html", frames, dur, fps, t0, t1),
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+        timed_out = threading.Event()
+
+        def on_timeout():
+            timed_out.set()
+            procutil.kill_tree(proc)          # вместе с браузером внутри
+
+        timer = threading.Timer(RENDER_TIMEOUT_SEC, on_timeout)
+        timer.daemon = True
+        timer.start()
         tail = []
-        for line in proc.stdout:
-            tail.append(line.rstrip())
-            if line.startswith(("кадр", "готово")):
-                progress(line.rstrip())
-        if proc.wait() != 0:
+        code = None
+        try:
+            for line in proc.stdout:
+                tail.append(line.rstrip())
+                if line.startswith(("кадр", "готово")):
+                    progress(line.rstrip())
+            code = proc.wait()
+        finally:
+            timer.cancel()
+            if code is None:                  # исключение по дороге (Ctrl+C, сбой чтения): процесс не оставляем
+                procutil.kill_tree(proc)
+        if timed_out.is_set():
+            raise RuntimeError(f"рендер кадров не уложился в {RENDER_TIMEOUT_SEC // 60} минут и остановлен")
+        if code != 0:
             raise RuntimeError("рендер кадров упал:\n" + "\n".join(tail[-12:]))
         if t0 is None:
             have, need = count_frames(frames), round(dur * fps)

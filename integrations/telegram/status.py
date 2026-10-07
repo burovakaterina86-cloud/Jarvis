@@ -10,6 +10,7 @@ Telegram ограничивает частоту правок, а владели
 """
 from __future__ import annotations
 
+import asyncio
 import time
 
 TELEGRAM_LIMIT = 4096
@@ -183,7 +184,16 @@ class StatusReporter:
             return
         self._created = True
         self._begin()
-        msg = await self._safe(self.bot.send_message, self.chat_id, self.text())
+        send = asyncio.ensure_future(self._safe(self.bot.send_message, self.chat_id, self.text()))
+        try:
+            msg = await asyncio.shield(send)
+        except asyncio.CancelledError:
+            # /stop или таймаут пришли, пока Telegram создавал карточку: запоминаем её номер, иначе «думаю» останется в чате
+            try:
+                self.message_id = getattr(await send, "message_id", None)
+            except Exception:  # noqa: BLE001
+                pass
+            raise
         self.message_id = getattr(msg, "message_id", None)
         self._last_edit = self.clock()
         self._last_text = self.text()

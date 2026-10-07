@@ -128,6 +128,12 @@ WD = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 WD_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
 
 
+def U(url):
+    """Адрес ссылки из JSON, который пишет агент: только http(s). `javascript:` стал бы кликабельным."""
+    url = str(url or "").strip()
+    return url if re.match(r"(?i)^https?://", url) else "#"
+
+
 def E(s):
     return html.escape("" if s is None else str(s), quote=True)
 
@@ -576,7 +582,7 @@ def reel_card(r, day):
 <button class="btn" type="button" data-toggle="sh-{uid}" aria-expanded="false">🎥 Для съёмки</button>
 {'<button class="btn" type="button" data-toggle="pt-' + uid + '" aria-expanded="false">✨ Потенциал</button>' if pot else ''}
 <span class="spacer"></span><span class="by">{E(author(r.get("author")))}</span>
-<a class="orig" href="{E(r.get("url"))}" target="_blank" rel="noopener">оригинал ↗</a></div>
+<a class="orig" href="{E(U(r.get("url")))}" target="_blank" rel="noopener">оригинал ↗</a></div>
 <textarea class="src" id="src-{uid}" hidden>{E(r.get("script_ru"))}</textarea>
 <div class="panel script" id="scr-{uid}" hidden><div class="panel-h">📜 Сценарий · {E(dur)} · {n_par} абз.</div>{paras(r.get("script_ru"))}
 {'<p class="en"><b>Хук оригинала (EN):</b> ' + E(r["original_hook_en"]) + '</p>' if r.get("original_hook_en") else ''}</div>
@@ -710,7 +716,7 @@ def carousel_card(cr):
     total = len(cr["slides_ru"])
     slides = "".join(slide_html(s, i, total, cr.get("cta_word_ru")) for i, s in enumerate(cr["slides_ru"]))
     return f'''<article class="card car{' rec' if ch else ''}">
-<div class="reel-top"><div class="chips">{chips}</div><a class="orig" href="{E(cr.get("url"))}" target="_blank" rel="noopener">{E(author(cr.get("author")))} · оригинал ↗</a></div>
+<div class="reel-top"><div class="chips">{chips}</div><a class="orig" href="{E(U(cr.get("url")))}" target="_blank" rel="noopener">{E(author(cr.get("author")))} · оригинал ↗</a></div>
 <div class="car-grid"><div><h4 class="reel-title{' big' if ch else ''}">{E(main)}</h4>{f'<p class="reel-sub">{E(sub)}</p>' if sub else ''}
 <div class="mrow">{E(mrow)}</div><blockquote class="hook">«{E(cr.get("hook_ru"))}»</blockquote></div>
 <div class="car-side"><div class="why"><div class="why-h">{'⭐ Почему в плане' if ch else '💡 Чем сильна'}</div><p>{E(why)}</p></div>
@@ -840,7 +846,7 @@ def source_rows(sources):
         out += (f'<div class="src"><span class="xb {xcls(s.get("x"))}">{E(x or "—")}</span>'
                 f'<div class="src-main"><b>{E(s.get("channel"))}</b><span>{E(s.get("title"))}</span></div>'
                 f'<div class="src-meta">▶ {E(k(s.get("views")))}{E(med)} · {E(hms(s.get("duration")))} · {E((s.get("lang") or "").upper())}</div>'
-                f'<a class="orig" href="{E(s.get("url"))}" target="_blank" rel="noopener" aria-label="Открыть видео">↗</a></div>')
+                f'<a class="orig" href="{E(U(s.get("url")))}" target="_blank" rel="noopener" aria-label="Открыть видео">↗</a></div>')
     return out
 
 
@@ -1055,7 +1061,7 @@ def nospeech_section():
         f'<tr><td class="mono">{E(author(r.get("author")))}</td><td>{E(r.get("topic_ru"))}</td>'
         f'<td class="mono num">{E(k(r.get("comments")))}</td><td class="mono num">{E(k(r.get("views")))}</td>'
         f'<td>{chip("✨", "вау", "--outlier") if r.get("wow") else ""}</td>'
-        f'<td><a class="orig" href="{E(r.get("url"))}" target="_blank" rel="noopener">↗</a></td></tr>' for r in ns)
+        f'<td><a class="orig" href="{E(U(r.get("url")))}" target="_blank" rel="noopener">↗</a></td></tr>' for r in ns)
     return f'''<section class="sec" id="nospeech"><div class="wrap">
 {sec_head("08", "🔇", "Instagram · без речи", "Рилсы без речи", f"{len(ns)} роликов, где смысл в картинке и титрах, а не в голосе. В план не брали.")}
 <div class="ask">🙋 Снимаете такие? — скажите агенту, и со следующей недели они войдут в подборку.</div>

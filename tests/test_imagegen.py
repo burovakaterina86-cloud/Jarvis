@@ -388,3 +388,15 @@ def test_run_codex_sends_prompt_through_stdin_and_never_through_cmd_shim(monkeyp
     ig.run_codex(["codex", "exec", "--json", prompt], tmp_path)
     assert seen["argv"] == ["node", "codex.js", "exec", "--json", "-"]
     assert seen["input"] == prompt and not any(".cmd" in a.lower() for a in seen["argv"])
+
+
+def test_kie_key_is_never_sent_to_a_foreign_host():
+    assert {"api.kie.ai", "kieai.redpandaai.co"} == ig.KIE_HOSTS
+    assert urllib_host(ig.KIE_BASE) in ig.KIE_HOSTS and urllib_host(ig.KIE_UPLOAD) in ig.KIE_HOSTS
+    with pytest.raises(ig.ImageGenError, match="не из kie.ai"):
+        ig.kie_http("POST", "https://evil.example/upload", "secret-key", {})
+
+
+def urllib_host(url):
+    import urllib.parse
+    return urllib.parse.urlsplit(url).hostname

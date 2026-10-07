@@ -68,8 +68,9 @@ def _load_env() -> None:
     try:
         from integrations.radar.keys import load_dotenv
         load_dotenv(only=("GROQ_API_KEY", "GROQ_KEY"))
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001 — без ключа монтаж работает, но причину оставляем в журнале ошибок
+        from runtime import errorlog
+        errorlog.record("montage.load_env", exc)
 
 
 def groq_key() -> str | None:
@@ -116,15 +117,19 @@ def find_puppeteer() -> str:
     """Папка puppeteer-core: ставится вместе с `npm i -g hyperframes` (или путь в MONTAGE_PUPPETEER)."""
     env = os.environ.get("MONTAGE_PUPPETEER")
     cands = [env]
+    npm_problem = ""
     try:
         root = subprocess.run(["npm", "root", "-g"], capture_output=True, text=True, timeout=30, shell=os.name == "nt").stdout.strip()
         if root:
             cands += [Path(root) / "hyperframes" / "node_modules" / "puppeteer-core", Path(root) / "puppeteer-core"]
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        npm_problem = f" (`npm root -g` не сработал: {type(exc).__name__})"   # раньше это маскировалось советом «поставь»
+        from runtime import errorlog
+        errorlog.record("montage.find_puppeteer", exc)
     found = _first_existing(cands)
     if not found:
-        raise FileNotFoundError("не найден puppeteer-core: поставь `npm i -g hyperframes` или задай MONTAGE_PUPPETEER")
+        raise FileNotFoundError("не найден puppeteer-core: поставь `npm i -g hyperframes` или задай MONTAGE_PUPPETEER"
+                                + npm_problem)
     return found
 
 

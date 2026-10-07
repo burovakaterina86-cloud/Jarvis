@@ -199,7 +199,7 @@ def shrink_image(path: Path, max_bytes: int = SLIDE_MAX_BYTES) -> bool:
                 tmp.replace(path)
                 if path.stat().st_size <= max_bytes:
                     return True
-        return path.exists()
+        return path.exists() and path.stat().st_size <= max_bytes
     except (OSError, subprocess.TimeoutExpired):
         return False
     finally:

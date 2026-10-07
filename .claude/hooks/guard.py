@@ -546,6 +546,19 @@ def _self_modify_reason(target: str, tool_input: dict) -> str:
     return f"правка собственных правил JARVIS: {target}" + (f" — «{preview}»" if preview else "")
 
 
+_INVISIBLE = re.compile("[\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff\u00ad]")
+_SPACED_LETTERS = re.compile(r"(?<=\b\w) (?=\w\b)")
+
+
+def _fold(text: str) -> str:
+    """Текст без уловок, которыми название кнопки прячут от правил: «P a y  n o w», «Pay[невидимый символ]now», полноширинные буквы.
+    Правила смотрят и на исходный текст, и на этот."""
+    import unicodedata
+
+    folded = _INVISIBLE.sub("", unicodedata.normalize("NFKC", text))
+    return re.sub(r" {2,}", " ", _SPACED_LETTERS.sub("", folded))
+
+
 def _tool_matches(spec: str, tool: str) -> bool:
     return spec in ("*", None, "") or re.fullmatch(spec, tool) is not None
 
@@ -669,6 +682,9 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
         if not _tool_matches(rule.get("tool", "*"), tool):
             continue
         texts = [blob]
+        folded = _fold(blob)
+        if folded != blob:
+            texts.append(folded)
         if shell:  # правила по самой командной строке: сырой и без кавычек
             raw = str(tool_input.get("command") or "")
             texts = [raw, _dequote(raw)]

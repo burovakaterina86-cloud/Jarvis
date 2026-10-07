@@ -75,6 +75,11 @@ def _carry_one(src, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
     dst = out_dir / path.name
     if path.resolve() != dst.resolve():
+        if dst.exists() and dst.read_bytes() != path.read_bytes():
+            # два разных скрина с одним именем из разных папок: второй не должен молча затереть первый
+            import hashlib
+            tag = hashlib.sha1(str(path.resolve()).encode("utf-8")).hexdigest()[:6]
+            dst = out_dir / f"{path.stem}-{tag}{path.suffix}"
         shutil.copyfile(path, dst)
     return dst
 

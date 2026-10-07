@@ -477,3 +477,61 @@ def test_download_slides_calls_shrink_for_each_saved_file(tmp_path):
     seen = []
     collect.download_slides(tmp_path, ["c1"], fetch=lambda u: b"img", shrink=seen.append)
     assert [p.name for p in seen] == ["01.jpg"]
+
+
+# ---------- ревью 2026-10-07 ----------
+
+def test_collect_is_not_skipped_forever_after_a_failed_carousel_layer(tmp_path):
+    from types import SimpleNamespace
+
+    from integrations.content_plan.__main__ import COLLECT_DONE, collect_finished
+    profile = SimpleNamespace(carousels_per_week=3)
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "reels_a.json").write_text("[]", encoding="utf-8")
+    assert collect_finished(profile, tmp_path) is False                  # рилсы есть, каруселей нет — слой не добран
+    (raw / "carousels_a.json").write_text("[]", encoding="utf-8")
+    assert collect_finished(profile, tmp_path) is True                   # неделя без метки, но целиком собрана
+    (raw / "carousels_a.json").unlink()
+    (raw / COLLECT_DONE).write_text("x", encoding="utf-8")
+    assert collect_finished(profile, tmp_path) is True                   # метка важнее
+    assert collect_finished(SimpleNamespace(carousels_per_week=0), tmp_path / "other") is False
+
+
+def test_resume_does_not_pay_twice_for_collected_reels(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from integrations.content_plan import __main__ as cp
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "reels_a.json").write_text("[]", encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(cp.collect, "collect_reels", lambda *a, **k: calls.append("reels") or {"reels": 1})
+    monkeypatch.setattr(cp.collect, "collect_carousels", lambda *a, **k: calls.append("carousels") or 2)
+    profile = SimpleNamespace(carousels_per_week=3, seed_authors=["a"])
+    import datetime as dt
+    cp.cmd_collect(profile, tmp_path, None, cp.UsdBudget(1.0), dt.date(2026, 10, 7), resume=True)
+    assert calls == ["carousels"] and (raw / cp.COLLECT_DONE).exists()
+
+
+def test_original_link_must_be_http():
+    from integrations.content_plan.render import U
+    assert U("javascript:alert(1)") == "#" and U(None) == "#" and U("data:text/html,x") == "#"
+    assert U("https://www.instagram.com/reel/abc/") == "https://www.instagram.com/reel/abc/"
+
+
+def test_shrink_reports_failure_when_file_stays_too_big(tmp_path, monkeypatch):
+    from integrations.content_plan import collect
+    big = tmp_path / "a.jpg"
+    big.write_bytes(b"x" * 500)
+    monkeypatch.setattr(collect.shutil, "which", lambda n: "ffmpeg")
+
+    class R:
+        returncode = 0
+
+    def fake_run(cmd, **kw):
+        Path(cmd[-1]).write_bytes(b"y" * 400)        # ffmpeg «отработал», но файл всё равно больше лимита
+        return R()
+
+    monkeypatch.setattr(collect.subprocess, "run", fake_run)
+    assert collect.shrink_image(big, max_bytes=100) is False

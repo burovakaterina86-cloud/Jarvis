@@ -405,3 +405,67 @@ def test_transcription_fails_loudly_when_nothing_decodes(tmp_path):
     with pytest.raises(RuntimeError):
         transcribe.transcribe_top(Groq(), [{"shortCode": "a", "videoUrl": "v"}], tmp_path,
                                   download=download, extract_audio=extract)
+
+
+# ---------- ревью 2026-10-07: данные Apify не теряются, адреса и коды проверяются ----------
+
+import pytest as _pytest  # noqa: E402
+
+
+@_pytest.mark.parametrize("url", [
+    "file:///C:/Users/x/secret.mp4", "http://scontent.cdninstagram.com/a.mp4", "https://evilcdninstagram.com/a.mp4",
+    "https://example.com/a.mp4", "ftp://x.fbcdn.net/a",
+])
+def test_media_url_must_be_https_instagram_or_apify(url):
+    from integrations.radar import transcribe
+    with _pytest.raises(ValueError):
+        transcribe.check_media_url(url)
+
+
+@_pytest.mark.parametrize("url", ["https://scontent-ams4-1.cdninstagram.com/v/a.mp4", "https://video.fbcdn.net/a.mp4",
+                                  "https://api.apify.com/v2/key-value-stores/x/records/y"])
+def test_media_url_allows_instagram_and_apify_hosts(url):
+    from integrations.radar import transcribe
+    transcribe.check_media_url(url)
+
+
+def test_one_broken_reel_does_not_cost_the_whole_run(tmp_path):
+    from integrations.radar import transcribe
+
+    class Groq:
+        def transcribe(self, path):
+            if "bad" in path.name:
+                raise RuntimeError("groq 500")
+            return "текст"
+
+    def download(url, dest):
+        if "boom" in url:
+            raise OSError("сеть")
+        dest.write_bytes(b"x")
+        return dest
+
+    reels = [{"shortCode": "good", "videoUrl": "u1"}, {"shortCode": "bad", "videoUrl": "u2"},
+             {"shortCode": "net", "videoUrl": "boom"}, {"shortCode": "../evil", "videoUrl": "u4"},
+             {"shortCode": "nourl"}]
+    out = transcribe.transcribe_top(Groq(), reels, tmp_path, download=download, extract_audio=lambda s, d: d.write_bytes(b"a"))
+    assert out == {"good": "текст"}
+    failed = (tmp_path / "failed.md").read_text(encoding="utf-8")
+    assert "bad" in failed and "net" in failed and "некорректный" in failed and "нет ссылки" in failed
+    assert not list(tmp_path.glob("*.media")) and not list(tmp_path.glob("*.opus"))     # хвосты убраны
+
+
+def test_raw_apify_data_is_saved_before_later_steps_can_fail(tmp_path):
+    import json as _json
+
+    from integrations.radar.__main__ import _save_raw
+    _save_raw(tmp_path / "out", [{"shortCode": "a", "videoUrl": "u"}])
+    assert _json.loads((tmp_path / "out" / "raw.json").read_text(encoding="utf-8"))[0]["shortCode"] == "a"
+
+
+def test_hidden_or_missing_counters_do_not_break_ranking():
+    from integrations.radar import rank
+    reels = [{"shortCode": "a", "videoPlayCount": 1000, "likesCount": -1, "commentsCount": None},
+             {"shortCode": "b", "videoPlayCount": None, "videoViewCount": 500, "likesCount": 50, "commentsCount": 5},
+             {"shortCode": "c"}]
+    assert rank.engagement_rate(reels[0]) == 0.0 and rank.engagement_rate(reels[1]) == 0.11
+    assert len(rank.rank_composite(reels, 3)) == 3

@@ -29,6 +29,7 @@ import tempfile
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -310,9 +311,15 @@ def kie_upload(path: Path, key: str, api=None) -> str:
     return url
 
 
+# Хосты kie.ai: API и загрузка файлов (https://docs.kie.ai/file-upload-api/quickstart — база `kieai.redpandaai.co`)
+KIE_HOSTS = {"api.kie.ai", "kieai.redpandaai.co"}
+
+
 def kie_http(method: str, path: str, key: str, body: dict | None = None) -> dict:
     data = json.dumps(body).encode("utf-8") if body is not None else None
     url = path if path.startswith("https://") else KIE_BASE + path
+    if urllib.parse.urlsplit(url).hostname not in KIE_HOSTS:   # ключ уходит только на хосты kie.ai
+        raise ImageGenError(f"адрес не из kie.ai, ключ не отправляю: {url[:60]}")
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Authorization", f"Bearer {key}")
     req.add_header("Content-Type", "application/json")

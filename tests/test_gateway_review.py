@@ -114,3 +114,45 @@ def test_bad_schedule_json_is_logged_not_silent(tmp_path):
     assert schedule.load_tasks(tmp_path) == []
     assert errorlog.ERRORS_PATH.exists() and "schedule.load_tasks" in errorlog.ERRORS_PATH.read_text(encoding="utf-8")
     assert FakeRouter  # импорт нужен модулю тестов-хелперов
+
+
+async def test_status_card_created_during_cancel_is_remembered_so_it_can_be_removed():
+    from integrations.telegram.status import StatusReporter
+
+    class SlowBot:
+        def __init__(self):
+            self.deleted = []
+
+        async def send_message(self, chat_id, text, **kw):
+            await asyncio.sleep(0.05)
+            return type("M", (), {"message_id": 77})()
+
+        async def delete_message(self, chat_id, message_id):
+            self.deleted.append(message_id)
+
+    bot = SlowBot()
+    reporter = StatusReporter(bot, 1, task="задача", min_interval=0, start_after=0)
+    start = asyncio.ensure_future(reporter.start())
+    await asyncio.sleep(0.01)
+    start.cancel()                                  # /stop пришёл, пока Telegram создавал карточку
+    try:
+        await start
+    except asyncio.CancelledError:
+        pass
+    assert reporter.message_id == 77
+    await reporter.finish("")
+    assert bot.deleted == [77]
+
+
+async def test_finished_schedule_runs_are_dropped_from_the_list(tmp_path):
+    g = make_gateway(tmp_path)
+
+    async def quick():
+        return None
+
+    for _ in range(5):
+        fut = asyncio.ensure_future(quick())
+        await fut
+        g._track_run(fut)
+    g._track_run(asyncio.ensure_future(quick()))
+    assert len(g._schedule_runs) <= 2

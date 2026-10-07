@@ -165,6 +165,27 @@ def _skill_files(kind: str, name: str, root: Path) -> list[tuple[str, Path]]:
     return out
 
 
+def fingerprint(kind: str, name: str, root: Path | str = ROOT) -> str:
+    """Отпечаток всего содержимого черновика (пути и байты файлов). Нужен, чтобы включить именно то, что владелица
+    видела на кнопке: агенту разрешено писать в `drafts/`, и между показом и нажатием файл мог измениться."""
+    import hashlib
+
+    root = Path(root)
+    digest = hashlib.sha256()
+    if kind == "skill":
+        items = _skill_files(kind, name, root)
+    else:
+        path = draft_path(kind, name, root)
+        items = [(path.name, path)] if path.is_file() else []
+    for rel, item in items:
+        try:
+            data = item.read_bytes()
+        except OSError:
+            data = b"<unreadable>"
+        digest.update(rel.encode("utf-8") + b"\0" + hashlib.sha256(data).digest())
+    return digest.hexdigest()
+
+
 def code_files(kind: str, name: str, root: Path | str = ROOT) -> list[str]:
     """Скрипты в черновике навыка — их владелица видит на кнопке перед включением."""
     return [rel for rel, item in _skill_files(kind, name, Path(root))
@@ -261,12 +282,17 @@ def _check_tree(files, base: Path, root: Path) -> list[str]:
 
 # ---------------------------------------------------------------- перенос
 
-def activate(kind: str, name: str, root: Path | str = ROOT) -> Path:
-    """Переносит проверенный черновик в рабочую папку. Возвращает путь к файлу навыка/агента."""
+def activate(kind: str, name: str, root: Path | str = ROOT, expected: str | None = None) -> Path:
+    """Переносит проверенный черновик в рабочую папку. Возвращает путь к файлу навыка/агента.
+
+    `expected` — отпечаток (`fingerprint`) того, что владелица видела: изменился черновик после показа — отказ."""
     root = Path(root)
     problems = validate(kind, name, root)
     if problems:
         raise ActivationError("; ".join(problems))
+    if expected is not None and fingerprint(kind, name, root) != expected:
+        raise ActivationError("черновик изменился после того, как я показал кнопку. Нажми «Посмотреть», проверь "
+                              "новую версию и включай снова")
     target = live_path(kind, name, root)
     if target.exists():
         raise ActivationError(f"{KINDS[kind]['word']} {name} уже есть — сначала удали старый")
