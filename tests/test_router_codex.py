@@ -28,6 +28,8 @@ def router(tmp_path, monkeypatch):
     monkeypatch.setattr(sessions, "SESSIONS_PATH", tmp_path / "sessions.json")
     monkeypatch.setattr(task_router, "EPISODES_DIR", tmp_path / "episodes")
     monkeypatch.setattr(spec, "SPECS_DIR", tmp_path / "specs")
+    # Фейковые CLI не пишут контент; этот набор проверяет переключение исполнителя.
+    monkeypatch.setattr(task_router.public_texts, "check", lambda *a, **kw: [])
     env = {**os.environ, "FAKE_CLAUDE_SCENARIO": "ok", "FAKE_CLAUDE_LOG": str(tmp_path / "claude.jsonl"),
            "FAKE_CODEX_SCENARIO": "ok", "FAKE_CODEX_LOG": str(tmp_path / "codex.jsonl"),
            "JARVIS_REVIEW": "off", "JARVIS_CODEX": "on"}

@@ -53,6 +53,35 @@ def test_subagent_or_skill_call_counts_as_a_pass():
     assert public_texts.check_file(REL, f"т\n{MARK}", tools) == []
 
 
+def test_week_json_has_the_same_pipeline_requirement(tmp_path):
+    rel = "essa-ai/content-plan/weeks/x/reels.json"
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"pipeline": "humaniser НЕ пройден", "days": []}), encoding="utf-8")
+    assert public_texts.check([rel], "task", root=tmp_path)
+
+
+def test_missing_public_text_is_a_problem(tmp_path):
+    assert public_texts.check([REL], "task", root=tmp_path)
+
+
+def test_successful_codex_reads_and_writes_are_pipeline_evidence(tmp_path):
+    rel = "essa-ai/content-plan/weeks/x/reels.json"
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"pipeline": "textwriter → humaniser → VOICE — пройден 2026-10-07"}), encoding="utf-8")
+    items = [{"type": "command_execution", "status": "completed", "exit_code": 0,
+              "command": f"Get-Content .agents/skills/{name}/SKILL.md"} for name in ("textwriter", "humaniser")]
+    items.append({"type": "file_change", "status": "completed", "changes": [{"path": rel}]})
+    log = tmp_path / "events.jsonl"
+    rows = [{"type": "pipeline_evidence", "task_id": "t", "operation": op, "path": target, "success": True}
+            for item in items for op, target in public_texts.codex_evidence(item)]
+    log.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+    assert public_texts.check([rel], "t", tmp_path, log) == []
+    items[0]["exit_code"] = 1
+    assert public_texts.codex_evidence(items[0]) == []
+
+
 def test_check_reads_the_turn_from_the_journal(tmp_path):
     (tmp_path / "essa-ai" / "content").mkdir(parents=True)
     (tmp_path / REL).write_text(f"текст\n{MARK}\n", encoding="utf-8")
@@ -108,6 +137,7 @@ async def test_skipped_passes_trigger_a_fix_turn(router, monkeypatch, tmp_path):
 async def test_if_the_fix_does_not_help_the_owner_is_warned_honestly(router, monkeypatch, tmp_path):
     res, calls = await _run(router, monkeypatch, tmp_path, fixed_ok={"works": False})
     assert len(calls) == 1 and "⚠️" in res.text and "НЕ прошёл" in res.text and REL in res.text
+    assert res.acceptance == "needs_changes"
 
 
 # ---------- правила хука и призыва реально подключены ----------

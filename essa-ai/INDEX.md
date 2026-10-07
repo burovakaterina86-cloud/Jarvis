@@ -22,6 +22,7 @@
 | Задача | Первым | Затем, если нужно |
 |---|---|---|
 | Пост, карусель, Reels, Stories | `06_CONTENT_PLAN_30_DAYS.md` + `07_CONTENT_RULES.md` | `VOICE.md` |
+| **Сценарий Reels/Stories, хук, призыв (CTA), кодовое слово** | `HOOKS_AND_CTA.md` (правила автора EdgeLab + чек-лист, 10 КБ) | `VOICE.md`; `HOOKS_AND_CTA_SOURCES.md` — только по просьбе, длинный |
 | Конкретный день плана | `06_CONTENT_PLAN_30_DAYS.md` | `07_CONTENT_RULES.md` |
 | Голос, тон, формулировки | `VOICE.md` | `04_BRAND_VOICE.md` — только если в `VOICE.md` ответа нет |
 | Аудитория, боли, сегменты | `02_AUDIENCE.md` | `AUDIENCE.md` — это гипотезы, не факты |

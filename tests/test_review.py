@@ -92,6 +92,8 @@ def router(tmp_path, monkeypatch):
     monkeypatch.setattr(sessions, "SESSIONS_PATH", tmp_path / "sessions.json")
     monkeypatch.setattr(task_router, "EPISODES_DIR", tmp_path / "episodes")
     monkeypatch.setattr(spec, "SPECS_DIR", tmp_path / "specs")
+    # Этот фейк сообщает Write, но не создаёт файл: здесь проверяем циклы review.
+    monkeypatch.setattr(task_router.public_texts, "check", lambda *a, **kw: [])
     env = {**os.environ, "FAKE_CLAUDE_SCENARIO": "ledger", "FAKE_CLAUDE_LOG": str(tmp_path / "calls.jsonl"),
            "FAKE_REVIEW_COUNTER": str(tmp_path / "review-count.txt"), "JARVIS_REVIEW": "on"}
     r = task_router.TaskRouter(env=env, claude_cmd=FAKE, budget_path=tmp_path / "budget.json",
@@ -141,6 +143,9 @@ async def test_two_failed_rounds_reach_the_owner_with_problems(router):
     assert res.review["verdict"] == "fix" and res.review["rounds"] == 2
     assert "⚠️" in res.text and "круг 2" in res.text
     assert res.status == "ok"
+    assert res.acceptance == "needs_changes"
+    rows = [json.loads(x) for x in (router.tmp / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert next(r for r in reversed(rows) if r["type"] == "task_state")["state"] == "needs_changes"
 
 
 async def test_fail_verdict_is_not_sent_back(router):
@@ -152,6 +157,7 @@ async def test_fail_verdict_is_not_sent_back(router):
 async def test_broken_review_does_not_break_the_answer(router):
     job, res, calls = await _run(router, "broken")
     assert res.status == "ok" and "не вышло" in res.text
+    assert res.acceptance == "check_unavailable"
 
 
 async def test_ledger_records_review(router):
@@ -168,6 +174,12 @@ async def test_switched_off_means_one_call(router):
     router.env = {**router.env, "JARVIS_REVIEW": "off"}
     job, res, calls = await _run(router, "fix")
     assert len(calls) == 1 and res.review is None
+    assert res.acceptance == "check_unavailable"
+
+
+def test_pass_with_problems_is_not_an_accepted_verdict():
+    res = SimpleNamespace(status="ok", structured={"verdict": "pass", "problems": ["нет файла"], "checked": []})
+    assert review.parse(res) is None
 
 
 async def test_tests_run_only_when_code_changed(router):

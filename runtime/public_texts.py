@@ -30,9 +30,24 @@ WRITE_TOOLS = ("Write", "Edit", "MultiEdit")
 PASSES = ("textwriter", "humaniser")
 
 
+def codex_evidence(item: dict) -> list[tuple[str, str]]:
+    """Только завершённое успешное действие Codex, а не обещание в тексте ответа."""
+    if item.get("status") != "completed":
+        return []
+    if item.get("type") == "file_change":
+        return [("Write", c["path"]) for c in item.get("changes", []) if isinstance(c.get("path"), str)]
+    if item.get("type") != "command_execution" or item.get("exit_code") != 0:
+        return []
+    command = str(item.get("command") or "").strip()
+    match = re.fullmatch(r"(?:cat|type|Get-Content)\s+(?:-LiteralPath\s+)?[\"']?([^\"'\n;&|]+?/skills/(?:textwriter|humaniser)/SKILL\.md)[\"']?", command.replace("\\", "/"), re.I)
+    return [("Read", match.group(1).strip())] if match else []
+
+
 def is_public_text(rel: str) -> bool:
     rel = rel.replace("\\", "/")
     low = rel.lower()
+    if low.startswith("essa-ai/content-plan/weeks/") and Path(low).name in ("reels.json", "slides.json"):
+        return True
     if not low.startswith(CONTENT_PREFIX) or not low.endswith(".md"):
         return False
     return Path(low).name not in NOT_PUBLIC_NAMES and not any(part in "/" + low for part in NOT_PUBLIC_PARTS)
@@ -60,6 +75,9 @@ def turn_tools(task_id: str, events_path: Path | None = None) -> list[tuple[str,
             continue
         if ev.get("task_id") == task_id and ev.get("type") == "tool_use":
             out.append((str(ev.get("tool") or ""), str(ev.get("summary") or "").replace("\\", "/")))
+        elif ev.get("task_id") == task_id and ev.get("type") == "pipeline_evidence":
+            if ev.get("success") is True and ev.get("operation") in ("Read", "Write"):
+                out.append((ev["operation"], str(ev.get("path") or "").replace("\\", "/")))
     return out
 
 
@@ -117,7 +135,17 @@ def check(files, task_id: str, root: Path = ROOT, events_path: Path | None = Non
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
+            problems.append(f"{rel}: файл результата не удалось прочитать")
             continue
+        if rel.endswith(".json"):
+            try:
+                data = json.loads(text)
+                if not isinstance(data, dict):
+                    raise ValueError
+                text = "<!-- pipeline: " + str(data.get("pipeline") or "") + " -->"
+            except ValueError:
+                problems.append(f"{rel}: неверный JSON результата")
+                continue
         problems += check_file(rel, text, tools)
     return problems
 

@@ -90,6 +90,7 @@ def router(tmp_path, monkeypatch):
     monkeypatch.setattr(sessions, "SESSIONS_PATH", tmp_path / "sessions.json")
     monkeypatch.setattr(task_router, "EPISODES_DIR", tmp_path / "episodes")
     monkeypatch.setattr(spec, "SPECS_DIR", tmp_path / "specs")
+    monkeypatch.setattr(task_router.public_texts, "check", lambda *a, **kw: [])
     env = {**os.environ, "FAKE_CLAUDE_SCENARIO": "ok", "FAKE_CLAUDE_LOG": str(tmp_path / "calls.jsonl"),
            "FAKE_REVIEW_COUNTER": str(tmp_path / "rc.txt"), "JARVIS_REVIEW": "on"}
     r = task_router.TaskRouter(env=env, claude_cmd=FAKE, budget_path=tmp_path / "budget.json",

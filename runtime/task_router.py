@@ -422,6 +422,19 @@ class TaskRouter:
             res = await self._enforce_public_texts(key, job, res, limit)
         if review.needs_review(job, res, env=self.env if self.env is not None else os.environ):
             res = await self._review(key, job, res, limit)
+        elif review.needs_review(job, res, env={"JARVIS_REVIEW": "on"}):
+            res.acceptance = "check_unavailable"
+        if res.status == "ok" and job.context == "chat":
+            # Исправляющий ход review мог заменить файлы после первой проверки конвейера.
+            try:
+                res.pipeline_problems = public_texts.check(res.files, job.task_id)
+            except Exception as exc:
+                res.pipeline_error = type(exc).__name__
+                res.acceptance = "check_unavailable"
+            if res.pipeline_problems:
+                res.acceptance = "needs_changes"
+            if res.pipeline_error:
+                res.acceptance = "check_unavailable"
         if runtime == "codex" and res.status == "ok":
             res.text = (res.text or "").rstrip() + "\n\n🟢 Отвечал через Codex"
         return res
@@ -502,6 +515,8 @@ class TaskRouter:
             problems = public_texts.check(res.files, job.task_id)
         except Exception as exc:  # noqa: BLE001 — проверка не должна ронять очередь
             errorlog.record("task_router.public_texts", exc, task_id=job.task_id)
+            res.pipeline_error = type(exc).__name__
+            res.acceptance = "check_unavailable"
             return res
         if not problems:
             return res
@@ -524,6 +539,8 @@ class TaskRouter:
                 if job.cancelled:
                     return _stopped()
         if problems:
+            res.pipeline_problems = problems
+            res.acceptance = "needs_changes"
             res.text = (res.text or "").rstrip() + public_texts.warning(problems)
         return res
 
@@ -570,6 +587,8 @@ class TaskRouter:
             if review.code_changed(res.files):
                 tests = await asyncio.to_thread(self.tests_runner)
         res.review = result
+        res.acceptance = ("check_unavailable" if result.get("error") or result.get("verdict") is None else
+                          "accepted" if result["verdict"] == "pass" else "needs_changes")
         res.text = review.annotate(res.text, result, by="Codex" if job.runtime_used == "codex" else None)
         return res
 
@@ -626,9 +645,10 @@ class TaskRouter:
         started = job.started
         duration = round(time.monotonic() - started, 1) if started else 0.0
         try:
-            task_state.emit(job.task_id, job.task, task_state.final_state(res.status), chat=key)
+            final = task_state.final_state(res.status, res.acceptance)
+            task_state.emit(job.task_id, job.task, final, chat=key)
             events.emit("task_done", task=job.task, task_id=job.task_id,
-                        status="done" if res.status == "ok" else "failed",
+                        status=final, acceptance=res.acceptance,
                         result_status=res.status, error=res.error, duration=float(duration),
                         tools=res.tool_uses, files_changed=list(res.files), attempts=res.attempts,
                         cost=res.cost_usd, context=job.context, session=res.session_id,
@@ -650,6 +670,7 @@ class TaskRouter:
         record = {"date": now.isoformat(timespec="seconds"), "session": res.session_id,
                   "trigger": "turn_end", "task_id": job.task_id, "task": job.task,
                   "status": res.status, "context": job.context, "runtime": job.runtime_used,
+                  "acceptance": res.acceptance,
                   "request": cut(job.prompt), "result": cut(res.text),
                   "files": list(res.files)[:EPISODE_FILES_LIMIT]}
         path = Path(EPISODES_DIR) / f"{now:%Y-%m}.jsonl"

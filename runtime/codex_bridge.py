@@ -181,6 +181,10 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
             if not isinstance(ev, dict):
                 continue
             kind, item = ev.get("type"), ev.get("item") or {}
+            if kind == "item.completed":
+                from runtime.public_texts import codex_evidence
+                for operation, path in codex_evidence(item):
+                    events.emit("pipeline_evidence", operation=operation, path=_rel(path, cwd), success=True, **base)
             if kind == "thread.started":
                 thread = ev.get("thread_id") or thread
                 base["session"] = thread

@@ -54,7 +54,7 @@ when_to_use: "По запросам вида «сделай контент дл�
 
 1. `copywriting` → пост.
 2. `copywriting` → карусель по слайдам.
-3. `reels-script` → сценарий Reels.
+3. `reels-script` → сценарий Reels (хук и призыв — по `essa-ai/HOOKS_AND_CTA.md`; каждый публичный текст — `textwriter` → `humaniser` на деле, бот проверяет по журналу).
 4. `reels-script` → Stories по кадрам.
 
 ## Шаг 7. Сохранение

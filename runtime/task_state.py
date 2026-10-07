@@ -17,17 +17,20 @@ from pathlib import Path
 
 from runtime import events
 
-STATES = ("queued", "running", "waiting_approval", "review", "done", "failed", "timeout", "stopped")
-TERMINAL = {"done", "failed", "timeout", "stopped"}
+STATES = ("queued", "running", "waiting_approval", "review", "done", "failed", "timeout", "stopped", "needs_changes", "check_unavailable")
+TERMINAL = {"done", "failed", "timeout", "stopped", "needs_changes", "check_unavailable"}
 TAIL_BYTES = 512 * 1024
 
 LABELS = {"queued": "в очереди", "running": "работаю", "waiting_approval": "жду твоего «да»",
           "review": "перепроверяю себя", "done": "готово", "failed": "не получилось",
-          "timeout": "остановился: слишком долго", "stopped": "остановлен"}
+          "timeout": "остановился: слишком долго", "stopped": "остановлен",
+          "needs_changes": "черновик требует правок", "check_unavailable": "готовность не проверена"}
 VERDICTS = {"pass": "перепроверил — всё в порядке", "fix": "при проверке нашлись замечания", "fail": "при проверке вышло, что сделано не то"}
 
 
-def final_state(result_status: str) -> str:
+def final_state(result_status: str, acceptance: str = "not_checked") -> str:
+    if result_status == "ok" and acceptance in ("needs_changes", "check_unavailable"):
+        return acceptance
     return {"ok": "done", "timeout": "timeout", "stopped": "stopped"}.get(result_status, "failed")
 
 

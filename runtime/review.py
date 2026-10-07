@@ -56,7 +56,7 @@ def needs_review(job, res, env=None) -> bool:
     if not enabled(env) or getattr(res, "status", "") != "ok" or getattr(job, "context", "chat") != "chat":
         return False
     files = getattr(res, "files", None) or []
-    return bool(getattr(job, "spec", None)) or any(f.startswith(CONTENT_PREFIX) for f in files) \
+    return bool(getattr(job, "spec", None)) or any(f.startswith((CONTENT_PREFIX, "essa-ai/content-plan/weeks/")) for f in files) \
         or bool(code_changed(files))
 
 
@@ -95,7 +95,10 @@ def parse(res) -> dict | None:
     data = getattr(res, "structured", None)
     if getattr(res, "status", "") != "ok" or not isinstance(data, dict):
         return None
-    if data.get("verdict") not in ("pass", "fix", "fail") or not isinstance(data.get("problems"), list):
+    if data.get("verdict") not in ("pass", "fix", "fail") or not isinstance(data.get("problems"), list) \
+            or not isinstance(data.get("checked"), list) \
+            or not all(isinstance(x, str) for x in data["problems"] + data["checked"]) \
+            or (data["verdict"] == "pass" and data["problems"]):
         return None
     return {"verdict": data["verdict"], "problems": [str(p) for p in data["problems"]],
             "checked": [str(c) for c in data.get("checked") or []]}
@@ -115,3 +118,17 @@ def annotate(text: str, review: dict, by: str | None = None) -> str:
     if by:
         tail = tail.replace("Перепроверил себя", f"Меня перепроверил {by}", 1)
     return ((text or "").rstrip() + "\n\n" + tail).strip()
+
+
+def unaccepted(res) -> str:
+    """Краткий честный итог вместо противоречивого «готово» исполнителя."""
+    unavailable = getattr(res, "acceptance", "") == "check_unavailable"
+    head = "Проверить готовность не вышло; результат пока не подтверждён." if unavailable else "Черновик сохранён, но ещё не готов."
+    problems = list(getattr(res, "pipeline_problems", [])) + list((getattr(res, "review", None) or {}).get("problems") or [])
+    if unavailable and not problems:
+        problems = ["Обязательная проверка недоступна."]
+    lines = [head] + [f"• {p}" for p in problems[:3]]
+    files = getattr(res, "files", [])
+    if files:
+        lines.append("Файлы: " + ", ".join(files[:3]))
+    return "\n".join(lines)

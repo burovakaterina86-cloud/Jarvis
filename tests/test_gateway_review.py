@@ -37,6 +37,19 @@ async def test_plain_message_is_not_wrapped(tmp_path):
     assert g.router.jobs[0][1].prompt == "сделай пост"
 
 
+async def test_rejected_answer_does_not_claim_ready_or_passed(tmp_path):
+    from runtime.claude_bridge import TurnResult
+    g = make_gateway(tmp_path)
+    ctx = FakeContext()
+    result = TurnResult("Готово, всё прошло!", None, False, None, "ok",
+                        acceptance="needs_changes", files=["essa-ai/content/draft.md"],
+                        review={"verdict": "fix", "problems": ["нет источника"]})
+    await g._deliver(ctx, OWNER, result)
+    text = ctx.bot.sent[-1]["text"]
+    assert "всё прошло" not in text and "ещё не готов" in text and "нет источника" in text
+    assert "essa-ai/content/draft.md" in text
+
+
 async def test_group_chat_is_ignored_even_for_the_owner(tmp_path):
     g = make_gateway(tmp_path)
     upd = FakeUpdate(OWNER, message=FakeIncoming(text="привет"))

@@ -668,6 +668,8 @@ class Gateway:
             await self._send(context, chat_id,
                              "Не смог подхватить прошлый разговор и начал заново 😅 Если что-то важное из него нужно — напомни.")
         raw = (getattr(result, "text", "") or "").strip()
+        if getattr(result, "acceptance", "") in ("needs_changes", "check_unavailable"):
+            raw = task_router.review.unaccepted(result)
         if not raw:
             return
         # Строки «📎 <путь>» — не текст для владелицы, а инструкция боту прислать файл;

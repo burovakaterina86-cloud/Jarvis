@@ -50,6 +50,9 @@ class TurnResult:
     resets_at: float | None = None                     # когда снимется лимит (epoch), если известно
     switch_offer: dict | None = None                   # лимит Claude: предложить Codex кнопкой (P4.1e)
     switched_back: bool = False                        # лимит Claude восстановился — вернулись к нему
+    acceptance: str = "not_checked"                    # accepted | needs_changes | check_unavailable | not_checked
+    pipeline_problems: list[str] = field(default_factory=list)
+    pipeline_error: str | None = None
 
 
 @dataclass(frozen=True)
