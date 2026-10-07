@@ -257,9 +257,31 @@ class Gateway:
     async def cmd_stop(self, update, context) -> None:
         if not self._allowed(update):
             return
-        stopped = self.router.stop(update.effective_chat.id)
-        await self._send(context, update.effective_chat.id,
-                         "Всё, остановился." if stopped else "Я сейчас ничем не занят — останавливать нечего.")
+        chat_id = update.effective_chat.id
+        cancel = getattr(self.router, "cancel_chat", None)
+        if cancel is None:  # совместимость с небольшими адаптерами шлюза
+            stopped = self.router.stop(chat_id)
+            await self._send(context, chat_id, "Всё, остановился." if stopped else "Я сейчас ничем не занят — останавливать нечего.")
+            return
+        report = cancel(chat_id)
+        if self.approvals is not None:
+            self.approvals.cancel_tasks(set(report.task_ids))
+        jobs = getattr(self, "jobs", None)
+        job_ids = jobs.cancel_chat(str(chat_id)) if jobs else []
+        checks = [self.router.wait_stopped(report.task_ids, 10)]
+        if jobs:
+            checks.append(jobs.wait_stopped(job_ids, 10))
+        complete = all(await asyncio.gather(*checks))
+        await self._send(context, chat_id, "Остановил текущую работу." if complete else "Останавливаю текущую работу…")
+        if not complete:
+            async def confirm():
+                while not await self.router.wait_stopped(report.task_ids, 1):
+                    await asyncio.sleep(0.2)
+                if jobs:
+                    while not await jobs.wait_stopped(job_ids, 1):
+                        await asyncio.sleep(0.2)
+                await self._send(context, chat_id, "Остановил текущую работу.")
+            asyncio.create_task(confirm())
 
     async def cmd_status(self, update, context) -> None:
         if not self._allowed(update):
@@ -347,6 +369,9 @@ class Gateway:
             return
         text = (getattr(update.message, "text", None) or "").strip()
         if not text:
+            return
+        if re.fullmatch(r"(?:стоп|остановись)[.!]?", text, re.IGNORECASE) and not getattr(update.message, "forward_origin", None):
+            await self.cmd_stop(update, context)
             return
         await self._run(update, context, self._forwarded(update.message, text))
 
@@ -485,6 +510,8 @@ class Gateway:
         await self._deliver(context, chat_id, result)
 
     async def _deliver(self, context, chat_id, result) -> None:
+        if getattr(result, "status", "") == "stopped":
+            return
         try:
             await self._deliver_inner(context, chat_id, result)
         except Exception as exc:  # noqa: BLE001 — сбой Telegram не должен ронять ход
@@ -512,6 +539,8 @@ class Gateway:
             result = await job.result
         finally:
             typing.cancel()
+        if getattr(result, "status", "") == "stopped":
+            return True
         if getattr(result, "status", "") != "ok" or side_lane.wants_queue(getattr(result, "text", "")):
             return False
         await self._deliver(context, chat_id, result)
@@ -583,6 +612,9 @@ class Gateway:
         if isinstance(offer, dict):
             await self._send(context, chat_id, self._offer_text(offer),
                              reply_markup=self._switch_keyboard(chat_id, offer))
+            return
+        records = getattr(self.approvals, "pending_records", None)
+        if records is not None and request_id not in {r["request_id"] for r in records()}:
             return
         if getattr(result, "brief", False) is True:
             pass   # новый разговор после паузы — служебная кухня, ей это не нужно (её поправка 2026-10-06)
@@ -908,7 +940,7 @@ class Gateway:
         """Фоновые работы (`integrations/jobs`): запуск, слежение, письмо о результате. Не держат чат."""
         if getattr(self, "jobs", None) is None:
             from integrations.jobs.runner import JobRunner
-            self.jobs = JobRunner(self.root, post=lambda text, files: outbox.post(self.root, text, files))
+            self.jobs = JobRunner(self.root, post=lambda text, files: outbox.post(self.root, text, files), owner_chat=self.owner_id)
         await asyncio.to_thread(self.jobs.tick)
 
     async def _draft_action(self, query, token: str, value: str, decision: str) -> None:

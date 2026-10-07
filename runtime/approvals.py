@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import getpass
 import hmac
 import inspect
@@ -103,6 +104,8 @@ class ApprovalsServer:
         self._token = ""
         self._callbacks: list = []
         self._pending: dict[str, asyncio.Future] = {}
+        self._records: dict[str, dict] = {}
+        self._cancelled_tasks: set[str] = set()
         self._tasks: set[asyncio.Future] = set()
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
@@ -126,6 +129,17 @@ class ApprovalsServer:
     @property
     def pending(self) -> list[str]:
         return [rid for rid, f in self._pending.items() if not f.done()]
+
+    def pending_records(self, task_ids: set[str] | None = None) -> list[dict]:
+        return [copy.deepcopy(self._records[rid]) for rid in self.pending
+                if rid in self._records and (task_ids is None or self._records[rid]["task_id"] in task_ids)]
+
+    def cancel_tasks(self, task_ids: set[str]) -> list[str]:
+        self._cancelled_tasks.update(task_ids)
+        ids = [r["request_id"] for r in self.pending_records(task_ids)]
+        for rid in ids:
+            self.resolve(rid, "deny", "stopped")
+        return ids
 
     @property
     def addresses(self) -> list[tuple[str, int]]:
@@ -198,9 +212,13 @@ class ApprovalsServer:
         except Exception:
             return web.json_response({"decision": "deny", "reason": "bad_request"}, status=400)
 
+        if task_id in self._cancelled_tasks:
+            return web.json_response({"decision": "deny", "reason": "stopped"})
         rid = uuid.uuid4().hex[:12]
         fut = asyncio.get_running_loop().create_future()
         self._pending[rid] = fut
+        self._records[rid] = {"request_id": rid, "task_id": task_id, "level": level,
+                              "tool": tool, "summary": summary, "details": redact_obj(details), "created_at": _now()}
         journal = self.root / "state" / "approvals.jsonl"
         _append_jsonl(journal, {"ts": _now(), "type": "request", "request_id": rid, "level": level,
                                 "tool": tool, "summary": _truncate(summary), "details": _truncate(details),
@@ -220,6 +238,7 @@ class ApprovalsServer:
             if not fut.done():
                 fut.cancel()
             self._pending.pop(rid, None)
+            self._records.pop(rid, None)
             _append_jsonl(journal, {"ts": _now(), "type": "decision", "request_id": rid,
                                     "decision": decision, "reason": reason, "tool": tool,
                                     "task_id": task_id})

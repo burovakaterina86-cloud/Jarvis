@@ -17,6 +17,19 @@ BODY = {"level": "EXTERNAL", "tool": "mcp__instagram__reply_comment",
         "summary": "Ответить @user: «спасибо»", "details": {"kind": "reply", "tool_input": {"text": "спасибо"}}}
 
 
+async def test_stop_denies_pending_and_future_approval_for_same_task(server, tmp_path):
+    gw = FakeGateway(server)
+    body = {**BODY, "task_id": "cancelled-task"}
+    response = asyncio.create_task(_post(tmp_path, body))
+    await gw.seen.wait()
+    rid = gw.calls[0][0]
+    assert server.cancel_tasks({"cancelled-task"}) == [rid]
+    assert not server.resolve(rid, "allow")
+    assert (await response)[1] == {"decision": "deny", "reason": "stopped"}
+    assert (await _post(tmp_path, body))[1] == {"decision": "deny", "reason": "stopped"}
+    assert len(gw.calls) == 1 and server.pending_records() == []
+
+
 class FakeGateway:
     """Записывает запросы и по желанию сразу отвечает решением."""
 

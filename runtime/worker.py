@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE_DIR = ROOT / "state"
-RUNTIMES = ("claude", "codex")
+RUNTIMES = ("claude", "codex", "claude2")
 
 
 def _read(name: str, default):
@@ -84,7 +84,8 @@ def active(chat, now: float | None = None) -> tuple[str, bool]:
 def current(chat) -> dict:
     """Для /status: без побочных эффектов."""
     entry = _read("runtime.json", {}).get(str(chat))
-    return entry if isinstance(entry, dict) and entry.get("runtime") == "codex" else {"runtime": "claude"}
+    ok = isinstance(entry, dict) and entry.get("runtime") in ("codex", "claude2")
+    return entry if ok else {"runtime": "claude"}
 
 
 # ---------- лимиты ----------
@@ -119,6 +120,14 @@ def describe_limits(data: dict | None = None, now: float | None = None) -> str:
             lines.append("У Claude лимит почти на исходе" + (f" (сброс в {_hhmm(reset)})" if reset else ""))
         else:
             lines.append("У Claude с лимитом всё хорошо")
+    claude2 = data.get("claude2") or {}
+    if claude2:
+        reset2 = _f(claude2.get("resets_at"))
+        if claude2.get("status") == "rejected" and (reset2 is None or reset2 > now):
+            lines.append(f"У второго аккаунта Claude лимит закончился, вернётся в {_hhmm(reset2)}" if reset2
+                         else "У второго аккаунта Claude лимит закончился")
+        else:
+            lines.append("Второй аккаунт Claude: с лимитом всё хорошо")
     codex = data.get("codex") or {}
     parts = []
     for key, label in (("primary", "5 ч"), ("secondary", "неделя")):
@@ -144,6 +153,13 @@ def load_offer(chat) -> dict | None:
 
 def drop_offer(chat) -> None:
     (Path(STATE_DIR) / "offers" / f"{chat}.json").unlink(missing_ok=True)
+
+
+def cancel_pending(chat) -> None:
+    """Убирает только предложения и отложенные продолжения этого чата."""
+    drop_offer(chat)
+    items = _read("deferred.json", [])
+    _write("deferred.json", [d for d in items if isinstance(d, dict) and str(d.get("chat")) != str(chat)])
 
 
 def defer(chat, at: float, prompt: str, task: str) -> None:

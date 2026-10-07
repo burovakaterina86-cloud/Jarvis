@@ -227,12 +227,14 @@ class _Outcome:
         self.stderr = ""
         self.agents: dict[str, str] = {}   # id вызова Agent/Task -> имя роли
         self.tools: dict[str, str] = {}    # id вызова инструмента -> его имя
+        self.limits_key = "claude"         # чей лимит пишем в state/limits.json: claude | claude2
         self.tool_uses = 0
         self.files: list[str] = []
 
 
 async def _run_once(prompt, session_id, on_event, run_id, task, env, claude_cmd, cwd,
-                    task_id: str = "", options: TurnOptions = DEFAULT_OPTIONS) -> _Outcome:
+                    task_id: str = "", options: TurnOptions = DEFAULT_OPTIONS,
+                    limits_key: str = "claude") -> _Outcome:
     cmd = list(claude_cmd) + build_args(session_id, options)
     kwargs = {}
     if sys.platform == "win32":
@@ -244,6 +246,7 @@ async def _run_once(prompt, session_id, on_event, run_id, task, env, claude_cmd,
     if run_id in _stopped:      # /stop пришёл, пока процесс запускался
         procutil.kill_tree(proc)
     out = _Outcome()
+    out.limits_key = limits_key
 
     async def feed():
         try:
@@ -321,7 +324,7 @@ def _absorb(out: _Outcome, ev: dict, cwd=None) -> None:
         info = ev.get("rate_limit_info") or {}
         try:   # для /status: последний известный лимит Claude (P4.1f)
             from runtime import worker
-            worker.save_limits("claude", {"status": info.get("status"), "resets_at": info.get("resetsAt")})
+            worker.save_limits(out.limits_key, {"status": info.get("status"), "resets_at": info.get("resetsAt")})
         except Exception:  # noqa: BLE001 — запись лимита не должна ронять ход
             pass
         if info.get("status") == "rejected":
@@ -402,14 +405,19 @@ def _to_result_core(out: _Outcome, session_id_in: str | None, run_id: str | None
 async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
                    run_id: str | None = None, task: str = "", env: dict | None = None,
                    claude_cmd: list[str] | None = None, cwd: str | Path | None = None,
-                   task_id: str = "", options: TurnOptions = DEFAULT_OPTIONS) -> TurnResult:
-    """Выполняет один ход Claude Code. Никогда не бросает исключений — ошибка в TurnResult.
+                   task_id: str = "", options: TurnOptions = DEFAULT_OPTIONS,
+                   account: tuple[str, str] | None = None) -> TurnResult:
+    """Выполняет один ход Claude Code. `account` = (ключ лимитов, папка входа) — второй аккаунт (`claude2_bridge`). Никогда не бросает исключений — ошибка в TurnResult.
 
     `task_id` попадает во все события хода и в окружение дочернего claude (`JARVIS_TASK_ID`),
     чтобы Guard и Approvals подписывали им свои записи.
     """
     run_id = run_id or uuid.uuid4().hex
     child_env = build_env(env)
+    limits_key = "claude"
+    if account:
+        limits_key = account[0]
+        child_env["CLAUDE_CONFIG_DIR"] = account[1]   # build_env отбросил родительскую; эта — только для второго аккаунта
     if task_id:
         child_env["JARVIS_TASK_ID"] = task_id
     cwd = cwd or ROOT
@@ -418,7 +426,7 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
     try:
         cmd = claude_cmd or default_claude_cmd()
         out = await _run_once(prompt, session_id, on_event, run_id, task, child_env, cmd, cwd, task_id,
-                              options)
+                              options, limits_key)
         res = _to_result(out, session_id, run_id)
         if session_id and res.status == "error" and out.activity:
             # Ход уже вызывал инструменты: повтор мог бы повторить внешнее действие.
@@ -436,7 +444,7 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
             events.emit("error", subtype="context_overflow", session=session_id, task=task,
                         task_id=task_id)
             out = await _run_once(_overflow_prompt(prompt), None, on_event, run_id, task,
-                                  child_env, cmd, cwd, task_id, options)
+                                  child_env, cmd, cwd, task_id, options, limits_key)
             res = _to_result(out, None, run_id)
             res.new_session, res.attempts = True, 2
         elif session_id and res.status == "error" and not out.activity:
@@ -444,7 +452,7 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
             events.emit("error", subtype="resume_failed", session=session_id, task=task,
                         task_id=task_id, error=_short(out.stderr.strip(), 300))
             out = await _run_once(prompt, None, on_event, run_id, task, child_env, cmd, cwd, task_id,
-                                  options)
+                                  options, limits_key)
             res = _to_result(out, None, run_id)
             res.new_session, res.attempts = True, 2
         return res

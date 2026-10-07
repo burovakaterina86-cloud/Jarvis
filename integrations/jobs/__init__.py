@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import uuid
 from pathlib import Path
@@ -73,6 +74,7 @@ def submit(title: str, argv: list[str], files: list[str] | None = None, done: st
            root: Path = ROOT) -> tuple[str, list[str]]:
     """Положить запрос. Возвращает (id, проблемы); при проблемах файл не создаётся."""
     req = {"title": title, "argv": argv, "files": files or [], "done": done, "fail": fail}
+    req.update(chat=os.environ.get("JARVIS_CHAT_ID", ""), task_id=os.environ.get("JARVIS_TASK_ID", ""))
     problems = validate(req, root)
     if problems:
         return "", problems

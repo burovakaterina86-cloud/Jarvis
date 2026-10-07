@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import os
 import subprocess
 import sys
@@ -52,15 +53,55 @@ def _clean_env() -> dict:
 
 
 class JobRunner:
-    def __init__(self, root: Path | str = ROOT, *, post, popen=subprocess.Popen, clock=time.time, env=None):
+    def __init__(self, root: Path | str = ROOT, *, post, popen=subprocess.Popen, clock=time.time, env=None, owner_chat=None):
         self.root = Path(root)
         self.post = post                  # (text, files) -> None : почтовый ящик
         self.popen = popen
         self.clock = clock
         self.env = env if env is not None else _clean_env()
+        self.owner_chat = str(owner_chat) if owner_chat is not None else None
         self.procs: dict[str, object] = {}
         self.requests = self.root / "jobs" / "requests"
         self.state = self.root / "state" / "jobs"
+
+    def cancel_chat(self, chat_id: str) -> list[str]:
+        self._take_requests()
+        ids = []
+        for rec in self._records():
+            legacy = not rec.get("chat") and self.owner_chat == str(chat_id)
+            if (str(rec.get("chat")) != str(chat_id) and not legacy) or rec["status"] not in ("queued", "running"):
+                continue
+            ids.append(rec["id"])
+            rec.update(status="stopped", finished_at=self.clock(), legacy_owner=legacy)
+            self._save(rec)
+            proc = self.procs.get(rec["id"])
+            if proc is not None:
+                procutil.kill_tree(proc)
+            elif rec.get("pid") and procutil.pid_alive(rec["pid"]):
+                class Orphan:
+                    pid = rec["pid"]
+                    returncode = None
+                    def kill(self):
+                        pass
+                procutil.kill_tree(Orphan())
+        return ids
+
+    async def wait_stopped(self, job_ids: list[str], timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while True:
+            alive = False
+            for job_id in job_ids:
+                proc = self.procs.get(job_id)
+                rec = next((r for r in self._records() if r["id"] == job_id), {})
+                if proc is not None:
+                    alive |= proc.poll() is None
+                elif rec.get("pid"):
+                    alive |= procutil.pid_alive(rec["pid"])
+            if not alive:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            await asyncio.sleep(0.05)
 
     # ---- состояние
 
@@ -120,6 +161,7 @@ class JobRunner:
                       + "; ".join(problems), [])
             return
         rec = {"id": job_id, "title": req["title"], "argv": req["argv"], "files": req.get("files", []),
+               "chat": req.get("chat", ""), "task_id": req.get("task_id", ""),
                "done": req.get("done", ""), "fail": req.get("fail", ""), "status": "queued",
                "queued_at": self.clock()}
         self._save(rec)
@@ -157,6 +199,8 @@ class JobRunner:
         return redact("\n".join(lines[-LOG_TAIL_LINES:]))
 
     def _finish(self, rec: dict, rc: int) -> None:
+        if rec.get("status") == "stopped":
+            return
         rec.update(status="done" if rc == 0 else "failed", rc=rc, finished_at=self.clock())
         self._save(rec)
         minutes = max(1, round((rec["finished_at"] - rec.get("started_at", rec["finished_at"])) / 60))

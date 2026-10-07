@@ -34,10 +34,12 @@ def main():
     argv = sys.argv[1:]
     stdin_data = sys.stdin.buffer.read().decode("utf-8")
     scenario = os.environ.get("FAKE_CLAUDE_SCENARIO", "ok")
+    if os.environ.get("CLAUDE_CONFIG_DIR") and os.environ.get("FAKE_CLAUDE2_SCENARIO"):
+        scenario = os.environ["FAKE_CLAUDE2_SCENARIO"]     # вызов под вторым аккаунтом (CLAUDE_CONFIG_DIR) — свой сценарий
     log = os.environ.get("FAKE_CLAUDE_LOG")
     if log:
         with open(log, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"argv": argv, "env_keys": sorted(os.environ),
+            fh.write(json.dumps({"argv": argv, "env_keys": sorted(os.environ), "config_dir": os.environ.get("CLAUDE_CONFIG_DIR"),
                                  "env_jarvis": {k: v for k, v in os.environ.items() if k.startswith("JARVIS_")},
                                  "stdin_len": len(stdin_data), "t_start": time.time(),
                                  "stdin_tail": stdin_data[-200:]},
