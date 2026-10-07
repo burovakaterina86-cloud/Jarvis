@@ -50,6 +50,21 @@ async def test_rejected_answer_does_not_claim_ready_or_passed(tmp_path):
     assert "essa-ai/content/draft.md" in text
 
 
+async def test_rejected_existing_bundle_has_no_ready_card(tmp_path):
+    from runtime.claude_bridge import TurnResult
+    rel = "essa-ai/content/test-bundle/post.md"
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True)
+    path.write_text("черновик", encoding="utf-8")
+    g = make_gateway(tmp_path)
+    ctx = FakeContext()
+    result = TurnResult("Готово", None, False, None, "ok", acceptance="needs_changes", files=[rel],
+                        review={"verdict": "fix", "problems": ["нет источника"]})
+    await g._deliver(ctx, OWNER, result)
+    assert all("Черновик готов" not in msg["text"] for msg in ctx.bot.sent)
+    assert all(not msg.get("reply_markup") for msg in ctx.bot.sent)
+
+
 async def test_group_chat_is_ignored_even_for_the_owner(tmp_path):
     g = make_gateway(tmp_path)
     upd = FakeUpdate(OWNER, message=FakeIncoming(text="привет"))

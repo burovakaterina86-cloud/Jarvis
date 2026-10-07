@@ -173,6 +173,8 @@ class Gateway:
         self._albums: dict[str, dict] = {}           # media_group_id -> собираемый альбом
         self._counter = 0
         self._approval_messages: dict[tuple[str, int], str] = {}
+        self._stop_generation: dict[str, int] = {}
+        self._handler_controls = []
 
     # ---- служебное
 
@@ -259,6 +261,17 @@ class Gateway:
         if not self._allowed(update):
             return
         chat_id = update.effective_chat.id
+        key = str(chat_id)
+        self._stop_generation[key] = self._stop_generation.get(key, 0) + 1
+        if str(chat_id) == str(self.owner_id):
+            outbox.cancel_pending(self.root)
+        for name, album in list(self._albums.items()):
+            if album.get("chat") == key:
+                album["task"].cancel()
+                self._albums.pop(name, None)
+        controls = [c for c in self._handler_controls if c.chat == key and not c.finished]
+        for control in controls:
+            control.cancel()
         cancel = getattr(self.router, "cancel_chat", None)
         if cancel is None:  # совместимость с небольшими адаптерами шлюза
             stopped = self.router.stop(chat_id)
@@ -267,9 +280,19 @@ class Gateway:
         report = cancel(chat_id)
         if self.approvals is not None:
             self.approvals.cancel_tasks(set(report.task_ids))
-        jobs = getattr(self, "jobs", None)
-        job_ids = jobs.cancel_chat(str(chat_id)) if jobs else []
+        outbox.cancel_tasks(self.root, set(report.task_ids))
+        jobs = self._job_runner()
+        job_ids = await asyncio.to_thread(jobs.cancel_chat, str(chat_id))
+        cancelled_ids = set(report.task_ids)
+        if jobs:
+            cancelled_ids.update(r["task_id"] for r in jobs._records() if r["id"] in job_ids and r.get("task_id"))
+        outbox.cancel_tasks(self.root, cancelled_ids)
+        if str(chat_id) == str(self.owner_id):
+            outbox.cancel_pending(self.root)
+        if self.approvals is not None:
+            self.approvals.cancel_tasks(cancelled_ids)
         checks = [self.router.wait_stopped(report.task_ids, 10)]
+        checks.append(schedule_jobs.wait_stopped(controls, 10))
         if jobs:
             checks.append(jobs.wait_stopped(job_ids, 10))
         complete = all(await asyncio.gather(*checks))
@@ -281,6 +304,8 @@ class Gateway:
                 if jobs:
                     while not await jobs.wait_stopped(job_ids, 1):
                         await asyncio.sleep(0.2)
+                while not await schedule_jobs.wait_stopped(controls, 1):
+                    await asyncio.sleep(0.2)
                 await self._send(context, chat_id, "Остановил текущую работу.")
             asyncio.create_task(confirm())
 
@@ -427,6 +452,7 @@ class Gateway:
         if not self._allowed(update):
             return
         chat_id = update.effective_chat.id
+        generation = self._stop_generation.get(str(chat_id), 0)
         media = update.message.voice or getattr(update.message, "audio", None)
         path = await self._download(context, media.file_id,
                                     f"voice-{getattr(media, 'file_unique_id', 'msg')}.ogg")
@@ -434,6 +460,8 @@ class Gateway:
         # /stop, кнопки подтверждения и расписание.
         text = (await asyncio.to_thread(voice.transcribe, path, transcriber=self.transcriber)
                 if path else None)
+        if generation != self._stop_generation.get(str(chat_id), 0):
+            return
         if not text:
             await self._send(context, chat_id, VOICE_FAILED)
             return
@@ -444,6 +472,7 @@ class Gateway:
         if not self._allowed(update):
             return
         chat_id = update.effective_chat.id
+        generation = self._stop_generation.get(str(chat_id), 0)
         msg = update.message
         doc = getattr(msg, "document", None)
         if doc is not None:
@@ -464,6 +493,8 @@ class Gateway:
             await self._send(context, chat_id, self._too_big_text(name, size))
             return
         path = await self._download(context, file_id, name)
+        if generation != self._stop_generation.get(str(chat_id), 0):
+            return
         if path is None:
             if "too big" in self._download_errors.pop(file_id, "").lower():
                 await self._send(context, chat_id, self._too_big_text(name, size))
@@ -484,7 +515,7 @@ class Gateway:
     async def _album_add(self, update, context, group: str, path: Path, caption: str) -> None:
         album = self._albums.get(group)
         if album is None:
-            album = self._albums[group] = {"paths": [], "caption": ""}
+            album = self._albums[group] = {"paths": [], "caption": "", "chat": str(update.effective_chat.id)}
             album["task"] = asyncio.ensure_future(self._album_flush(update, context, group))
         album["paths"].append(path)
         album["caption"] = album["caption"] or caption
@@ -521,6 +552,7 @@ class Gateway:
     # ---- ход агента
 
     async def _run(self, update, context, prompt: str, task: str = "", runtime: str | None = None) -> None:
+        generation = self._stop_generation.get(str(update.effective_chat.id), 0)
         chat_id = update.effective_chat.id
         if _TODAY_QUESTION.search(prompt) and len(prompt) <= 60:
             # «что на сегодня» — Python отвечает сам, мгновенно и без лимита (её жалоба 2026-10-06: долго и технично)
@@ -528,6 +560,8 @@ class Gateway:
             await self._send(context, chat_id, out.text)
             return
         if await self._try_side_lane(context, chat_id, prompt):
+            return
+        if self._stop_generation.get(str(chat_id), 0) != generation:
             return
         task = task or _task_name(prompt)
         runtime_for = getattr(self.router, "runtime_for", None)
@@ -555,15 +589,21 @@ class Gateway:
         # Статус-карточка уходит из чата вместе с концом хода; итоговая строка нужна только
         # репортёру с выключенным удалением (`delete_on_finish=False`).
         await reporter.finish(_final_line(result, reporter))
-        await self._deliver(context, chat_id, result)
+        await self._deliver(context, chat_id, result, generation=generation)
 
-    async def _deliver(self, context, chat_id, result) -> None:
-        if getattr(result, "status", "") == "stopped":
+    async def _deliver(self, context, chat_id, result, *, generation=None) -> None:
+        if generation is None:
+            generation = self._stop_generation.get(str(chat_id), 0)
+        def cancelled():
+            return self._stop_generation.get(str(chat_id), 0) != generation
+        if getattr(result, "status", "") == "stopped" or cancelled():
             return
         try:
-            await self._deliver_inner(context, chat_id, result)
+            await self._deliver_inner(context, chat_id, result, cancelled=cancelled)
         except Exception as exc:  # noqa: BLE001 — сбой Telegram не должен ронять ход
             log.warning("не удалось доставить ответ: %s", type(exc).__name__, exc_info=True)
+            if cancelled():
+                return
             try:
                 await self._send(context, chat_id,
                                  "Ответ у меня готов, но Telegram его не принял 😕 "
@@ -575,6 +615,7 @@ class Gateway:
         """Короткий вопрос, пока идёт долгая задача, — сразу ответ в отдельной лёгкой полосе (её жалоба 2026-10-06).
 
         True — ответ отправлен. False — это не вопрос-в-пути (просьба сделать работу, сбой): идёт в обычную очередь."""
+        generation = self._stop_generation.get(str(chat_id), 0)
         pending = getattr(self.router, "pending", None)
         if not pending or not pending(chat_id) or not side_lane.looks_like_question(prompt):
             return False
@@ -592,7 +633,7 @@ class Gateway:
             return True
         if getattr(result, "status", "") != "ok" or side_lane.wants_queue(getattr(result, "text", "")):
             return False
-        await self._deliver(context, chat_id, result)
+        await self._deliver(context, chat_id, result, generation=generation)
         return True
 
     def _queued_text(self, chat_id, position: int) -> str:
@@ -625,12 +666,15 @@ class Gateway:
         ]])
 
     async def _switch_action(self, update, context, query, chat: str, decision: str) -> None:
+        generation = self._stop_generation.get(str(chat), 0)
         if decision == "codex":
             job = self.router.offer_job(chat)
             if job is None:
                 await query.edit_message_text(text="Это предложение уже неактуально.", reply_markup=None)
                 return
             await query.edit_message_text(text="Хорошо, продолжаю в Codex 🟢", reply_markup=None)
+            if self._stop_generation.get(str(chat), 0) != generation:
+                return
             await self._run(update, context, job.prompt, task=job.task, runtime="codex")
             return
         offer = worker.load_offer(chat)
@@ -650,13 +694,15 @@ class Gateway:
         for item in worker.due_deferred(now):
             job = Job(prompt=item["prompt"], task=item["task"], uses_browser=False, on_event=_ignore_event,
                       runtime="claude")
-            self._track_run(asyncio.ensure_future(self._run_scheduled(job)))
+            self._track_run(asyncio.ensure_future(self._run_scheduled(job, self._stop_generation.get(str(self.owner_id), 0))))
             started.append(item["task"])
         return started
 
-    async def _deliver_inner(self, context, chat_id, result) -> None:
+    async def _deliver_inner(self, context, chat_id, result, *, cancelled=lambda: False) -> None:
         if getattr(result, "switched_back", False) is True:
             await self._send(context, chat_id, "Лимит у Claude восстановился, так что возвращаюсь к нему 🙂")
+        if cancelled():
+            return
         offer = getattr(result, "switch_offer", None)
         if isinstance(offer, dict):
             await self._send(context, chat_id, self._offer_text(offer),
@@ -668,6 +714,8 @@ class Gateway:
             await self._send(context, chat_id,
                              "Не смог подхватить прошлый разговор и начал заново 😅 Если что-то важное из него нужно — напомни.")
         raw = (getattr(result, "text", "") or "").strip()
+        if cancelled():
+            return
         if getattr(result, "acceptance", "") in ("needs_changes", "check_unavailable"):
             raw = task_router.review.unaccepted(result)
         if not raw:
@@ -689,22 +737,28 @@ class Gateway:
                     caption="Получилось длинно, поэтому весь ответ — в файле.")
             else:
                 for part in parts:
+                    if cancelled():
+                        return
                     if part.strip():
                         await render.send(context.bot, chat_id, part)
         if attachments:
-            await self._send_attachments(context, chat_id, attachments)
+            await self._send_attachments(context, chat_id, attachments, cancelled=cancelled)
+        if cancelled():
+            return
         bundle = files.find_content_bundle(text, self.root)
-        if bundle:
+        if bundle and getattr(result, "acceptance", "") not in ("needs_changes", "check_unavailable"):
             await self._send(context, chat_id, "Черновик готов — посмотри и скажи, что с ним делать.",
                              reply_markup=self._content_keyboard(bundle))
 
-    async def _send_attachments(self, context, chat_id, raw_paths: list[str]) -> None:
+    async def _send_attachments(self, context, chat_id, raw_paths: list[str], *, cancelled=lambda: False) -> None:
         """Отправляет файлы, названные агентом строками «📎 <путь>» — без пережатия.
 
         Плохой файл не мешает остальным: причина отказа уходит одной строкой,
         остальные вложения всё равно доставляются.
         """
         for i, raw in enumerate(raw_paths):
+            if cancelled():
+                return
             name = Path(raw.strip()).name or raw.strip() or "(пусто)"
             if i >= files.ATTACH_MAX_FILES:
                 await self._send(context, chat_id,
@@ -720,6 +774,8 @@ class Gateway:
                     await context.bot.send_document(chat_id, document=fh, filename=path.name)
             except Exception as exc:  # noqa: BLE001 — сбой одного файла не должен ронять остальные
                 log.warning("не удалось отправить вложение %s: %s", path.name, type(exc).__name__, exc_info=True)
+                if cancelled():
+                    return
                 await self._send(context, chat_id, f"Не получилось прислать {path.name}: Telegram не принял")
 
     # ---- кнопки
@@ -751,6 +807,9 @@ class Gateway:
             msg = await self.bot.send_message(self.owner_id, text,
                                         reply_markup=self._approval_keyboard(request_id))
             self._approval_messages[(str(self.owner_id), msg.message_id)] = request_id
+            if records is not None and request_id not in {r["request_id"] for r in records()}:
+                await self.bot.delete_message(self.owner_id, msg.message_id)
+                self._approval_messages.pop((str(self.owner_id), msg.message_id), None)
             while len(self._approval_messages) > MAX_TOKENS:
                 self._approval_messages.pop(next(iter(self._approval_messages)))
         except Exception as exc:  # noqa: BLE001
@@ -870,7 +929,14 @@ class Gateway:
         if self.bot is None or self.owner_id is None:
             return 0
         delivered = 0
+        generation = self._stop_generation.get(str(self.owner_id), 0)
         for path in outbox.pending(self.root):
+            def cancelled():
+                return (self._stop_generation.get(str(self.owner_id), 0) != generation
+                        or outbox.is_cancelled(self.root, path))
+            if cancelled():
+                outbox.discard(path)
+                continue
             try:
                 raw = path.read_text(encoding="utf-8")
             except OSError:
@@ -878,18 +944,26 @@ class Gateway:
             text, attachments = files.extract_attachments(raw)
             try:
                 for part in render.prepare(text.strip()):
+                    if cancelled():
+                        break
                     if part.strip():
                         await render.send(self.bot, self.owner_id, part)
             except Exception as exc:  # noqa: BLE001 — письмо остаётся и уйдёт на следующем опросе
                 log.warning("письмо %s не ушло: %s", path.name, type(exc).__name__, exc_info=True)
                 continue
-            outbox.mark_sent(path)    # текст ушёл: письмо больше не повторяем, что бы ни было с вложениями
+            if cancelled():
+                outbox.discard(path)
+                continue
             if attachments:
                 try:
-                    await self._send_attachments(_BotContext(self.bot), self.owner_id, attachments)
+                    await self._send_attachments(_BotContext(self.bot), self.owner_id, attachments, cancelled=cancelled)
                 except Exception as exc:  # noqa: BLE001
                     log.warning("вложения письма %s не ушли: %s", path.name, type(exc).__name__, exc_info=True)
-            delivered += 1
+            if not cancelled():
+                outbox.mark_sent(path)
+                delivered += 1
+            else:
+                outbox.discard(path)
         return delivered
 
     async def check_schedule(self, now: dt.datetime | None = None) -> list[str]:
@@ -908,7 +982,9 @@ class Gateway:
             state[task["id"]] = slot.isoformat()
             schedule_mod.save_state(state, self.root)
             if handler:   # делает Python; Claude — только если обработчик вернул задание
-                self._track_run(asyncio.ensure_future(self._run_handler(task, slot, now)))
+                control = schedule_jobs.ScheduleControl(str(self.owner_id))
+                self._handler_controls.append(control)
+                self._track_run(asyncio.ensure_future(self._run_handler(task, slot, now, control)))
                 started.append(task["id"])
                 continue
             header = (f"Это задача по расписанию «{task['id']}» ({slot:%Y-%m-%d %H:%M}), владелица сейчас "
@@ -920,19 +996,36 @@ class Gateway:
                       context="isolated", timeout_sec=float(minutes) * 60 if minutes else None,
                       browser=False,      # расписанию браузер не нужен: минус ~17 тыс. токенов на ход
                       queue="schedule")   # своя очередь: долгий радар не задерживает её сообщения
-            self._track_run(asyncio.ensure_future(self._run_scheduled(job)))
+            self._track_run(asyncio.ensure_future(self._run_scheduled(job, self._stop_generation.get(str(self.owner_id), 0))))
             started.append(task["id"])
         return started
 
-    async def _run_handler(self, task: dict, slot: dt.datetime, now: dt.datetime) -> None:
+    async def _run_handler(self, task: dict, slot: dt.datetime, now: dt.datetime, control=None) -> None:
+        control = control or schedule_jobs.ScheduleControl(str(self.owner_id))
+        if control not in self._handler_controls:
+            self._handler_controls.append(control)
+        token = schedule_jobs.CONTROL.set(control)
+        try:
+            if not control.cancelled.is_set():
+                await self._run_handler_inner(task, slot, now, control)
+        finally:
+            control.finished = True
+            schedule_jobs.CONTROL.reset(token)
+            self._handler_controls.remove(control)
+
+    async def _run_handler_inner(self, task, slot, now, control) -> None:
         """Задача на Python: письмо уходит через почтовый ящик; задание Claude — обычным фоновым ходом."""
         try:
             out = await asyncio.to_thread(schedule_jobs.run, task["handler"], self.root, now)
         except Exception as exc:  # noqa: BLE001 — сбой расписания не роняет бота
+            if control.cancelled.is_set():
+                return
             log.warning("задача по расписанию %s не выполнилась: %s", task["id"], type(exc).__name__, exc_info=True)
             # слот уже отмечен: без сообщения задача пропала бы на неделю, и она бы об этом не узнала
             outbox.post(self.root, f"Задача по расписанию «{task['id']}» не выполнилась ({type(exc).__name__}). "
                                    "Подробности в журнале ошибок: state/errors.jsonl.", [])
+            return
+        if control.cancelled.is_set():
             return
         if out.prompt:
             header = (f"Это задача по расписанию «{task['id']}» ({slot:%Y-%m-%d %H:%M}), владелица сейчас "
@@ -949,14 +1042,18 @@ class Gateway:
         """Запоминает фоновую задачу расписания; завершённые выбрасываем сразу, список не растёт за весь срок жизни бота."""
         self._schedule_runs = [f for f in getattr(self, "_schedule_runs", []) if not f.done()] + [future]
 
-    async def _run_scheduled(self, job) -> None:
+    async def _run_scheduled(self, job, generation=None) -> None:
+        if generation is None:
+            generation = self._stop_generation.get(str(self.owner_id), 0)
+        if generation is not None and generation != self._stop_generation.get(str(self.owner_id), 0):
+            return
         try:
             self.router.submit(self.owner_id, job)
             result = await job.result
         except Exception as exc:  # noqa: BLE001 — сбой расписания не роняет бота
             log.warning("задача по расписанию %s не выполнилась: %s", job.task, type(exc).__name__, exc_info=True)
             return
-        await self._deliver(_BotContext(self.bot), self.owner_id, result)
+        await self._deliver(_BotContext(self.bot), self.owner_id, result, generation=generation)
 
     async def schedule_tasks_done(self) -> None:
         """Дождаться запущенных задач по расписанию (нужно тестам и мягкой остановке)."""
@@ -991,12 +1088,15 @@ class Gateway:
             except Exception as exc:  # noqa: BLE001
                 log.warning("фоновые работы: %s", type(exc).__name__, exc_info=True)
 
-    async def check_jobs(self) -> None:
-        """Фоновые работы (`integrations/jobs`): запуск, слежение, письмо о результате. Не держат чат."""
+    def _job_runner(self):
         if getattr(self, "jobs", None) is None:
             from integrations.jobs.runner import JobRunner
             self.jobs = JobRunner(self.root, post=lambda text, files: outbox.post(self.root, text, files), owner_chat=self.owner_id)
-        await asyncio.to_thread(self.jobs.tick)
+        return self.jobs
+
+    async def check_jobs(self) -> None:
+        """Фоновые работы (`integrations/jobs`): запуск, слежение, письмо о результате. Не держат чат."""
+        await asyncio.to_thread(self._job_runner().tick)
 
     async def _draft_action(self, query, token: str, value: str, decision: str) -> None:
         kind, _, name = value.partition(":")

@@ -198,7 +198,7 @@ async def test_manual_switch_to_codex_carries_a_summary(router):
     from runtime import task_router
     (router.tmp / "episodes").mkdir(parents=True)
     (router.tmp / "episodes" / "2026-10.jsonl").write_text(json.dumps(
-        {"date": "2026-10-05T20:00:00+03:00", "context": "chat", "status": "ok",
+        {"date": "2026-10-05T20:00:00+03:00", "chat": "1", "context": "chat", "status": "ok",
          "request": "сделай карусель про промпты", "result": "Готово: 9 слайдов"}, ensure_ascii=False) + "\n",
         encoding="utf-8")
     router.set_runtime(1, "codex")

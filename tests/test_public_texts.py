@@ -6,6 +6,25 @@ import pytest
 from runtime import events, public_texts
 
 REL = "essa-ai/content/2026-10-07-obyasni.md"
+
+
+@pytest.mark.parametrize("name", ["carousels.json", "strategy.json"])
+def test_actual_weekly_json_requires_pipeline(tmp_path, name):
+    rel = "essa-ai/content-plan/weeks/test/" + name
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True)
+    path.write_text('{"pipeline": "humaniser НЕ пройден"}', encoding="utf-8")
+    assert public_texts.check([rel], "test", root=tmp_path, events_path=tmp_path / "events")
+    assert "В JSON" in public_texts.fix_prompt([rel + ": нет прохода"])
+
+
+@pytest.mark.parametrize("shell", ["powershell -Command", "pwsh -NoProfile -Command", "bash -lc"])
+def test_completed_codex_shell_read_is_recognized(shell):
+    item = {"type": "command_execution", "status": "completed", "exit_code": 0,
+            "command": shell + " 'Get-Content .agents/skills/humaniser/SKILL.md'"}
+    assert public_texts.codex_evidence(item) == [("Read", ".agents/skills/humaniser/SKILL.md")]
+    item["command"] = shell + " 'Get-Content .agents/skills/humaniser/SKILL.md; echo other'"
+    assert public_texts.codex_evidence(item) == []
 MARK = "<!-- pipeline: textwriter → humaniser → VOICE — пройден 2026-10-07 -->"
 GOOD = [("Read", "C:/p/.claude/skills/textwriter/SKILL.md"), ("Write", "C:/p/" + REL),
         ("Read", "C:/p/.claude/skills/humaniser/SKILL.md"), ("Edit", "C:/p/" + REL)]

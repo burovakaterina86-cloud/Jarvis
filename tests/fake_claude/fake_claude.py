@@ -82,6 +82,17 @@ def main():
     out({"type": "system", "subtype": "init", "session_id": sid, "tools": ["Read"]})
     if scenario == "sleep":
         time.sleep(60)
+    if scenario == "approval_wait":
+        import urllib.request
+        from pathlib import Path
+        root = Path(os.environ["FAKE_APPROVAL_ROOT"])
+        port = (root / "state" / "approvals.port").read_text(encoding="utf-8")
+        token = (root / "state" / "secrets" / "approvals.token").read_text(encoding="utf-8")
+        body = {"level": "EXTERNAL", "tool": "Bash", "summary": "Просмотр плана", "task_id": os.environ["JARVIS_TASK_ID"],
+                "details": {"kind": "run_script", "tool_input": {"command": "python -c 'print(1)'", "description": "Посмотреть идеи недели"}}}
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/approve", data=json.dumps(body).encode(),
+                                         headers={"X-Jarvis-Token": token, "Content-Type": "application/json"})
+        urllib.request.urlopen(request, timeout=10).read()
     if scenario == "sleep_child":
         # дочерний процесс живёт дольше родителя — проверка taskkill /T
         pid_file = os.environ["FAKE_CLAUDE_CHILD_PID"]

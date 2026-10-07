@@ -53,6 +53,13 @@ def isolated_worker_state(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def isolated_dialogue_context(tmp_path, monkeypatch):
+    """Тестовые ходы не подмешивают поправки из живого разговора владелицы."""
+    from runtime import task_router
+    monkeypatch.setattr(task_router, "ROOT", tmp_path)
+
+
+@pytest.fixture(autouse=True)
 def isolated_logging(tmp_path, monkeypatch):
     """Лог бота в тестах — во временной папке. Тест `gateway.main` зовёт `setup_logging()` с путём по умолчанию, и
     к корневому логгеру цепляется файловый обработчик боевого `state/jarvis.log`: трассировки тестов попадали в

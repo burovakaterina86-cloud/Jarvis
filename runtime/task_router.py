@@ -490,10 +490,13 @@ class TaskRouter:
         run_id = run_id_for(job.run_key or key)
         bridge = self.runtimes[runtime]
         cmd = {"claude_cmd": self.claude_cmd} if runtime in ("claude", "claude2") else {"codex_cmd": self.codex_cmd}
-        turn = asyncio.ensure_future(bridge.run_turn(
-            prompt, sid, on_event, run_id=run_id, task=job.task,
-            env={**(os.environ if self.env is None else self.env), "JARVIS_CHAT_ID": key},
-            task_id=job.task_id, options=options, **cmd))
+        async def launch():
+            if job.cancelled:
+                return _stopped()
+            return await bridge.run_turn(prompt, sid, on_event, run_id=run_id, task=job.task,
+                env={**(os.environ if self.env is None else self.env), "JARVIS_CHAT_ID": key},
+                task_id=job.task_id, options=options, **cmd)
+        turn = asyncio.ensure_future(launch())
         done, _ = await asyncio.wait({turn}, timeout=limit)
         if not done:
             # Останавливаем тем же путём, что /stop: дерево процесса, ход возвращает «stopped».

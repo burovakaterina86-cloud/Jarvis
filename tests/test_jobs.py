@@ -251,6 +251,45 @@ def _old_running(tmp_path, pid, files=None):
     return state / "old.json"
 
 
+def test_stale_completion_cannot_overwrite_stop(tmp_path, monkeypatch):
+    from integrations.jobs import runner as r
+    monkeypatch.setattr(r.procutil, "kill_tree", lambda proc: None)
+    runner, mail, _, _ = make_runner(tmp_path, [FakeProc([None])])
+    put(tmp_path, "x")
+    runner.owner_chat = "1"
+    runner.tick()
+    stale = runner._records()[0]
+    runner.cancel_chat("1")
+    runner._finish(stale, 0)
+    assert runner._records()[0]["status"] == "stopped" and not mail
+
+
+def test_stop_serializes_with_process_launch(tmp_path, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from integrations.jobs import runner as r
+    entered, release = threading.Event(), threading.Event()
+    killed = []
+    monkeypatch.setattr(r.procutil, "kill_tree", lambda proc: killed.append(proc))
+    runner, mail, _, _ = make_runner(tmp_path, [FakeProc([None])])
+    original = runner.popen
+    def paused(*args, **kwargs):
+        entered.set()
+        assert release.wait(3)
+        return original(*args, **kwargs)
+    runner.popen = paused
+    runner.owner_chat = "1"
+    put(tmp_path, "x")
+    with ThreadPoolExecutor(2) as pool:
+        tick = pool.submit(runner.tick)
+        assert entered.wait(3)
+        stop = pool.submit(runner.cancel_chat, "1")
+        release.set()
+        tick.result(3)
+        assert stop.result(3) == ["x"]
+    assert runner._records()[0]["status"] == "stopped" and killed and not mail
+
+
 def test_job_still_alive_after_bot_restart_is_not_marked_interrupted(tmp_path, monkeypatch):
     """На Windows дети переживают родителя: пометка «прервана» поставила бы вторую копию в ту же папку."""
     from integrations.jobs import runner as r

@@ -39,6 +39,12 @@ def codex_evidence(item: dict) -> list[tuple[str, str]]:
     if item.get("type") != "command_execution" or item.get("exit_code") != 0:
         return []
     command = str(item.get("command") or "").strip()
+    # Принимаем лишь одинарную оболочку с буквальным чтением, без цепочек и подстановок.
+    wrapped = re.fullmatch(r"(?:powershell(?:\.exe)?|pwsh(?:\.exe)?|bash|/bin/bash)\s+(?:-NoProfile\s+)?(?:-Command|-c|-lc)\s+(['\"])(.*)\1", command, re.I)
+    if wrapped:
+        command = wrapped.group(2)
+    if any(c in command for c in ("$", "`", "\n", ";", "&", "|")):
+        return []
     match = re.fullmatch(r"(?:cat|type|Get-Content)\s+(?:-LiteralPath\s+)?[\"']?([^\"'\n;&|]+?/skills/(?:textwriter|humaniser)/SKILL\.md)[\"']?", command.replace("\\", "/"), re.I)
     return [("Read", match.group(1).strip())] if match else []
 
@@ -46,7 +52,7 @@ def codex_evidence(item: dict) -> list[tuple[str, str]]:
 def is_public_text(rel: str) -> bool:
     rel = rel.replace("\\", "/")
     low = rel.lower()
-    if low.startswith("essa-ai/content-plan/weeks/") and Path(low).name in ("reels.json", "slides.json"):
+    if low.startswith("essa-ai/content-plan/weeks/") and Path(low).name in ("reels.json", "slides.json", "carousels.json", "strategy.json"):
         return True
     if not low.startswith(CONTENT_PREFIX) or not low.endswith(".md"):
         return False
@@ -157,8 +163,9 @@ def fix_prompt(problems: list[str], skills_dir: str = ".claude/skills") -> str:
              f"1. Прочитай {skills_dir}/textwriter/SKILL.md и перепиши текст в файле по нему (живая форма, голос essa-ai/VOICE.md).",
              f"2. Прочитай {skills_dir}/humaniser/SKILL.md и пройди DETECTOR → REWRITER → CHECKER; сохрани очищенный текст в тот же файл.",
              "3. Для хука и призыва сверься с essa-ai/HOOKS_AND_CTA.md (если файла нет — скажи об этом владелице).",
-             "4. Последней строкой файла поставь отметку: <!-- pipeline: textwriter → humaniser → VOICE — пройден "
-             f"{date.today():%Y-%m-%d} -->",
+             "4. В Markdown последней строкой поставь <!-- pipeline: textwriter → humaniser → VOICE — пройден "
+             f"{date.today():%Y-%m-%d} -->. В JSON сохрани валидный JSON: запиши в поле pipeline строку "
+             f"textwriter → humaniser → VOICE — пройден {date.today():%Y-%m-%d}, без HTML-комментария.",
              "Ничего не выдумывай от её имени. Отметку ставь, только если шаги 1–2 действительно сделаны. "
              "В ответе владелице коротко: что исправил."]
     return "\n".join(lines)

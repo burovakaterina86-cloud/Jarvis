@@ -15,6 +15,10 @@ from __future__ import annotations
 import datetime as dt
 import re
 import subprocess
+import asyncio
+import contextvars
+import threading
+import time
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -107,7 +111,7 @@ def _radar_python(root: Path) -> str:
 
 def run_radar_script(root: Path) -> tuple[int, str]:
     try:
-        proc = subprocess.run([_radar_python(root), "-m", "integrations.radar", str(root / RADAR_CONFIG)],
+        proc = _run_process([_radar_python(root), "-m", "integrations.radar", str(root / RADAR_CONFIG)],
                               cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,   # трейсбек не теряем
                               timeout=RADAR_TIMEOUT_SEC, env=secretenv.scrub(),
                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -243,7 +247,7 @@ def plan_monday(now: dt.datetime) -> dt.date:
 
 def run_content_plan_script(root: Path, week_rel: str) -> tuple[int, str]:
     try:
-        proc = subprocess.run([_radar_python(root), "-m", "integrations.content_plan", "weekly", week_rel],
+        proc = _run_process([_radar_python(root), "-m", "integrations.content_plan", "weekly", week_rel],
                               cwd=str(root), capture_output=True, timeout=CONTENT_PLAN_TIMEOUT_SEC, env=secretenv.scrub(),
                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except subprocess.TimeoutExpired:
@@ -268,6 +272,64 @@ def content_plan(root: Path, now: dt.datetime, runner=run_content_plan_script) -
                        "проверь Billing и Settings → Limits. " + note)
     template = (root / CONTENT_PLAN_PROMPT).read_text(encoding="utf-8")
     return Outcome(prompt=template.replace("{{WEEK_DIR}}", week_rel).replace("{{WEEK_START}}", monday.isoformat()))
+
+
+CONTROL = contextvars.ContextVar("jarvis_schedule_control", default=None)
+
+
+class ScheduleControl:
+    """Отмена Python-обработчика и дерева запущенного им сборщика."""
+    def __init__(self, chat: str):
+        self.chat = chat
+        self.cancelled = threading.Event()
+        self.finished = False
+        self._procs = set()
+        self._lock = threading.Lock()
+
+    def cancel(self):
+        from runtime import procutil
+        self.cancelled.set()
+        with self._lock:
+            for proc in self._procs:
+                procutil.kill_tree(proc)
+
+    def run(self, command, **kwargs):
+        from runtime import procutil
+        timeout = kwargs.pop("timeout", None)
+        if kwargs.pop("capture_output", False):
+            kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
+        if self.cancelled.is_set():
+            return subprocess.CompletedProcess(command, -9, b"", b"")
+        proc = subprocess.Popen(command, **kwargs)
+        with self._lock:
+            self._procs.add(proc)
+            if self.cancelled.is_set():
+                procutil.kill_tree(proc)
+        try:
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                procutil.kill_tree(proc)
+                proc.communicate()
+                raise
+            return subprocess.CompletedProcess(command, proc.returncode, stdout or b"", stderr or b"")
+        finally:
+            with self._lock:
+                self._procs.discard(proc)
+
+
+def _run_process(command, **kwargs):
+    control = CONTROL.get()
+    return control.run(command, **kwargs) if control else subprocess.run(command, **kwargs)
+
+
+async def wait_stopped(controls, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while any(not control.finished for control in controls):
+        if time.monotonic() >= deadline:
+            return False
+        await asyncio.sleep(0.02)
+    return True
 
 
 HANDLERS = {"radar": radar, "morning": morning, "corrections": corrections, "content_plan": content_plan}

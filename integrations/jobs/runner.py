@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 import uuid
+import threading
 from pathlib import Path
 
 from runtime import errorlog, procutil, secretenv
@@ -63,8 +64,13 @@ class JobRunner:
         self.procs: dict[str, object] = {}
         self.requests = self.root / "jobs" / "requests"
         self.state = self.root / "state" / "jobs"
+        self._lock = threading.RLock()
 
     def cancel_chat(self, chat_id: str) -> list[str]:
+        with self._lock:
+            return self._cancel_chat_locked(chat_id)
+
+    def _cancel_chat_locked(self, chat_id: str) -> list[str]:
         self._take_requests()
         ids = []
         for rec in self._records():
@@ -152,6 +158,10 @@ class JobRunner:
             self.post(f"Запрос на работу {path.name} не читается (битый JSON), не запустил.", [])
             return
         problems = validate(req, self.root)
+        from integrations.telegram import outbox
+        if isinstance(req, dict) and outbox._cancelled(self.root, req.get("task_id")):
+            self._set_aside(path, ".cancelled")
+            return
         job_id = path.stem
         if self._path(job_id).exists():       # то же имя у уже идущей работы: не затираем её запись
             job_id = f"{job_id}-{uuid.uuid4().hex[:6]}"
@@ -176,7 +186,8 @@ class JobRunner:
             log_path = self.state / f"{rec['id']}.log"
             try:
                 with open(log_path, "wb") as log:    # потомок получает свой дескриптор, наш закрываем сразу
-                    proc = self.popen(_command(self.root, rec["argv"]), cwd=str(self.root), env=self.env,
+                    proc = self.popen(_command(self.root, rec["argv"]), cwd=str(self.root),
+                                      env={**self.env, "JARVIS_TASK_ID": str(rec.get("task_id") or ""), "JARVIS_CHAT_ID": str(rec.get("chat") or "")},
                                       stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             except OSError as exc:
@@ -199,6 +210,11 @@ class JobRunner:
         return redact("\n".join(lines[-LOG_TAIL_LINES:]))
 
     def _finish(self, rec: dict, rc: int) -> None:
+        with self._lock:
+            current = next((r for r in self._records() if r["id"] == rec["id"]), rec)
+            self._finish_locked(current, rc)
+
+    def _finish_locked(self, rec: dict, rc: int) -> None:
         if rec.get("status") == "stopped":
             return
         rec.update(status="done" if rc == 0 else "failed", rc=rc, finished_at=self.clock())
@@ -260,6 +276,7 @@ class JobRunner:
             self._finish(rec, rc)
 
     def tick(self) -> None:
-        self._poll()
-        self._take_requests()
-        self._start_queued()
+        with self._lock:
+            self._poll()
+            self._take_requests()
+            self._start_queued()
