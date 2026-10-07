@@ -733,6 +733,7 @@ class Gateway:
         return InlineKeyboardMarkup([[
             InlineKeyboardButton("Подтвердить", callback_data=self.approval_callback_data(request_id, "allow")),
             InlineKeyboardButton("Отклонить", callback_data=self.approval_callback_data(request_id, "deny")),
+            InlineKeyboardButton("Подробности", callback_data=self.approval_callback_data(request_id, "show")),
         ]])
 
     async def on_approval_request(self, request_id, level, tool, summary, details) -> None:
@@ -1080,6 +1081,16 @@ class Gateway:
             return
         value = entry[0]
         if prefix == APPROVE_PREFIX:
+            if decision == "show":
+                records = getattr(self.approvals, "pending_records", lambda: [])()
+                row = next((r for r in records if r["request_id"] == value), None)
+                if row is None:
+                    await query.edit_message_text(text="Этот запрос уже закрыт.", reply_markup=None)
+                else:
+                    detail = explain.full_details(row["tool"], row["details"])
+                    await context.bot.send_document(self.owner_id, document=detail.encode("utf-8"), filename="action-details.txt",
+                                                    caption="Полные данные действия. Просмотр не даёт разрешения на запуск.")
+                return
             self._tokens.pop(token, None)   # подтверждение одноразовое
             await self._resolve_approval(query, value, decision)
         elif prefix == CONTENT_PREFIX:

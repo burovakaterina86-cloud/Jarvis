@@ -67,6 +67,43 @@ def _file_block(path: str) -> str:
     return f"Файл: {path}" + (f"\nЭто {what}." if what else "")
 
 
+_NET = re.compile(r"https?://|\brequests\.|urllib|\bsocket\b|\bcurl\b|\bwget\b|invoke-webrequest|\biwr\b|httpx|aiohttp|smtplib",
+                  re.IGNORECASE)
+_WRITES = re.compile(r"open\([^)]*,\s*['\"][wax]|\.write(_text|_bytes)?\(|os\.(remove|unlink|rename|replace)|shutil\.|rmtree|"
+                     r"\.unlink\(|set-content|add-content|out-file|remove-item|\brm\s|\bmv\s|\bcp\s|>>?\s*\S", re.IGNORECASE)
+_FILES = re.compile(r"['\"]([\w./\\ -]+\.(?:json|md|txt|csv|html|py|yaml|jsonl))['\"]")
+
+
+def describe_command(command: str) -> list[str]:
+    """Что делает команда, простыми словами и по её тексту — без претензии на точность. Для кнопки «Подтвердить»:
+    она видела только обрезок кода и не понимала, безопасно ли это."""
+    cmd = str(command or "")
+    lines = []
+    files = []
+    for m in _FILES.finditer(cmd):
+        name = m.group(1).strip()
+        if name not in files:
+            files.append(name)
+    if files:
+        lines.append("Работает с файлами: " + ", ".join(files[:4]))
+    net, writes = bool(_NET.search(cmd)), bool(_WRITES.search(cmd))
+    if net:
+        lines.append("⚠️ В тексте есть обращение в интернет — данные могут уйти наружу.")
+    if writes:
+        lines.append("⚠️ Меняет, создаёт или удаляет файлы.")
+    lines.append("Запуск кода; последствия автоматически не проверены.")
+    return lines
+
+
+def full_details(tool: str, details: dict) -> str:
+    """Полные данные отдельно от основной карточки, с переводами строк и без секретов."""
+    import json
+    from runtime.redact import redact_obj
+    tin = details.get("tool_input") or {}
+    command = tin.get("command")
+    return str(redact_obj(command)) if isinstance(command, str) else json.dumps(redact_obj(tin), ensure_ascii=False, indent=2)
+
+
 def build(level: str, tool: str, summary: str, details: dict) -> str:
     """Текст сообщения с кнопками «Подтвердить / Отклонить»."""
     details = details if isinstance(details, dict) else {}
@@ -89,15 +126,20 @@ def build(level: str, tool: str, summary: str, details: dict) -> str:
         parts.append("Обычно это нужно, если ты просила положить что-то в другое место. Не просила — отклони.")
     elif kind == "run_script":
         parts.append("Хочу запустить программу на твоём компьютере.")
-        parts.append(f"Команда: {_short(tin.get('command'))}")
-        parts.append("Она не из проверенных мест, поэтому спрашиваю. Если не понимаешь, зачем, — отклони.")
+        why = " ".join(str(tin.get("description") or "").split())
+        if why:
+            parts.append(f"Зачем (как я сам это описал): {why}")
+        else:
+            parts.append("Цель в запросе не указана.")
+        parts.append("\n".join(describe_command(tin.get("command"))))
+        parts.append("Полная команда — в «Подробности». Если цель неясна, можно нажать «Отклонить».")
     elif kind == "big_read":
         parts.append("Хочу прочитать очень большой файл целиком.")
         parts.append(_file_block(path))
         parts.append("Это съест много лимита. Если нужен только кусок, лучше отклонить, и я прочитаю часть.")
     elif kind == "unknown_tool":
         parts.append(f"Хочу воспользоваться инструментом «{tool}», которого не знаю.")
-        parts.append("Побочных действий я не жду, но Guard такого ещё не видел. Нажми «Отклонить», если сомневаешься.")
+        parts.append("Последствия этого действия автоматически не проверены. Подробности доступны отдельно.")
     else:
         parts.append(summary)
         block = _file_block(path)
