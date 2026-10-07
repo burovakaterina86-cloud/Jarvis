@@ -30,7 +30,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from runtime import events
+from runtime import errorlog, events, procutil
 from runtime.claude_bridge import DEFAULT_OPTIONS, TURN_PROMPT_FILE, TurnOptions, TurnResult, build_env
 from runtime.redact import tool_summary
 
@@ -124,8 +124,8 @@ async def _call(cb, event):
         r = cb(event)
         if inspect.isawaitable(r):
             await r
-    except Exception:  # колбэк не должен ронять ход
-        pass
+    except Exception as exc:  # колбэк не должен ронять ход
+        errorlog.record("codex_bridge.callback", exc)
 
 
 _TOOL_OF_ITEM = {"command_execution": "Bash", "file_change": "apply_patch"}
@@ -157,6 +157,8 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
             *cmd, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             cwd=str(cwd), env=child_env, limit=STREAM_LIMIT, **kwargs)
         _running[run_id] = proc
+        if run_id in _stopped:      # /stop пришёл, пока процесс запускался
+            procutil.kill_tree(proc)
         try:
             proc.stdin.write(prompt.encode("utf-8"))
             await proc.stdin.drain()
@@ -210,10 +212,13 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
         returncode = await proc.wait()
         stderr = (await err_task).decode("utf-8", "replace")[-2000:]
     except Exception as exc:  # noqa: BLE001
+        errorlog.record("codex_bridge.run_turn", exc, task_id=task_id, task=task)
         events.emit("error", error=repr(exc)[:500], status="failed", **base)
         return TurnResult("", session_id, False, None, "error", repr(exc)[:500], runtime="codex", attempts=0)
     finally:
-        _running.pop(run_id, None)
+        proc_left = _running.pop(run_id, None)
+        if proc_left is not None and proc_left.returncode is None:   # ход отменён: не оставляем сироту
+            procutil.kill_tree(proc_left)
         if schema_file is not None:
             schema_file.unlink(missing_ok=True)
 
@@ -245,23 +250,12 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
 
 
 def stop(run_id: str) -> bool:
-    """Убивает дерево процесса хода Codex. True, если ход был запущен."""
+    """Убивает дерево процесса хода Codex (не блокируя цикл событий). True, если ход был запущен."""
     proc = _running.get(run_id)
     if proc is None:
         return False
     _stopped.add(run_id)
-    if proc.returncode is None:
-        if sys.platform == "win32":
-            try:
-                subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, timeout=5,
-                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            except (OSError, subprocess.SubprocessError):
-                pass
-        try:
-            proc.kill()
-        except (ProcessLookupError, OSError):
-            pass
+    procutil.kill_tree(proc)
     return True
 
 

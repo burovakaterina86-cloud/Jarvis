@@ -6,7 +6,7 @@ when_to_use: "Когда задача требует открыть сайт —
 
 # Browser use — браузер JARVIS
 
-Инструменты MCP-сервера `playwright` (`.mcp.json`: `npx @playwright/mcp@latest --user-data-dir <абсолютный путь к state/browser-profile> --browser msedge`). Профиль постоянный: логины, сделанные владелицей, сохраняются. Браузер один — браузерные задачи идут по очереди.
+Инструменты MCP-сервера `playwright` (`.mcp.json`: `npx @playwright/mcp@0.0.83 --user-data-dir <абсолютный путь к state/browser-profile> --browser msedge`). Профиль постоянный: логины, сделанные владелицей, сохраняются. Браузер один — браузерные задачи идут по очереди.
 
 ## Базовые приёмы
 

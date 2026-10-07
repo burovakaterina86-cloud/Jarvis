@@ -4,7 +4,7 @@
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
 const puppeteer = require(process.env.MONTAGE_PUPPETEER);
@@ -22,6 +22,23 @@ const browser = await puppeteer.launch({
   args: ["--allow-file-access-from-files", "--disable-gpu", "--hide-scrollbars", "--force-color-profile=srgb"],
 });
 const page = await browser.newPage();
+// Страница строится из данных, которые пишет агент: даже если в неё проскочит скрипт, наружу он не достучится.
+// Пускаем только data: и файлы из папок монтажа (MONTAGE_ALLOW: шрифты, логотипы, сама страница); сеть, UNC-пути
+// и любые другие файлы (секреты, ключи) блокируем.
+const allow = JSON.parse(process.env.MONTAGE_ALLOW || "[]").map(p => path.resolve(p).toLowerCase());
+const blocked = new Set();
+await page.setRequestInterception(true);
+page.on("request", req => {
+  const url = req.url();
+  let ok = url.startsWith("data:") || url === "about:blank";
+  if (!ok && url.startsWith("file:")) {
+    try {
+      const p = path.resolve(fileURLToPath(url)).toLowerCase();
+      ok = allow.some(root => p === root || p.startsWith(root + path.sep));
+    } catch { ok = false; }
+  }
+  if (ok) { req.continue(); } else { blocked.add(url.slice(0, 120)); req.abort("blockedbyclient"); }
+});
 await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
 await page.goto(pathToFileURL(html).href, { waitUntil: "load" });
 await page.evaluate(() => document.fonts.ready);
@@ -43,4 +60,5 @@ for (let k = k0; k < k1; k++) {
   if (k % 150 === 0) console.log(`кадр ${k}/${total} (${((Date.now() - started) / 1000).toFixed(0)} с)`);
 }
 await browser.close();
+if (blocked.size) console.log("ВНИМАНИЕ: браузер заблокировал запросы страницы:", [...blocked].slice(0, 5).join(" | "));
 console.log("готово", k1 - k0, "кадров");

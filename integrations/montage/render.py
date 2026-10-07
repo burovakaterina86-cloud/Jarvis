@@ -1,6 +1,7 @@
 """Покадровый рендер оверлея: Node + puppeteer-core + Edge/Chrome. Кадры — прозрачные PNG 1080×1920."""
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -8,15 +9,23 @@ import sys
 import time
 from pathlib import Path
 
+from runtime import secretenv
+
 from . import config
 
 MJS = config.TEMPLATES / "render.mjs"
 
 
+def allowed_roots(html: Path) -> list[Path]:
+    """Папки, из которых странице оверлея можно читать файлы: шрифты, логотипы, шаблоны и она сама."""
+    return [config.ASSETS, config.LOGO_CACHE, config.TEMPLATES, Path(html).resolve().parent]
+
+
 def env_for(html: Path, frames: Path, dur: float, fps: int = config.FPS, t0=None, t1=None) -> dict:
-    env = dict(os.environ)
+    env = secretenv.scrub()   # node и браузер страницы: никаких ключей
     env.update(MONTAGE_PUPPETEER=config.find_puppeteer(), MONTAGE_BROWSER=config.find_browser(), MONTAGE_HTML=str(Path(html).resolve()),
-               MONTAGE_FRAMES=str(Path(frames).resolve()), MONTAGE_FPS=str(fps), MONTAGE_DUR=str(dur))
+               MONTAGE_FRAMES=str(Path(frames).resolve()), MONTAGE_FPS=str(fps), MONTAGE_DUR=str(dur),
+               MONTAGE_ALLOW=json.dumps([str(p) for p in allowed_roots(html)]))
     if t0 is not None:
         env["MONTAGE_T0"] = str(t0)
     if t1 is not None:

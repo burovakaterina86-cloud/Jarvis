@@ -36,7 +36,7 @@ when_to_use: По запросам «смонтируй рилс», «сдела
 6. **Просмотр кадров перед сборкой** (≈ 20 секунд): `python -m integrations.montage.run preview --work outbox/montage/<имя> --spec <spec.json> --at 3.8,12.9,34.5,62`
    (нужны `chistovik.mp4` и `words.json` из `prepare`) → лист `work/preview.png` ей строкой `📎 …`, а **сам читай `work/preview-small.jpg`** (≈ 60–90 КБ): большой `preview.png` Read читать не даёт без её кнопки. Всегда — для сцены `custom` и нового
    стиля; в `preview` печатается «за безопасной зоной: …» — исправь, пока список не пуст.
-7. **Новый стиль? Сначала три варианта** (`.Codex/rules/visual-variants.md`): хук, плашка шага, призыв — три разных
+7. **Новый стиль? Сначала три варианта** (`.agents/rules/visual-variants.md`): хук, плашка шага, призыв — три разных
    направления картинками, выбирает она. Утверждённый стиль (оранжевый фон, карточки B, анимация с курсором) — по умолчанию,
    для него вариантов не нужно.
 8. **Сборка:** `python -m integrations.montage.run remake --work outbox/montage/<имя> --spec <spec.json>` (после `prepare`), либо одной командой

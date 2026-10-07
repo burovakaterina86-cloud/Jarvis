@@ -15,15 +15,16 @@ SUMMARY_LIMIT = 200
 
 _KEY = r"(?:token|secret|password|passwd|pwd|api[_-]?key|apikey|access[_-]?key|auth|client[_-]?secret)"
 _PATTERNS = [
-    # Bearer <токен>
-    (re.compile(r"(?i)(\bbearer\s+)[^\s'\"]+"), r"\1" + MASK),
+    # Authorization: <схема> <значение> целиком, затем Bearer / Basic <токен> без заголовка
+    (re.compile(r"(?i)(\bauthorization[\"']?\s*[:=]\s*[\"']?)[^\r\n\"']+"), r"\1" + MASK),
+    (re.compile(r"(?i)(\b(?:bearer|basic)\s+)[^\s'\"]+"), r"\1" + MASK),
     # key=value, key: value, "key": "value"
     (re.compile(r"(?i)(\b[\w-]*" + _KEY + r"[\w-]*[\"']?\s*[:=]\s*[\"']?)[^\s'\"&,;}]+"), r"\1" + MASK),
     # известные форматы ключей
     (re.compile(r"\bsk-[A-Za-z0-9_-]{16,}"), MASK),
     (re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}"), MASK),
     (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}"), MASK),
-    (re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{30,}"), MASK),            # токен Telegram-бота
+    (re.compile(r"(?<!\d)\d{8,10}:[A-Za-z0-9_-]{30,}"), MASK),       # токен Telegram-бота (и в адресе .../bot<токен>/)
     (re.compile(r"\bapify_api_[A-Za-z0-9]{16,}"), MASK),
     (re.compile(r"\bgsk_[A-Za-z0-9]{20,}"), MASK),                   # Groq
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), MASK),                     # AWS

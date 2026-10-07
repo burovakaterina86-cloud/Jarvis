@@ -338,5 +338,5 @@ async def send(bot, chat_id, html: str, **kw):
     except Exception as exc:  # noqa: BLE001 — решает is_markup_error, остальное пробрасываем
         if not is_markup_error(exc):
             raise
-        log.warning("Telegram не принял разметку — отправляю без неё: %s", type(exc).__name__)
+        log.warning("Telegram не принял разметку — отправляю без неё: %s", type(exc).__name__, exc_info=True)
         return await bot.send_message(chat_id, to_plain(html), **kw)

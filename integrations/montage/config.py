@@ -67,7 +67,7 @@ def _load_env() -> None:
     """Подхватить файл окружения проекта, как делают бот и радар (значения никуда не печатаются)."""
     try:
         from integrations.radar.keys import load_dotenv
-        load_dotenv()
+        load_dotenv(only=("GROQ_API_KEY", "GROQ_KEY"))
     except Exception:
         pass
 
@@ -79,9 +79,11 @@ def groq_key() -> str | None:
 
 
 def child_env(extra: dict | None = None) -> dict:
-    """Окружение для дочерних скриптов: вендорные roughcut/captions ждут именно GROQ_API_KEY."""
-    env = dict(os.environ)
+    """Окружение для дочерних скриптов (ffmpeg, vendor): без секретов, кроме ключа Groq — вендорные
+    roughcut/captions ждут именно GROQ_API_KEY."""
+    from runtime import secretenv
     key = groq_key()
+    env = secretenv.scrub()
     if key:
         env["GROQ_API_KEY"] = key
     env.update(extra or {})

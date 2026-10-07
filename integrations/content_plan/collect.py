@@ -230,8 +230,10 @@ def download_slides(week_dir: Path, codes: list[str], *, fetch=_fetch_bytes, shr
             folder.mkdir(parents=True, exist_ok=True)
             ok = 0
             for i, url in enumerate(urls, 1):
-                host = (urlparse(url).hostname or "").lower()
-                if not host.endswith(SLIDE_HOSTS):
+                parts = urlparse(url)
+                host = (parts.hostname or "").lower()
+                # граница по точке: «evilcdninstagram.com» под suffix-проверку не подходит; только https
+                if parts.scheme != "https" or not any(host == d or host.endswith("." + d) for d in SLIDE_HOSTS):
                     continue
                 try:
                     target = folder / f"{i:02d}.jpg"

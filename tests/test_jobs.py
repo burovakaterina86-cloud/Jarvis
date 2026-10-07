@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -99,7 +100,7 @@ def test_job_runs_in_bot_process_and_result_is_mailed_with_the_file(tmp_path):
     runner, mail, spawned, now = make_runner(tmp_path, [FakeProc([None, 0])])
     put(tmp_path)
     runner.tick()
-    assert len(spawned) == 1 and spawned[0][0][1:4] == ["-m", "integrations.montage.run", "remake"]
+    assert len(spawned) == 1 and spawned[0][0][1] == "-P" and spawned[0][0][4:7] == [str(tmp_path), "integrations.montage.run", "remake"]
     assert spawned[0][1]["cwd"] == str(tmp_path) and "TELEGRAM_BOT_TOKEN" not in spawned[0][1]["env"]
     assert mail == [] and not list((tmp_path / "jobs" / "requests").glob("*.json"))   # запрос принят и снят
     runner.tick()
@@ -141,7 +142,7 @@ def test_rejected_request_is_not_run_and_owner_is_told_why(tmp_path):
     folder.mkdir(parents=True)
     (folder / "evil.json").write_text(json.dumps({"title": "Хитрая", "argv": ["-c", "x"], "files": []}), encoding="utf-8")
     runner.tick()
-    assert spawned == [] and "не запустил" in mail[0][0] and (folder / "evil.rejected").exists()
+    assert spawned == [] and "не запустил" in mail[0][0] and list(folder.glob("evil-*.rejected"))
 
 
 def test_no_more_than_max_running_and_the_rest_waits(tmp_path):
@@ -170,14 +171,17 @@ def test_job_left_running_by_a_previous_bot_is_reported_as_interrupted(tmp_path)
     assert len(mail) == 1
 
 
-def test_runaway_job_is_killed_after_two_hours(tmp_path):
+def test_runaway_job_is_killed_after_two_hours(tmp_path, monkeypatch):
+    from integrations.jobs import runner as r
+    killed = []     # настоящий kill_tree с фальшивым pid убил бы чужой процесс: подменяем
+    monkeypatch.setattr(r.procutil, "kill_tree", lambda proc: killed.append(proc))
     proc = FakeProc([None])
     runner, mail, _, now = make_runner(tmp_path, [proc])
     put(tmp_path)
     runner.tick()
     now["t"] += 2 * 60 * 60 + 5
     runner.tick()
-    assert proc.killed and "больше двух часов" in mail[0][0]
+    assert killed == [proc] and "больше двух часов" in mail[0][0]    # вместе с детьми: ffmpeg, браузер
 
 
 # ---------- бот и защита ----------
@@ -205,3 +209,65 @@ def test_guard_lets_the_agent_submit_and_check_but_not_run_arbitrary_code(tmp_pa
     assert g.decide(g.ev("Bash", command=submit), tmp_path, env=env).action == "allow"
     assert g.decide(g.ev("Bash", command="python -m integrations.jobs status"), tmp_path, env=env).action == "allow"
     assert g.decide(g.ev("Bash", command="python -c \"import os\""), tmp_path, env=env).action == "ask"
+
+
+def test_job_cannot_be_hijacked_by_a_stdlib_lookalike_in_project_root(tmp_path):
+    """argparse.py в корне не должен подменять стандартный модуль внутри фоновой работы."""
+    import subprocess
+    from integrations.jobs.runner import _command
+    (tmp_path / "argparse.py").write_text("print('SHADOWED')", encoding="utf-8")
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "mod.py").write_text("import argparse, sys; print(hasattr(argparse, 'ArgumentParser'), sys.argv[1:])",
+                                encoding="utf-8")
+    cmd = _command(tmp_path, ["-m", "pkg.mod", "a", "b"])
+    cmd[0] = sys.executable
+    proc = subprocess.run(cmd, cwd=tmp_path, capture_output=True, text=True)
+    out = proc.stdout
+    assert proc.returncode == 0, proc.stderr
+    assert "SHADOWED" not in out and out.strip() == "True ['a', 'b']"
+
+
+def test_repeated_request_name_does_not_stop_the_runner_or_overwrite_a_running_job(tmp_path):
+    runner, mail, spawned, _ = make_runner(tmp_path, [FakeProc([None]), FakeProc([None])])
+    put(tmp_path, "reel")
+    runner.tick()
+    put(tmp_path, "reel")                       # то же имя, пока первая работа идёт
+    runner.tick()
+    assert len(spawned) == 2 and len(list((tmp_path / "state" / "jobs").glob("reel*.json"))) == 2
+    folder = tmp_path / "jobs" / "requests"
+    for _ in range(2):                           # битый JSON дважды под одним именем
+        (folder / "bad.json").write_text("{не json", encoding="utf-8")
+        runner.tick()
+    assert len(list(folder.glob("bad-*.bad"))) == 2 and "не читается" in mail[-1][0]
+
+
+def _old_running(tmp_path, pid, files=None):
+    state = tmp_path / "state" / "jobs"
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "old.json").write_text(json.dumps({"id": "old", "title": "Сборка", "argv": REMAKE, "files": files or [],
+                                                "status": "running", "pid": pid, "started_at": 1000.0}), encoding="utf-8")
+    return state / "old.json"
+
+
+def test_job_still_alive_after_bot_restart_is_not_marked_interrupted(tmp_path, monkeypatch):
+    """На Windows дети переживают родителя: пометка «прервана» поставила бы вторую копию в ту же папку."""
+    from integrations.jobs import runner as r
+    monkeypatch.setattr(r.procutil, "pid_alive", lambda pid: True)
+    path = _old_running(tmp_path, pid=777)
+    runner, mail, _, _ = make_runner(tmp_path, [])
+    runner.tick()
+    assert mail == [] and json.loads(path.read_text(encoding="utf-8"))["status"] == "running"
+
+
+def test_job_finished_while_bot_was_down_is_reported_by_its_result_file(tmp_path, monkeypatch):
+    from integrations.jobs import runner as r
+    monkeypatch.setattr(r.procutil, "pid_alive", lambda pid: False)
+    (tmp_path / "outbox").mkdir()
+    (tmp_path / "outbox" / "x.mp4").write_bytes(b"video")
+    path = _old_running(tmp_path, pid=777, files=["outbox/x.mp4"])
+    runner, mail, _, _ = make_runner(tmp_path, [])
+    runner.tick()
+    assert mail[0][0].startswith("Готово") and mail[0][1] == ["outbox/x.mp4"]
+    assert json.loads(path.read_text(encoding="utf-8"))["status"] == "done"

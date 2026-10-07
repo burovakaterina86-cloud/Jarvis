@@ -30,10 +30,18 @@ def _read(name: str, default):
     return data if isinstance(data, type(default)) else default
 
 
+def _f(value):
+    """float или None: испорченное число в state/*.json не должно ронять /status и очередь."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _write(name: str, data) -> None:
     path = Path(STATE_DIR) / name
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
+    tmp = path.with_name(path.name + f".{os.getpid()}.tmp")   # pid: бот и скрипт не затирают файл друг друга
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     os.replace(tmp, path)
 
@@ -65,8 +73,8 @@ def active(chat, now: float | None = None) -> tuple[str, bool]:
         data.pop(str(chat), None)
         _write("runtime.json", data)
         return "claude", True
-    until = entry.get("until")
-    if until is not None and now >= float(until):
+    until = _f(entry.get("until"))
+    if until is not None and now >= until:
         data[str(chat)] = {"runtime": "claude", "announce": True}
         _write("runtime.json", data)
         return active(chat, now)
@@ -104,8 +112,8 @@ def describe_limits(data: dict | None = None, now: float | None = None) -> str:
     lines = []
     claude = data.get("claude") or {}
     if claude:
-        reset = claude.get("resets_at")
-        if claude.get("status") == "rejected" and (reset is None or float(reset) > now):
+        reset = _f(claude.get("resets_at"))
+        if claude.get("status") == "rejected" and (reset is None or reset > now):
             lines.append(f"У Claude лимит закончился, вернётся в {_hhmm(reset)}" if reset else "У Claude лимит закончился")
         elif claude.get("status") == "allowed_warning":
             lines.append("У Claude лимит почти на исходе" + (f" (сброс в {_hhmm(reset)})" if reset else ""))
@@ -115,8 +123,8 @@ def describe_limits(data: dict | None = None, now: float | None = None) -> str:
     parts = []
     for key, label in (("primary", "5 ч"), ("secondary", "неделя")):
         window = codex.get(key) or {}
-        if "used_percent" in window:
-            parts.append(f"{label} — {window['used_percent']:g}%" +
+        if _f(window.get("used_percent")) is not None:
+            parts.append(f"{label} — {_f(window['used_percent']):g}%" +
                          (f" (сброс в {_hhmm(window['resets_at'])})" if key == "primary" and window.get("resets_at") else ""))
     if parts:
         lines.append("У Codex израсходовано: " + ", ".join(parts))
@@ -147,8 +155,8 @@ def defer(chat, at: float, prompt: str, task: str) -> None:
 def due_deferred(now: float | None = None) -> list[dict]:
     """Задачи, которым пора; забираются из очереди (второй раз не вернутся)."""
     now = time.time() if now is None else now
-    items = _read("deferred.json", [])
-    due = [d for d in items if float(d.get("at", 0)) <= now]
+    items = [d for d in _read("deferred.json", []) if isinstance(d, dict)]
+    due = [d for d in items if (_f(d.get("at", 0)) or 0.0) <= now]
     if due:
         _write("deferred.json", [d for d in items if d not in due])
     return due

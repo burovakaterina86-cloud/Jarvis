@@ -13,6 +13,10 @@
 #   shell_tools: [<имя>, ...]            — инструменты, чьё поле command проверяется как команда
 #   deny_paths: [<glob>, ...]            — секреты: любое чтение/упоминание → DENY
 #   protected_write_paths: [<glob>, ...] — запись → DENY
+#   protected_root_files: [<glob имени>, ...] — файлы ПРЯМО в корне проекта, запись → DENY (ревью 2026-10-07):
+#                                          `argparse.py` в корне подменил бы стандартный модуль внутри доверенного
+#                                          `python -m integrations.*`, `conftest.py` исполнил бы код при `pytest`,
+#                                          `start.bat` — это запуск самого бота
 #   ask_write_paths: [<glob>, ...]       — собственные правила JARVIS: запись → EXTERNAL (kind self_modify),
 #                                          на кнопке путь и начало правки (её решение 2026-10-05, аудит P0.4)
 #   dev_mode: {deny_kinds: [<вид>, ...]}  — какие отказы действуют в сессиях разработки (guard.py --mode dev)
@@ -53,6 +57,9 @@ external:
   self_modify: ask
   run_script: ask
   url_data: ask
+  local_network: ask
+  dynamic_path: ask
+  secret_probe: ask
   install_package: ask
   git_config: ask
 
@@ -150,6 +157,29 @@ protected_write_paths:
   - ".mcp.json"
   - ".codex/hooks.json"   # Guard для Codex (P4.1): его доверие подтверждает владелица
   - "**/.env*"
+  - "tests/**"            # `python -m pytest` доверенный запуск: чужой conftest.py исполнился бы без кнопки
+  - "**/conftest.py"
+  - "**/sitecustomize.py"
+  - "**/usercustomize.py"
+
+protected_root_files:
+  - "*.py"
+  - "*.pyw"
+  - "*.pyd"
+  - "*.dll"
+  - "*.exe"
+  - "*.pth"
+  - "*.bat"
+  - "*.cmd"
+  - "*.ps1"
+  - "*.sh"
+  - "*.vbs"
+  - "*.jar"
+  - "pytest.ini"
+  - "tox.ini"
+  - "setup.cfg"
+  - "pyproject.toml"
+  - "requirements*.txt"
 
 # Правила, по которым JARVIS думает и действует. Не DENY: разбор поправок законно пишет
 # в .claude/rules/ — но только через кнопку. MEMORY.md и memory/ сюда не входят.
@@ -209,7 +239,7 @@ rules:
 
   # --- удаление: всегда подтверждение ---
   - {tool: "Bash|PowerShell", match: '(^|[\s;&|("''(])(rm|rmdir|unlink|shred|del|erase|rd|ri|remove-item|clear-content)(\.exe)?(\s|$)', level: MONEY, kind: delete, reason: "удаление файлов"}
-  - {tool: "Bash|PowerShell", match: '\bfind\b[^;&|\n]*\s-delete\b|\bgit\s+clean\b', level: MONEY, kind: delete, reason: "удаление файлов"}
+  - {tool: "Bash|PowerShell", match: '\bfind\b[^;&|\n]*\s-delete\b|\bgit\s+clean\b|\btruncate\b', level: MONEY, kind: delete, reason: "удаление файлов"}
   - {tool: "*", match: '::\s*delete\s*\(|\bos\.(remove|unlink|rmdir|removedirs)\b|shutil\.rmtree|\.unlink\s*\(|\.rmdir\s*\(|unlinksync|rmsync|\bfs\.(rm|unlink)\b', level: MONEY, kind: delete, reason: "удаление файлов"}
 
   # --- разрушительный git: правки без коммита и история стираются без возврата (аудит 2026-10-06) ---
@@ -254,3 +284,29 @@ rules:
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(\bfollow(ing)?\b|\bunfollow\b|\bsubscribe\b|подписаться|отписаться|\blike\b|\bunlike\b|нравится|лайк|add a comment|post comment|добавить комментарий|оставить комментарий|написать комментарий|\brepost\b|репост)', level: EXTERNAL, kind: send_message, reason: "действие от имени владелицы в соцсети (подписка, лайк, комментарий)"}
   - {tool: "mcp__playwright__browser_(click|press_key)", match: '(зарегистр|register|sign up|check-in|регистрация на рейс|онлайн-регистрац)', level: EXTERNAL, kind: register, reason: "регистрация"}
   - {tool: "mcp__playwright__browser_evaluate|mcp__playwright__browser_run_code", match: '.', level: EXTERNAL, kind: unknown_tool, reason: "выполнение кода на странице"}
+
+  # --- проверка Guard 2026-10-07: что он пропускал ---
+  # Имя файла собирается на лету (переменная, подстановка, {a,b}, -join, [char]) — по тексту не видно, что читается.
+  # `git commit -m "$(cat <<EOF …)"` — обычная запись сообщения, её не трогаем.
+  - {tool: "Bash|PowerShell", match: '^(?!\s*git\s)(?s:.*?)\b(cat|type|gc|get-content|more|head|tail|sls|select-string|findstr|grep|rg|sed|awk|xxd|strings|base64|cp|mv|copy|copy-item|move-item|tee|sort|curl|wget)\b[^;&|\n]*(\$\(|\$\{|\$[a-z_]|%\w+%|`|\{[^}\s]*,[^}\s]*\}|\[char\]|-join\b|frombase64string|\bchr\()', level: EXTERNAL, kind: dynamic_path, reason: "имя файла или путь собирается на лету: не вижу, что именно читается или копируется"}
+  # Поиск по всему проекту заденет и секреты.
+  - {tool: "Bash|PowerShell", match: '\b(grep|egrep|fgrep|findstr|select-string|sls)\b[^;&|\n]*(\s-[a-z]*r[a-z]*\s|\s-recurse\b|\s/s\b|\s--recursive\b)[^;&|\n]*(\s\.[\\/]?(\s|$)|\s\*(\s|$)|\s\.[\\/]\*)', level: EXTERNAL, kind: secret_probe, reason: "поиск по всему проекту заденет и файлы с ключами: для поиска есть инструмент Grep"}
+  - {tool: "Bash|PowerShell", match: '\b(select-string|sls|findstr|grep|egrep|fgrep)\b[^;&|\n]*[\s\x27"](?:\.[\\/])?\*(?:[\x27"\s]|$)|\b(select-string|sls|findstr|grep)\b[^;&|\n]*[\s\x27"]\.\*(?:[\x27"\s]|$)', level: EXTERNAL, kind: secret_probe, reason: "поиск по всем файлам папки заденет и файлы с ключами: для поиска есть инструмент Grep"}
+  - {tool: "Bash|PowerShell", match: '\b(get-childitem|gci|dir|ls)\b[^\n]*-force[^\n]*\|', level: EXTERNAL, kind: secret_probe, reason: "перебор скрытых файлов проекта"}
+
+  # --- выгрузка данных наружу: все способы, не только curl -d ---
+  - {tool: "Bash|PowerShell", match: '\bcurl(\.exe)?\b[^;&|\n]*\s(?-i:-[a-zA-Z]*[TFdX]\S*|--(upload-file|json|form|data|data-binary|data-raw|data-urlencode)\S*)', level: EXTERNAL, kind: network_write, reason: "запрос с отправкой данных"}
+  - {tool: "Bash|PowerShell", match: '\bwget\b[^;&|\n]*--(post-data|post-file|body-data|body-file|method)', level: EXTERNAL, kind: network_write, reason: "запрос с отправкой данных"}
+  - {tool: "Bash|PowerShell", match: '(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^;&|\n]*\s-(body|infile|form|method)\b', level: EXTERNAL, kind: network_write, reason: "запрос с отправкой данных"}
+  - {tool: "Bash|PowerShell", match: '(^|[\s;&|(])(nc|ncat|netcat|socat|telnet|ssh|scp|sftp|ftp|tftp|rsync)(\.exe)?\s', level: EXTERNAL, kind: network_write, reason: "прямое сетевое соединение: данные уйдут наружу"}
+  - {tool: "Bash|PowerShell", match: '\bgit\b[^;&|\n]*\s-c\s*\S*(hookspath|fsmonitor|sshcommand|core\.editor|core\.pager|alias\.|credential\.|gpg\.program|diff\.external|protocol\.)|\bgit_(ssh|ext|askpass|editor|pager)\w*=', level: EXTERNAL, kind: git_config, reason: "git с подменой настроек: хуки, ssh-команда, алиасы"}
+
+  # --- запуск чужого кода не только через python/node ---
+  - {tool: "Bash|PowerShell", match: '(^|[\s;&|(])(bash|sh|zsh|dash|ksh|csh|ruby|perl|php|lua|deno|bun|java|wscript|cscript|mshta|rundll32|regsvr32|msbuild|installutil|wmic|forfiles|pwsh|powershell)(\.exe)?\s', level: EXTERNAL, kind: run_script, reason: "запуск кода другим интерпретатором"}
+  - {tool: "Bash|PowerShell", match: '\b(invoke-expression|iex|invoke-command|icm|start-process|saps|invoke-item|add-type|invoke-wmimethod)\b|\s-e(nc|ncodedcommand)\b|frombase64string|wscript\.shell|-comobject', level: EXTERNAL, kind: run_script, reason: "запуск кода: iex, Start-Process, закодированная команда"}
+  - {tool: "Bash|PowerShell", match: '(^|[;&|(]\s*|&\s*|\bcall\s+)(?!(?:[^\s;&|()"''<>]*[\\/])?(?:python\w*|py|node|git|ffmpeg|ffprobe|npm|npx|pip\w*|curl|taskkill|tasklist|claude|codex)(?:\.exe|\.cmd)?(?:\s|$))(?:\.{1,2}[\\/]|[a-z]:[\\/]|/)?(?:[^\s;&|()"''<>]*[\\/])?[^\s;&|()"''<>]+\.(ps1|bat|cmd|sh|exe|com|vbs|wsf|scr|msi|jar|pyw?)(\s|$)', level: EXTERNAL, kind: run_script, reason: "запуск файла-скрипта или программы"}
+
+  # --- деньги в браузере: слова, которых не было ---
+  - {tool: "mcp__playwright__browser_(click|press_key)", match: '(\bbuy\b|complete (your )?(order|purchase)|place (your )?order|confirm (order|purchase|payment)|submit order|к оплате|заказать|оформить заказ|в один клик|one.click|pay with|apple pay|google pay)', level: DENY, kind: purchase, reason: "оплату и покупку делает только владелица сама (её решение 2026-09-25): JARVIS только кладёт в корзину"}
+  # Номер карты (13–19 цифр подряд) в любом поле — отказ, даже если у поля нет подписи «карта».
+  - {tool: "mcp__playwright__browser_(type|fill_form)", match: '(?<!\d)(?:\d[ -]?){13,19}(?!\d)', level: DENY, kind: secret_field, reason: "похоже на номер карты"}

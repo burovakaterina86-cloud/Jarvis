@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from runtime import claude_bridge, codex_bridge, events, review, spec, task_state, worker
+from runtime import claude_bridge, codex_bridge, errorlog, events, review, spec, task_state, worker
 from runtime import sessions as sessions_mod
 from runtime.redact import redact
 
@@ -270,6 +270,9 @@ class TaskRouter:
             try:
                 res = await self._run(key, job)
             except Exception as exc:  # noqa: BLE001
+                errorlog.record("task_router.worker", exc, task_id=job.task_id, task=job.task)
+                events.emit("error", subtype="router_crash", error=repr(exc)[:300], task=job.task,
+                            task_id=job.task_id, status="failed")
                 res = claude_bridge.TurnResult("Ой, у меня что-то сломалось внутри, и ответить не вышло 😕 Попробуй ещё раз.", None, False, None,
                                                "error", repr(exc)[:500], attempts=0)
             finally:
@@ -471,8 +474,8 @@ class TaskRouter:
                 events.emit("spec_proposed", task=job.task, task_id=job.task_id, status="waiting_owner")
             elif job.spec:
                 spec.close(key, job.task_id)
-        except Exception:  # noqa: BLE001 — план не должен ронять очередь
-            pass
+        except Exception as exc:  # noqa: BLE001 — план не должен ронять очередь
+            errorlog.record("task_router.track_spec", exc, task_id=job.task_id)
 
     def _record(self, job: Job, res, key: str | None = None) -> None:
         """Итог задачи в журнал и, если ход работал, строка эпизода. Не бросает исключений."""
@@ -491,8 +494,11 @@ class TaskRouter:
                         session_mode=job.session_mode, runtime=job.runtime_used, progress=1.0)
             if res.status in WORKED and res.attempts > 0:
                 self._write_episode(job, res)
-        except Exception:  # noqa: BLE001 — журнал не должен ронять очередь
-            pass
+            if res.status in ("error", "timeout") and res.attempts > 0:
+                errorlog.record(f"turn.{job.runtime_used}", message=res.error or res.status,
+                                type=res.status, task_id=job.task_id, task=job.task)
+        except Exception as exc:  # noqa: BLE001 — журнал не должен ронять очередь
+            errorlog.record("task_router.record", exc, task_id=job.task_id)
 
     def _write_episode(self, job: Job, res) -> None:
         now = datetime.now(timezone.utc).astimezone()
@@ -546,8 +552,8 @@ async def _call(cb, arg):
         r = cb(arg)
         if inspect.isawaitable(r):
             await r
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        errorlog.record("task_router.callback", exc)
 
 
 _default: TaskRouter | None = None

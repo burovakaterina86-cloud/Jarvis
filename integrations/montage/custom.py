@@ -30,7 +30,7 @@ def sanitize(html: str) -> str:
     for tag in FORBIDDEN_TAGS:
         if re.search(rf"<\s*{tag}\b", low):
             raise SpecError(f"в HTML сцены нельзя <{tag}> (логотипы — <img src=\"{{{{logo:имя}}}}\">, свои значки — внутренний <svg>)")
-    if re.search(r"\son[a-z]+\s*=", low):
+    if re.search(r"<[^>]*?[\s/\"'`]on[a-z]+\s*=", low) or re.search(r"\son[a-z]+\s*=", low):
         raise SpecError("в HTML сцены нельзя обработчики событий (on…=)")
     if "javascript:" in low or "@import" in low or "<!--" in low and "-->" not in low:
         raise SpecError("в HTML сцены нельзя javascript:, @import и незакрытые комментарии")
@@ -38,6 +38,8 @@ def sanitize(html: str) -> str:
         raise SpecError("в HTML сцены нельзя внешние адреса (src/href): логотипы — {{logo:имя}}")
     if re.search(r"url\(\s*(?:[\"']\s*(?!#|\{\{)|(?![\"'])(?!#|\{\{))", low):
         raise SpecError("в стилях сцены нельзя url(…) на внешнее: логотипы — {{logo:имя}}")
+    if re.search(r"srcset\s*=|image-set\(|expression\s*\(|\\\\[a-z0-9.$_-]+\\|\\[0-9a-f]{2,6}\s", low):
+        raise SpecError("в HTML сцены нельзя srcset, image-set(), сетевые пути и экранированные символы в стилях")
     if re.search(r"https?://|//[a-z0-9.-]+\.[a-z]{2,}", low):
         raise SpecError("в HTML сцены нельзя адреса в интернет")
     return html

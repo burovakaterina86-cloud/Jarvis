@@ -60,7 +60,7 @@ velsvisual download <returned-url> -o <output-file> --json
 Исходник и версия для сайта хранятся раздельно. Для локального H.264 с частыми ключевыми кадрами, без звука и B-кадров используй:
 
 ```bash
-python .Codex/skills/site-builder/scripts/prepare_video.py <source.mp4> <assets/film.mp4> --max-edge 1280 --gop 4
+python .agents/skills/site-builder/scripts/prepare_video.py <source.mp4> <assets/film.mp4> --max-edge 1280 --gop 4
 ```
 
 Скрипт требует работающие FFmpeg и FFprobe. Проверь `--help`; при необходимости задай пути через `--ffmpeg`/`--ffprobe` или `SITE_BUILDER_FFMPEG`/`SITE_BUILDER_FFPROBE`.

@@ -30,6 +30,22 @@ def _mask() -> str:
     return "data:image/svg+xml;base64," + base64.b64encode((config.ASSETS / "claude-icon.svg").read_bytes()).decode()
 
 
+def num(v) -> str:
+    """Число в атрибут: приводим к float, чтобы из поля спецификации нельзя было вставить разметку."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"в сцене ожидалось число, а пришло {str(v)[:40]!r}") from e
+    if f != f or f in (float("inf"), float("-inf")):
+        raise ValueError(f"в сцене ожидалось конечное число, а пришло {str(v)[:40]!r}")
+    return str(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else repr(f)
+
+
+def attr(s) -> str:
+    """Текст в значение атрибута в кавычках."""
+    return _html.escape(str(s), quote=True)
+
+
 def esc(s: str) -> str:
     return _html.escape(str(s), quote=False).replace("&lt;br&gt;", "<br>")
 
@@ -55,7 +71,7 @@ PF = "font-family:PF,serif;font-style:italic;font-weight:600"
 
 # ---------------------------------------------------------------- сплит
 def hook_html(d: dict) -> str:
-    size = d.get("size", 150)
+    size = num(d.get("size", 150))
     lines = ""
     for ln in d["lines"]:
         segs = ""
@@ -80,17 +96,17 @@ def chip_html(c: dict) -> str:
     if c.get("arrow"):
         return ARROW
     img = f"<img src='{_logo(c['logo'])}'>" if c.get("logo") else (icons.icon_svg(c["icon"], 44) if c.get("icon") else "")
-    return f"<div class=chip data-t='{c['t']}'><div class=ring></div>{img}<span>{esc(c['text'])}</span></div>"
+    return f"<div class=chip data-t='{num(c['t'])}'><div class=ring></div>{img}<span>{esc(c['text'])}</span></div>"
 
 
 def step_html(d: dict) -> str:
-    n = d["n"]
+    n = int(num(d["n"]))
     segs = "".join(f"<div class=seg data-i='{i}'><div class=fill></div></div>" for i in range(1, 11))
     chips = "".join(chip_html(c) for c in d.get("chips", []))
     return (f"{PANEL_BG}<div class='abs segs' style='left:70px;top:150px;display:flex;gap:8px'>{segs}</div>"
             f"<div class='abs card' style='left:70px;right:70px;top:215px;padding:48px 56px 50px'>"
             f"<div style='display:flex;align-items:center;gap:30px'>"
-            f"<div class='numc tile' style='width:130px;height:130px;min-width:130px;background:{CLAY};font-size:{80 if n < 10 else 60}px;border-radius:65px'>{n}</div>"
+            f"<div class='numc tile' style='width:130px;height:130px;min-width:130px;background:{CLAY};font-size:{80 if n < 10 else 60}px;border-radius:65px'>{num(n)}</div>"
             f"<div class=ttl style='font-size:76px;font-weight:900;line-height:1.04'>{esc(d['title'])}</div></div>"
             f"<div class=chips style='display:flex;flex-wrap:wrap;gap:16px;margin-top:38px'>{chips}</div></div>"
             f"<div class=cur><svg width='64' height='64' viewBox='0 0 24 24'><path d='M4 2 L4 19 L8.6 14.8 L11.6 21.5 L14.2 20.3 L11.3 13.8 L17.5 13.4 Z' "
@@ -138,13 +154,13 @@ def week_html(d: dict) -> str:
                   f"<div style='margin-top:30px;font-size:26px;font-weight:700;opacity:.5'>{esc(d.get('card_text', 'пост твоим голосом'))}</div></div>")
     return _full(
         f"<div class='abs hd' style='left:0;right:0;top:175px;text-align:center;font-size:98px;font-weight:900;color:#fff;letter-spacing:-2px;white-space:nowrap'>"
-        f"<span class='tt tt1' data-t='{d['t_a']}'>{esc(d.get('title_a', '1 текст'))}</span> → "
-        f"<span class='tt tt2' style='{PF};color:{INK}' data-t='{d['t_b']}'>{esc(d.get('title_b', '7 постов'))}</span></div>{cells}")
+        f"<span class='tt tt1' data-t='{num(d['t_a'])}'>{esc(d.get('title_a', '1 текст'))}</span> → "
+        f"<span class='tt tt2' style='{PF};color:{INK}' data-t='{num(d['t_b'])}'>{esc(d.get('title_b', '7 постов'))}</span></div>{cells}")
 
 
 def money_html(d: dict) -> str:
     rows = "".join(
-        f"<div class=mrow data-t='{r['t']}' style='display:flex;align-items:center;gap:26px;padding:26px 8px;border-bottom:3px solid #EEE7DE'>"
+        f"<div class=mrow data-t='{num(r['t'])}' style='display:flex;align-items:center;gap:26px;padding:26px 8px;border-bottom:3px solid #EEE7DE'>"
         f"<div class='tick tile' style='width:62px;height:62px;border-radius:31px;background:#E6DFD6;font-size:34px'>✓</div>"
         f"<div style='font-size:50px;font-weight:800'>{esc(r['text'])}</div></div>" for r in d["rows"])
     return _full(
@@ -211,7 +227,7 @@ def build(res: Resolved, out_dir: Path) -> dict:
     body, meta = "", []
     for sc in res.scenes:
         sid = sc.id
-        body += f"<div class=scene id='{sid}'>{BUILDERS[sc.type](sc.data)}</div>"
+        body += f"<div class=scene id='{attr(sid)}'>{BUILDERS[sc.type](sc.data)}</div>"
         m = {"id": sid, "type": JS_TYPE.get(sc.type, sc.type), "start": sc.start, "end": sc.end}
         if sc.type == "step":
             m["n"] = sc.data["n"]

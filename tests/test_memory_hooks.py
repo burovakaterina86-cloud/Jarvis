@@ -115,9 +115,9 @@ def test_capture_learning_reminds_after_real_task(tmp_path):
     mod = _load("capture_learning")
     code, out = run_main(mod, stop(tmp_path), tmp_path)
     assert code == 0
-    ctx = out["hookSpecificOutput"]["additionalContext"]
-    assert out["hookSpecificOutput"]["hookEventName"] == "Stop"
-    assert "memory/decisions/" in ctx and "create-skill" in ctx
+    # формат Stop из документации Claude Code: decision=block + reason (additionalContext у Stop не заявлен)
+    assert out["decision"] == "block" and "hookSpecificOutput" not in out
+    assert "memory/decisions/" in out["reason"] and "create-skill" in out["reason"]
 
 
 def test_capture_learning_silent_when_stop_hook_active(tmp_path):
@@ -264,7 +264,7 @@ def test_capture_learning_ignores_meta_and_sidechain_entries(tmp_path):
     code, out = run_main(mod, event, tmp_path)
     assert code == 0
     assert out is not None, "вставка хука не должна сбрасывать счёт хода владелицы"
-    assert "memory/decisions/" in out["hookSpecificOutput"]["additionalContext"]
+    assert "memory/decisions/" in out["reason"]
 
 
 def test_pre_compact_ignores_meta_and_sidechain_entries(tmp_path):

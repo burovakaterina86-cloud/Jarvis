@@ -16,10 +16,10 @@ when_to_use: "По её просьбам «сделай сайт», «ленди
 
 - **Сайт собирается в `outbox/sites/<имя>/`** (имя латиницей, цифры, дефис). Начало: `python -m integrations.site_builder init <имя>` — создаст папку, `assets/` и положит движок в `scroll-engine/`. Копировать файлы из папки навыка командой `cp` не нужно: защита это не пропускает. Дальше пишешь `index.html` и остальное инструментом Write.
 - **Проверка:** `python -m integrations.site_builder check <имя>` (viewport, локальные пути, лишние внешние ссылки, `prefers-reduced-motion`, размер). Потом в браузере (Playwright) открой `file:///…/outbox/sites/<имя>/index.html`, ширины 390, 768 и 1440 px, прокрутка вперёд и назад, обязательно по [проверке результата](references/verification.md). Локальный сервер (`python -m http.server`) не запускай: это просит кнопку, `file://` открывается и так.
-- **Видео:** готовить локально `python .Codex/skills/site-builder/scripts/prepare_video.py <исходник> <assets/film.mp4> --max-edge 1280 --gop 4` (нужны FFmpeg и FFprobe).
+- **Видео:** готовить локально `python .agents/skills/site-builder/scripts/prepare_video.py <исходник> <assets/film.mp4> --max-edge 1280 --gop 4` (нужны FFmpeg и FFprobe).
 - **Платная генерация (Vels Visual, KIE) — только после её «да» в чате.** Перед запуском назови модель, что будет сгенерировано и цену; без ответа не запускай. Навык `visual` проверяет модели и схему.
 - **Выдача:** `python -m integrations.site_builder pack <имя>` → `outbox/sites/<имя>.zip`; ответ заканчивай строкой `📎 outbox/sites/<имя>.zip`. Если архив больше ~45 МБ, Telegram его не примет: скажи ей и предложи отдать без тяжёлых видео. **Не публикуй сайт и не размещай его в интернете** — размещение только по её кнопке.
-- Тексты на сайте (заголовки, кнопки, подписи) — публичные, значит, `textwriter` → `humaniser` (`.Codex/rules/public-texts.md`); личных историй от её имени не выдумывай.
+- Тексты на сайте (заголовки, кнопки, подписи) — публичные, значит, `textwriter` → `humaniser` (`.agents/rules/public-texts.md`); личных историй от её имени не выдумывай.
 
 ## С чего начать
 

@@ -4,31 +4,22 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from runtime import secretenv
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def load_dotenv(path: Path | None = None) -> None:
-    """Подхватить `.env` в окружение, не перекрывая заданное снаружи.
+def load_dotenv(path: Path | None = None, *, only) -> None:
+    """Подхватить из `.env` в окружение ТОЛЬКО ключи `only`, не перекрывая заданное снаружи.
 
-    Та же семантика, что у бота (`integrations.telegram.gateway.load_env`): владелица
-    вписывает ключи в `.env`, а радар должен их видеть и из Telegram, и из терминала.
-    Значения никуда не печатаются.
+    Владелица вписывает ключи в `.env`, а модуль должен их видеть и из Telegram, и из терминала. Раньше сюда
+    загружалось всё содержимое файла (токен Telegram и чужие ключи тоже) и через окружение уходило в
+    дочерние процессы: node, Edge, ffmpeg, Codex. Значения никуда не печатаются.
     """
-    path = path or ROOT / ".env"
-    try:
-        raw = path.read_text(encoding="utf-8")
-    except OSError:
-        return
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        if line.startswith("export "):
-            line = line[len("export "):]
-        key, _, value = line.partition("=")
-        key = key.strip()
-        if key:
-            os.environ.setdefault(key, value.strip().strip('"').strip("'"))
+    names = set(only)
+    path = Path(path) if path else ROOT / ".env"
+    for key, value in secretenv._from_dotenv(names, path).items():
+        os.environ.setdefault(key, value)
 
 
 class KeysError(Exception):
@@ -38,7 +29,7 @@ class KeysError(Exception):
 def require_keys(env: dict[str, str] | None = None) -> tuple[str, str]:
     """Вернуть (apify_token, groq_key) или бросить `KeysError` с именами недостающих."""
     if env is None:
-        load_dotenv()
+        load_dotenv(only=("APIFY_TOKEN", "GROQ_KEY", "GROQ_API_KEY"))
         env = os.environ
     apify = env.get("APIFY_TOKEN")
     groq = env.get("GROQ_KEY") or env.get("GROQ_API_KEY")

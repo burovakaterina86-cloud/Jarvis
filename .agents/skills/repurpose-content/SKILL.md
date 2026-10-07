@@ -9,7 +9,7 @@ when_to_use: Когда владелица даёт существующий т�
 ## Источник
 
 - Файл из `inbox/`, `essa-ai/knowledge/`, `essa-ai/content/<папка>/`, текст из сообщения или ссылка.
-- Ссылка открывается через `browser-use` (правила — `.Codex/rules/untrusted-content.md`).
+- Ссылка открывается через `browser-use` (правила — `.agents/rules/untrusted-content.md`).
 - Проверь `essa-ai/content/PUBLISHED.md`: если материал уже публиковался в целевом формате — скажи и предложи новый угол.
 
 ## Порядок

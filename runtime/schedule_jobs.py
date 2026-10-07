@@ -19,6 +19,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from runtime import errorlog, secretenv
+
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT = Path("essa-ai") / "content"
 RADAR_CONFIG = Path("essa-ai") / "radar" / "config.json"
@@ -106,13 +108,16 @@ def _radar_python(root: Path) -> str:
 def run_radar_script(root: Path) -> tuple[int, str]:
     try:
         proc = subprocess.run([_radar_python(root), "-m", "integrations.radar", str(root / RADAR_CONFIG)],
-                              cwd=str(root), capture_output=True, timeout=RADAR_TIMEOUT_SEC,
+                              cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,   # трейсбек не теряем
+                              timeout=RADAR_TIMEOUT_SEC, env=secretenv.scrub(),
                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except subprocess.TimeoutExpired:
         return 3, "радар шёл дольше 30 минут"
     except OSError as exc:
         return 3, f"радар не запустился: {type(exc).__name__}"
     tail = proc.stdout.decode("utf-8", "replace").strip().splitlines()[-3:]
+    if proc.returncode not in (0, 2):
+        errorlog.record("schedule.radar", message=" ".join(tail), type=f"exit {proc.returncode}")
     return proc.returncode, " ".join(tail)
 
 
@@ -239,7 +244,7 @@ def plan_monday(now: dt.datetime) -> dt.date:
 def run_content_plan_script(root: Path, week_rel: str) -> tuple[int, str]:
     try:
         proc = subprocess.run([_radar_python(root), "-m", "integrations.content_plan", "weekly", week_rel],
-                              cwd=str(root), capture_output=True, timeout=CONTENT_PLAN_TIMEOUT_SEC,
+                              cwd=str(root), capture_output=True, timeout=CONTENT_PLAN_TIMEOUT_SEC, env=secretenv.scrub(),
                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except subprocess.TimeoutExpired:
         return 3, "сбор шёл дольше полутора часов"

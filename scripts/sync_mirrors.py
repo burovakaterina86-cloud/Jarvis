@@ -1,10 +1,14 @@
-"""Зеркала для Codex: `.claude/skills` → `.agents/skills`, `.claude/agents/*.md` → `.codex/agents/*.toml`.
+"""Зеркала для Codex: `.claude/skills` → `.agents/skills`, `.claude/rules/*.md` → `.agents/rules/*.md`,
+`.claude/agents/*.md` → `.codex/agents/*.toml`.
 
     python scripts/sync_mirrors.py --check [--root <папка>]   # только проверить
     python scripts/sync_mirrors.py --write [--root <папка>]   # пересобрать зеркала из .claude/
 
-Источник истины — `.claude/`. Правило зеркала (то же, что в tests/test_content_plan_visuals.py):
-в тексте `.claude` → `.Codex`, `CLAUDE.md` → `AGENTS.md`; навык `autopilot` — дословная копия
+Источник истины — `.claude/`. Правило зеркала: пути в тексте переписываются на настоящие папки Codex
+(`.claude/skills` → `.agents/skills`, `.claude/rules` → `.agents/rules`, `.claude/agents/<имя>.md` →
+`.codex/agents/<имя>.toml`), `CLAUDE.md` → `AGENTS.md`; прочие `.claude/…` (хуки, настройки) остаются как есть —
+такие файлы существуют. Раньше `.claude` заменялось на несуществующую `.Codex`: ссылки вели в никуда, а на
+регистрозависимой файловой системе путь не нашёлся бы вовсе. Навык `autopilot` — дословная копия
 (у него свои пути установки); концы строк не важны (git на Windows их меняет).
 Владелица пользуется Codex (её решение 2026-10-05) — зеркала поддерживаются, а не снимаются.
 Код выхода: 0 — зеркала совпадают (или пересобраны), 1 — есть расхождения, 2 — ошибка аргументов.
@@ -13,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -25,16 +30,26 @@ SKIP_PARTS = {"__pycache__"}
 SKIP_SUFFIXES = {".pyc"}
 
 
+_REWRITES = ((b".claude/skills", b".agents/skills"), (b".claude/rules", b".agents/rules"),
+             (b".claude/agents", b".codex/agents"), (b"CLAUDE.md", b"AGENTS.md"))
+_AGENT_MD = re.compile(rb"(\.codex/agents/[\w\-<>]+)\.md")
+
+
+def rewrite(data: bytes) -> bytes:
+    """Пути `.claude/…` в тексте → настоящие папки зеркал Codex (см. модульную строку)."""
+    for old, new in _REWRITES:
+        data = data.replace(old, new)
+    return _AGENT_MD.sub(rb"\1.toml", data)
+
+
 def mirrored(skill: str, data: bytes) -> bytes:
     """Содержимое файла навыка в зеркале (байты, концы строк — LF)."""
     data = data.replace(b"\r\n", b"\n")
-    if skill in VERBATIM:
-        return data
-    return data.replace(b".claude", b".Codex").replace(b"CLAUDE.md", b"AGENTS.md")
+    return data if skill in VERBATIM else rewrite(data)
 
 
 def _mirror_text(text: str) -> str:
-    return text.replace(".claude", ".Codex").replace("CLAUDE.md", "AGENTS.md")
+    return rewrite(text.encode("utf-8")).decode("utf-8")
 
 
 def _files(base: Path) -> dict[str, Path]:
@@ -121,9 +136,23 @@ def _compare_agents(root: Path) -> list[str]:
     return report
 
 
+def _compare_rules(root: Path) -> list[str]:
+    src, dst = _files(root / ".claude" / "rules"), _files(root / ".agents" / "rules")
+    report = []
+    for rel in sorted(src.keys() | dst.keys()):
+        shown = f".agents/rules/{rel}"
+        if rel not in dst:
+            report.append(f"нет копии: {shown}")
+        elif rel not in src:
+            report.append(f"лишнее в копии: {shown}")
+        elif mirrored("rules", src[rel].read_bytes()) != dst[rel].read_bytes().replace(b"\r\n", b"\n"):
+            report.append(f"расходится: {shown}")
+    return report
+
+
 def compare(root: Path | str = ROOT) -> list[str]:
     root = Path(root)
-    return _compare_skills(root) + _compare_agents(root)
+    return _compare_skills(root) + _compare_rules(root) + _compare_agents(root)
 
 
 def write(root: Path | str = ROOT) -> list[str]:
@@ -140,6 +169,17 @@ def write(root: Path | str = ROOT) -> list[str]:
     for rel in sorted(set(_files(dst_root)) - set(src)):
         (dst_root / rel).unlink()
         changed.append(f".agents/skills/{rel} (удалён: нет в .claude)")
+    rules_src, rules_dst = _files(root / ".claude" / "rules"), root / ".agents" / "rules"
+    for rel, path in sorted(rules_src.items()):
+        target = rules_dst / rel
+        body = mirrored("rules", path.read_bytes())
+        if not target.is_file() or target.read_bytes().replace(b"\r\n", b"\n") != body:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(body)
+            changed.append(f".agents/rules/{rel}")
+    for rel in sorted(set(_files(rules_dst)) - set(rules_src)):
+        (rules_dst / rel).unlink()
+        changed.append(f".agents/rules/{rel} (удалён: нет в .claude)")
     agents_src = {p.stem: p for p in (root / ".claude" / "agents").glob("*.md")}
     agents_dst = root / ".codex" / "agents"
     for name, path in sorted(agents_src.items()):

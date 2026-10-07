@@ -62,7 +62,11 @@ def run(config: RadarConfig, apify_client, groq_client, out_dir: Path,
             f"остановлено на потолке запросов: {exc}\n", encoding="utf-8")
         print(f"упёрлись в потолок запросов: {exc}")
         return EXIT_BUDGET_OR_SERVICE
-    except Exception as exc:  # сервис отказал — Apify/Groq недоступны или вернули ошибку
+    except Exception as exc:  # сервис отказал — Apify/Groq недоступны или вернули ошибку, или баг в коде
+        from runtime import errorlog
+        errorlog.record("radar.run", exc)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "STOPPED.md").write_text(f"остановлено: {type(exc).__name__}: {exc}\n", encoding="utf-8")
         print(f"сервис отказал: {exc}")
         return EXIT_BUDGET_OR_SERVICE
 

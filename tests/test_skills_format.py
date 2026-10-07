@@ -104,7 +104,7 @@ def test_mcp_profile_path_matches_login_module():
 
     cfg = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))
     args = cfg["mcpServers"]["playwright"]["args"]
-    assert "@playwright/mcp@latest" in args
+    assert "@playwright/mcp@0.0.83" in args   # версия закреплена: @latest тянул бы новый код при каждом старте
     assert not any("dangerously" in str(a) for a in args)
     from_mcp = Path(args[args.index("--user-data-dir") + 1])
     assert from_mcp.is_absolute(), "путь профиля не должен зависеть от рабочей папки MCP"

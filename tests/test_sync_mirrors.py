@@ -96,9 +96,30 @@ def test_line_endings_alone_are_not_a_difference(tmp_path):
 
 def test_project_rule_paths_are_rewritten(tmp_path):
     in_sync(tmp_path)
-    tree(tmp_path, {".claude/skills/a/SKILL.md": "читай .claude/rules и CLAUDE.md",
-                    ".agents/skills/a/SKILL.md": "читай .Codex/rules и AGENTS.md"})
+    tree(tmp_path, {".claude/skills/a/SKILL.md": "читай .claude/rules/x.md, .claude/skills/a и CLAUDE.md",
+                    ".agents/skills/a/SKILL.md": "читай .agents/rules/x.md, .agents/skills/a и AGENTS.md"})
     assert sync.compare(tmp_path) == []
+
+
+def test_rewrite_points_only_at_folders_that_exist():
+    """Раньше `.claude` → `.Codex` (такой папки нет): ссылки вели в никуда, на Linux регистр ломал путь вовсе."""
+    text = (b"`.claude/rules/safety.md`, `.claude/skills/site-builder/scripts/p.py`, "
+            b"`.claude/agents/researcher.md`, `.claude/hooks/guard.py`, CLAUDE.md")
+    out = sync.rewrite(text)
+    assert b".Codex" not in out
+    assert out == (b"`.agents/rules/safety.md`, `.agents/skills/site-builder/scripts/p.py`, "
+                   b"`.codex/agents/researcher.toml`, `.claude/hooks/guard.py`, AGENTS.md")
+
+
+def test_rules_are_mirrored_and_drift_is_reported(tmp_path):
+    in_sync(tmp_path)
+    tree(tmp_path, {".claude/rules/safety.md": "см. .claude/rules/approvals.md"})
+    assert sync.compare(tmp_path) == ["нет копии: .agents/rules/safety.md"]
+    sync.write(tmp_path)
+    assert (tmp_path / ".agents/rules/safety.md").read_text(encoding="utf-8") == "см. .agents/rules/approvals.md"
+    assert sync.compare(tmp_path) == []
+    (tmp_path / ".agents/rules/safety.md").write_text("правка руками", encoding="utf-8")
+    assert sync.compare(tmp_path) == ["расходится: .agents/rules/safety.md"]
 
 
 def test_raw_copy_without_rewrite_is_drift(tmp_path):
@@ -134,12 +155,12 @@ def test_write_rebuilds_everything_from_claude(tmp_path):
     changed = sync.write(tmp_path)
     assert sync.compare(tmp_path) == []
     assert ".agents/skills/b/SKILL.md" in changed and ".codex/agents/x.toml" in changed
-    assert (tmp_path / ".agents/skills/b/SKILL.md").read_text(encoding="utf-8") == "новый навык про .Codex"
+    assert (tmp_path / ".agents/skills/b/SKILL.md").read_text(encoding="utf-8") == "новый навык про .claude"
     assert not (tmp_path / ".agents/skills/old/SKILL.md").exists()
     assert not (tmp_path / ".codex/agents/gone.toml").exists()
     import tomllib
     t = tomllib.loads((tmp_path / ".codex/agents/x.toml").read_text(encoding="utf-8"))
-    assert t["developer_instructions"].strip() == body.replace(".claude", ".Codex").replace("CLAUDE.md", "AGENTS.md")
+    assert t["developer_instructions"].strip() == body.replace(".claude/rules", ".agents/rules").replace("CLAUDE.md", "AGENTS.md")
     assert sync.write(tmp_path) == []          # второй раз — нечего менять
 
 

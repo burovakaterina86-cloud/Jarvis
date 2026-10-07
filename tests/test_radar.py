@@ -336,13 +336,15 @@ def test_main_docstring_on_bad_args_does_not_crash_on_pipe(tmp_path, capsys):
 def test_reel_radar_mirror_matches_claude_skill():
     claude_text = (ROOT / ".claude" / "skills" / "reel-radar" / "SKILL.md").read_text(encoding="utf-8")
     mirror_text = (ROOT / ".agents" / "skills" / "reel-radar" / "SKILL.md").read_text(encoding="utf-8")
-    assert claude_text.replace(".claude/", ".Codex/") == mirror_text
+    from scripts.sync_mirrors import mirrored
+    assert mirrored("x", claude_text.encode("utf-8")).decode("utf-8") == mirror_text
 
 
 def test_content_plan_mirror_matches_claude_skill():
     claude_text = (ROOT / ".claude" / "skills" / "content-plan" / "SKILL.md").read_text(encoding="utf-8")
     mirror_text = (ROOT / ".agents" / "skills" / "content-plan" / "SKILL.md").read_text(encoding="utf-8")
-    assert claude_text.replace(".claude/", ".Codex/") == mirror_text
+    from scripts.sync_mirrors import mirrored
+    assert mirrored("x", claude_text.encode("utf-8")).decode("utf-8") == mirror_text
 
 
 def test_content_plan_mentions_reel_radar_connection():

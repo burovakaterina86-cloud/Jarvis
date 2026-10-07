@@ -13,7 +13,10 @@ import os
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
+
+from runtime import errorlog, procutil, secretenv
 
 from . import ALLOWED_MODULES, ROOT, validate  # noqa: F401  (ALLOWED_MODULES — для читателя)
 
@@ -27,12 +30,22 @@ def _python(root: Path) -> str:
     return str(venv) if venv.exists() else sys.executable
 
 
+# `python -m модуль` ставит текущую папку первой в sys.path: положенный в корень проекта argparse.py или json.py
+# подменил бы стандартный модуль внутри белого списка. Здесь корень идёт после стандартной библиотеки.
+_BOOT = ("import runpy, sys; sys.path.append(sys.argv.pop(1)); "
+         "m = sys.argv[1]; sys.argv[0:2] = [m]; runpy.run_module(m, run_name='__main__', alter_sys=True)")
+
+
+def _command(root: Path, argv: list[str]) -> list[str]:
+    """Команда запуска работы: `-m модуль аргументы…` → безопасный запуск того же модуля."""
+    if len(argv) >= 2 and argv[0] == "-m":
+        return [_python(root), "-P", "-c", _BOOT, str(root), *argv[1:]]
+    return [_python(root), *argv]
+
+
 def _clean_env() -> dict:
     """Без токенов бота и Claude: работе они не нужны, а ключи сервисов (`APIFY_TOKEN`…) модули берут из `.env` сами."""
-    env = dict(os.environ)
-    for key in list(env):
-        if key.startswith(("TELEGRAM", "CLAUDE", "ANTHROPIC")) and key != "CLAUDE_CODE_GIT_BASH_PATH":
-            env.pop(key)
+    env = secretenv.scrub()
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
     return env
@@ -71,27 +84,46 @@ class JobRunner:
 
     # ---- шаги
 
+    def _set_aside(self, path: Path, suffix: str) -> None:
+        """Убирает обработанный запрос под уникальное имя: Windows не даёт rename поверх существующего файла,
+        и один повторный запрос навсегда ломал бы опрос."""
+        os.replace(path, path.with_name(f"{path.stem}-{uuid.uuid4().hex[:6]}{suffix}"))
+
     def _take_requests(self) -> None:
         if not self.requests.is_dir():
             return
         for path in sorted(self.requests.glob("*.json")):
             try:
-                req = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                path.rename(path.with_suffix(".bad"))
-                continue
-            problems = validate(req, self.root)
-            job_id = path.stem
-            if problems:
-                path.rename(path.with_suffix(".rejected"))
-                self.post(f"Работу «{req.get('title', job_id) if isinstance(req, dict) else job_id}» не запустил: "
-                          + "; ".join(problems), [])
-                continue
-            rec = {"id": job_id, "title": req["title"], "argv": req["argv"], "files": req.get("files", []),
-                   "done": req.get("done", ""), "fail": req.get("fail", ""), "status": "queued",
-                   "queued_at": self.clock()}
-            self._save(rec)
-            path.unlink(missing_ok=True)
+                self._take_request(path)
+            except Exception as exc:  # noqa: BLE001 — один плохой файл не должен останавливать остальные
+                errorlog.record("jobs.take_request", exc, file=path.name)
+                try:
+                    self._set_aside(path, ".bad")
+                except OSError:
+                    pass
+
+    def _take_request(self, path: Path) -> None:
+        try:
+            req = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            self._set_aside(path, ".bad")
+            errorlog.record("jobs.bad_request", exc, file=path.name)
+            self.post(f"Запрос на работу {path.name} не читается (битый JSON), не запустил.", [])
+            return
+        problems = validate(req, self.root)
+        job_id = path.stem
+        if self._path(job_id).exists():       # то же имя у уже идущей работы: не затираем её запись
+            job_id = f"{job_id}-{uuid.uuid4().hex[:6]}"
+        if problems:
+            self._set_aside(path, ".rejected")
+            self.post(f"Работу «{req.get('title', job_id) if isinstance(req, dict) else job_id}» не запустил: "
+                      + "; ".join(problems), [])
+            return
+        rec = {"id": job_id, "title": req["title"], "argv": req["argv"], "files": req.get("files", []),
+               "done": req.get("done", ""), "fail": req.get("fail", ""), "status": "queued",
+               "queued_at": self.clock()}
+        self._save(rec)
+        path.unlink(missing_ok=True)
 
     def _start_queued(self) -> None:
         running = sum(1 for r in self._records() if r["status"] == "running")
@@ -101,12 +133,13 @@ class JobRunner:
             self.state.mkdir(parents=True, exist_ok=True)
             log_path = self.state / f"{rec['id']}.log"
             try:
-                log = open(log_path, "wb")
-                proc = self.popen([_python(self.root), *rec["argv"]], cwd=str(self.root), env=self.env, stdout=log,
-                                  stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                with open(log_path, "wb") as log:    # потомок получает свой дескриптор, наш закрываем сразу
+                    proc = self.popen(_command(self.root, rec["argv"]), cwd=str(self.root), env=self.env,
+                                      stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             except OSError as exc:
-                rec.update(status="failed", finished_at=self.clock(), error=type(exc).__name__)
+                errorlog.record("jobs.start", exc, job=rec["id"])
+                rec.update(status="failed", finished_at=self.clock(), error=f"{type(exc).__name__}: {exc}"[:200])
                 self._save(rec)
                 self.post(f"Работа «{rec['title']}» не запустилась: {type(exc).__name__}.", [])
                 continue
@@ -145,20 +178,35 @@ class JobRunner:
                 text += "\nКонец журнала:\n" + tail
             self.post(text, [])
 
+    def _poll_orphan(self, rec: dict) -> None:
+        """Работа, начатая до перезапуска бота. На Windows дети не умирают вместе с родителем: пока процесс жив,
+        ждём, а не помечаем «прервана» (иначе она поставила бы вторую копию в ту же папку)."""
+        pid, started = rec.get("pid"), rec.get("started_at", self.clock())
+        too_long = self.clock() - started > MAX_RUN_SEC
+        if isinstance(pid, int) and procutil.pid_alive(pid) and not too_long:
+            return
+        files = rec.get("files") or []
+        done = (bool(files) and not too_long
+                and all((self.root / f).is_file() and (self.root / f).stat().st_mtime >= started for f in files))
+        if done and isinstance(pid, int):   # процесс закончился, пока бота не было, и результат на месте
+            self._finish(rec, 0)
+            return
+        rec.update(status="interrupted", finished_at=self.clock())
+        self._save(rec)
+        self.post(f"Работа «{rec['title']}» прервалась: бот перезапускался. Скажи, и я поставлю её заново.", [])
+
     def _poll(self) -> None:
         for rec in self._records():
             if rec["status"] != "running":
                 continue
             proc = self.procs.get(rec["id"])
-            if proc is None:                   # бот перезапускался: его дети умерли вместе с ним
-                rec.update(status="interrupted", finished_at=self.clock())
-                self._save(rec)
-                self.post(f"Работа «{rec['title']}» прервалась: бот перезапускался. Скажи, и я поставлю её заново.", [])
+            if proc is None:                   # бот перезапускался
+                self._poll_orphan(rec)
                 continue
             rc = proc.poll()
             if rc is None:
                 if self.clock() - rec.get("started_at", self.clock()) > MAX_RUN_SEC:
-                    proc.kill()
+                    procutil.kill_tree(proc)    # вместе с ffmpeg и браузером внутри работы
                     self.procs.pop(rec["id"], None)
                     rec.update(status="failed", rc=-9, finished_at=self.clock())
                     self._save(rec)

@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from runtime import events
+from runtime import errorlog, events, procutil, secretenv
 from runtime.redact import tool_summary
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,9 +29,7 @@ STREAM_LIMIT = 32 * 1024 * 1024
 
 # Переменные, которые не должны попасть в окружение claude: всё служебное окружение
 # родительской сессии Claude Code (иначе дочерний claude уходит на хост-авторизацию
-# вместо подписки владелицы — D02) и Telegram-секреты.
-_ENV_DROP_PREFIX = ("CLAUDE", "ANTHROPIC", "TELEGRAM")
-_ENV_KEEP = {"CLAUDE_CODE_GIT_BASH_PATH"}  # нужен claude на Windows
+# вместо подписки владелицы — D02) и любые секреты (токены, ключи сервисов — `runtime/secretenv.py`).
 
 
 @dataclass
@@ -83,14 +81,14 @@ NO_BROWSER_OPTIONS = TurnOptions(browser=False)
 
 _running: dict[str, asyncio.subprocess.Process] = {}
 _stopped: set[str] = set()
+_active: set[str] = set()   # ходы, которые идут сейчас (в паузе между запусками процесса `_running` пуст)
 
 
 def build_env(base: dict | None = None) -> dict:
-    """Окружение дочернего claude: всё из base, кроме CLAUDE*/ANTHROPIC*/TELEGRAM*
-    (исключение — _ENV_KEEP). JARVIS_* и остальное окружение процесса передаётся как есть."""
-    src = dict(os.environ if base is None else base)
-    return {k: v for k, v in src.items()
-            if k.upper() in _ENV_KEEP or not k.upper().startswith(_ENV_DROP_PREFIX)}
+    """Окружение дочернего claude: всё из base, кроме CLAUDE*/ANTHROPIC*/TELEGRAM* (исключение —
+    CLAUDE_CODE_GIT_BASH_PATH) и переменных, похожих на секреты (ключи Apify/Groq/kie.ai…: модули JARVIS берут их
+    из `.env` сами). JARVIS_* и остальное окружение процесса передаётся как есть."""
+    return secretenv.scrub(os.environ if base is None else base)
 
 
 def skill_names(root: Path = ROOT) -> list[str]:
@@ -140,8 +138,8 @@ async def _call(cb, event):
         r = cb(event)
         if inspect.isawaitable(r):
             await r
-    except Exception:  # колбэк владельца не должен ронять ход
-        pass
+    except Exception as exc:  # колбэк владельца не должен ронять ход
+        errorlog.record("claude_bridge.callback", exc)
 
 
 def _short(s, n=500):
@@ -164,6 +162,13 @@ def _rel(path: str, cwd) -> str:
         return str(path).replace(chr(92), "/")
 
 
+def _result_text(content) -> str:
+    """Текст результата инструмента: строка или список текстовых блоков."""
+    if isinstance(content, list):
+        content = " ".join(b.get("text", "") for b in content if isinstance(b, dict))
+    return _short(" ".join(str(content or "").split()), 400)
+
+
 def _log_event(ev: dict, sid: str | None, task: str, out: "_Outcome | None" = None,
                task_id: str = "") -> None:
     """Переводит событие stream-json в словарь events.jsonl.
@@ -184,12 +189,18 @@ def _log_event(ev: dict, sid: str | None, task: str, out: "_Outcome | None" = No
                 name, inp = block.get("name"), block.get("input") or {}
                 if name in _SUBAGENT_TOOLS and block.get("id") and isinstance(inp, dict):
                     agents[block["id"]] = str(inp.get("subagent_type") or "general-purpose")
+                if out is not None and block.get("id"):
+                    out.tools[block["id"]] = str(name)
                 events.emit("tool_use", tool=name, summary=tool_summary(str(name), inp), **base)
     elif t == "user":
         for block in content if isinstance(content, list) else []:
             if isinstance(block, dict) and block.get("type") == "tool_result":
                 events.emit("tool_result", tool_use_id=block.get("tool_use_id"),
                             is_error=bool(block.get("is_error")), **base)
+                if block.get("is_error"):   # ошибка агента: из повторов растёт памятка «не повторяй»
+                    tool = out.tools.get(block.get("tool_use_id"), "?") if out is not None else "?"
+                    errorlog.record(f"tool:{tool}", message=_result_text(block.get("content")),
+                                    kind="agent", type="tool_error", task_id=task_id)
     elif t == "result":
         failed = bool(ev.get("is_error")) or (sub not in (None, "success"))
         events.emit("result", cost=ev.get("total_cost_usd"), duration=ev.get("duration_ms"),
@@ -215,6 +226,7 @@ class _Outcome:
         self.returncode = None
         self.stderr = ""
         self.agents: dict[str, str] = {}   # id вызова Agent/Task -> имя роли
+        self.tools: dict[str, str] = {}    # id вызова инструмента -> его имя
         self.tool_uses = 0
         self.files: list[str] = []
 
@@ -229,6 +241,8 @@ async def _run_once(prompt, session_id, on_event, run_id, task, env, claude_cmd,
         *cmd, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE, cwd=str(cwd), env=env, limit=STREAM_LIMIT, **kwargs)
     _running[run_id] = proc
+    if run_id in _stopped:      # /stop пришёл, пока процесс запускался
+        procutil.kill_tree(proc)
     out = _Outcome()
 
     async def feed():
@@ -273,6 +287,8 @@ async def _run_once(prompt, session_id, on_event, run_id, task, env, claude_cmd,
         await asyncio.gather(feeder, err_task, return_exceptions=True)
     finally:
         _running.pop(run_id, None)
+        if proc.returncode is None:   # ход отменён (остановка бота, таймаут): процесс не должен остаться сиротой
+            procutil.kill_tree(proc)
     return out
 
 
@@ -398,6 +414,7 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
         child_env["JARVIS_TASK_ID"] = task_id
     cwd = cwd or ROOT
     _stopped.discard(run_id)
+    _active.add(run_id)
     try:
         cmd = claude_cmd or default_claude_cmd()
         out = await _run_once(prompt, session_id, on_event, run_id, task, child_env, cmd, cwd, task_id,
@@ -411,6 +428,9 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
                 "часть действий могла уже выполниться. Скажи, что делать дальше, или начни заново "
                 "командой /new.")
             return res
+        if res.status == "error" and run_id in _stopped:
+            # /stop или таймаут пришли между запусками процесса: повторный запуск не нужен
+            return TurnResult("Остановился.", res.session_id or session_id, False, res.cost_usd, "stopped", "stopped")
         if session_id and res.status == "error" and _is_overflow(out):
             # Контекст переполнен: новая сессия со сводкой последней задачи.
             events.emit("error", subtype="context_overflow", session=session_id, task=task,
@@ -429,30 +449,23 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
             res.new_session, res.attempts = True, 2
         return res
     except Exception as exc:  # noqa: BLE001
+        errorlog.record("claude_bridge.run_turn", exc, task_id=task_id, task=task)
         events.emit("error", error=_short(repr(exc)), task=task, task_id=task_id, session=session_id,
                     status="failed")
         return TurnResult("", session_id, False, None, "error", _short(repr(exc)))
     finally:
         _stopped.discard(run_id)
+        _active.discard(run_id)
 
 
 def stop(run_id: str) -> bool:
-    """Убивает дерево процесса хода. True, если ход был запущен."""
+    """Убивает дерево процесса хода (не блокируя цикл событий). True, если ход был запущен."""
     proc = _running.get(run_id)
     if proc is None:
+        if run_id in _active:      # ход идёт, но процесса сейчас нет (пауза между запусками): остановим на следующем шаге
+            _stopped.add(run_id)
+            return True
         return False
     _stopped.add(run_id)
-    if proc.returncode is not None:
-        return True
-    if sys.platform == "win32":
-        try:
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
-                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        except (OSError, subprocess.SubprocessError):
-            pass
-    try:
-        proc.kill()
-    except (ProcessLookupError, OSError):
-        pass
+    procutil.kill_tree(proc)
     return True

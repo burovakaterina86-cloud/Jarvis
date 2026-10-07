@@ -14,7 +14,11 @@ def load_history(path: str | Path = HISTORY_PATH) -> dict[str, Any]:
     path = Path(path)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except FileNotFoundError:
+        data = {}
+    except (OSError, json.JSONDecodeError) as exc:   # битый файл молча отключал проверку повторов
+        from runtime import errorlog
+        errorlog.record("content_plan.history", exc, file=path.name)
         data = {}
     return {**{k: list(v) for k, v in EMPTY.items()}, **data}
 

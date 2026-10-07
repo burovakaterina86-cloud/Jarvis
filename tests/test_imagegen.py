@@ -42,7 +42,8 @@ def test_codex_saved_file_in_place(tmp_path):
 
     def run(cmd, cwd):
         assert "$imagegen" in cmd[-1] and "a.png" in cmd[-1] and "3:4" in cmd[-1]
-        dest.write_bytes(b"png")
+        assert cwd != dest.parent and cmd[cmd.index("-C") + 1] == str(cwd)   # Codex пишет не в папку результата
+        (cwd / "a.png").write_bytes(b"png")
         return 0, events({"type": "thread.started", "thread_id": "t"}, {"type": "turn.completed"})
 
     assert ig.generate_codex("кот", dest, run=run, home=tmp_path) == dest
@@ -54,11 +55,12 @@ def test_codex_gets_absolute_folder_for_relative_dest(tmp_path, monkeypatch):
 
     def run(cmd, cwd):
         seen["C"], seen["cwd"] = cmd[cmd.index("-C") + 1], cwd
-        (tmp_path / "imgs" / "a.png").write_bytes(b"png")
+        (Path(cwd) / "a.png").write_bytes(b"png")
         return 0, ""
 
     ig.generate_codex("кот", Path("imgs/a.png"), run=run, home=tmp_path)
-    assert Path(seen["C"]).is_absolute() and Path(seen["C"]) == tmp_path / "imgs"
+    assert Path(seen["C"]).is_absolute() and Path(seen["C"]) == Path(seen["cwd"])
+    assert (tmp_path / "imgs" / "a.png").read_bytes() == b"png"
 
 
 def test_codex_image_picked_from_generated_images(tmp_path):
@@ -160,7 +162,7 @@ def test_codex_gets_reference_images(tmp_path):
     def run(cmd, cwd):
         assert f"--image={ref.resolve()}" in cmd
         assert ig.KEEP_FACE in cmd[-1]
-        dest.write_bytes(b"png")
+        (cwd / "a.png").write_bytes(b"png")
         return 0, ""
 
     assert ig.generate_codex("она", dest, refs=[ref], run=run, home=tmp_path) == dest
@@ -367,3 +369,22 @@ def test_hairstyle_and_clothing_always_change():
     assert "overall hairstyle unless asked" not in ig.IDENTITY_LOCK
     assert "Hairstyle and clothing MUST be different from the reference photos" in ig.KEEP_FACE
     assert "hair colour stays" in ig.KEEP_FACE
+
+
+def test_run_codex_sends_prompt_through_stdin_and_never_through_cmd_shim(monkeypatch, tmp_path):
+    """Многострочный промпт и `&` не должны идти аргументом: codex.cmd обрезает и исполняет их."""
+    seen = {}
+
+    def fake_run(argv, **kw):
+        seen.update(argv=argv, input=kw.get("input"))
+
+        class P:
+            returncode, stdout = 0, ""
+        return P()
+
+    monkeypatch.setattr("runtime.codex_bridge.default_codex_cmd", lambda: ["node", "codex.js"])
+    monkeypatch.setattr(ig.subprocess, "run", fake_run)
+    prompt = 'строка 1\nA sign "OPEN & echo PWNED>marker.txt & rem'
+    ig.run_codex(["codex", "exec", "--json", prompt], tmp_path)
+    assert seen["argv"] == ["node", "codex.js", "exec", "--json", "-"]
+    assert seen["input"] == prompt and not any(".cmd" in a.lower() for a in seen["argv"])

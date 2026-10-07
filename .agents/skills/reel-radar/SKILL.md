@@ -75,7 +75,7 @@ Python-модуль (`integrations/radar/`) пишет только механи
 
 Только чтение публичных данных через Apify. Ничего не публикует, не лайкает,
 не подписывается, не пишет людям. Логины и cookies владелицы не используются.
-Подробно — `.Codex/rules/safety.md`, `.Codex/rules/untrusted-content.md`.
+Подробно — `.agents/rules/safety.md`, `.agents/rules/untrusted-content.md`.
 
 ## Связка с content-plan
 

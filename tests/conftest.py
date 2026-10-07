@@ -11,6 +11,8 @@ REPO = Path(__file__).resolve().parents[1]
 # не понять, что делал сам JARVIS (до 2026-10-05 там было 470 строк шума от тестов).
 LIVE_JOURNALS = (
     REPO / "state" / "events.jsonl",
+    REPO / "state" / "errors.jsonl",            # журнал ошибок (runtime/errorlog.py)
+    REPO / "state" / "errors_index.json",
     REPO / "state" / "approvals.jsonl",
     REPO / "state" / "sessions.json",
     REPO / "state" / "session_activity.json",   # время её последнего хода (P3.1)
@@ -47,6 +49,14 @@ def isolated_worker_state(tmp_path, monkeypatch):
     """Кто работает (Claude/Codex), лимиты, предложения и отложенные задачи — во временной папке."""
     from runtime import worker
     monkeypatch.setattr(worker, "STATE_DIR", tmp_path / "worker-state")
+
+
+@pytest.fixture(autouse=True)
+def isolated_errorlog(tmp_path, monkeypatch):
+    """Журнал ошибок — во временной папке: ни логгер, ни мост в тесте не пишут в боевой state/."""
+    from runtime import errorlog
+    monkeypatch.setattr(errorlog, "ERRORS_PATH", tmp_path / "errlog" / "errors.jsonl")
+    monkeypatch.setattr(errorlog, "INDEX_PATH", tmp_path / "errlog" / "errors_index.json")
 
 
 @pytest.fixture

@@ -1,8 +1,10 @@
 """Stop: после настоящей задачи один раз напомнить про урок / решение / алгоритм.
 
 Вход: JSON Stop на stdin (stop_hook_active, transcript_path, last_assistant_message).
-Выход: {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": "..."}}
-или ничего. Не срабатывает при stop_hook_active=true (нет зацикливания) и на
+Выход: {"decision": "block", "reason": "..."} или ничего. Для события Stop документирован именно этот вид:
+`decision: block` не даёт агенту закончить, а `reason` он видит и выполняет ещё один короткий шаг. Прежний
+`hookSpecificOutput.additionalContext` у Stop не заявлен — напоминание могло не доходить до модели
+(проверка 2026-10-07 по документации Claude Code, раздел про Stop-хуки). Не срабатывает при stop_hook_active=true (нет зацикливания) и на
 коротких ходах (< MIN_TOOL_USES вызовов инструментов с последнего сообщения
 владелицы; служебные записи transcript и ходы субагентов не считаются).
 Хук не защитный: любая ошибка -> exit 0 без эффекта.
@@ -39,7 +41,7 @@ def handle(event, root):
         return None
     if tool_uses_in_last_turn(path) < MIN_TOOL_USES:
         return None
-    return {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": REMINDER}}
+    return {"decision": "block", "reason": REMINDER}
 
 
 def main(stdin=None, stdout=None, root=ROOT):

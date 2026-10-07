@@ -25,6 +25,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import sys
 import time
 import urllib.error
@@ -198,11 +199,20 @@ def parse_codex_events(output: str) -> tuple[str | None, str | None]:
 
 
 def run_codex(cmd: list[str], cwd: Path) -> tuple[int, str]:
-    exe = shutil.which(cmd[0])
-    if not exe:
-        raise ImageGenError("codex не установлен")
+    """Запускает `codex exec`; ПОСЛЕДНИЙ элемент `cmd` — промпт, он уходит через stdin, а не аргументом.
+
+    На Windows `codex` — это `codex.cmd`: cmd.exe обрезает аргумент на первом переводе строки и исполняет
+    `& … ` внутри него. Поэтому запускаем `node …/codex.js` напрямую (как `codex_bridge`), а промпт — в stdin.
+    """
+    from runtime.codex_bridge import default_codex_cmd
     try:
-        p = subprocess.run([exe, *cmd[1:]], cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True,
+        base = default_codex_cmd()
+    except FileNotFoundError as e:
+        raise ImageGenError("codex не установлен") from e
+    *args, prompt = cmd[1:]
+    try:
+        from runtime import secretenv
+        p = subprocess.run([*base, *args, "-"], cwd=cwd, input=prompt, env=secretenv.scrub(), capture_output=True,
                            text=True, encoding="utf-8", errors="replace", timeout=CODEX_TIMEOUT_S)
     except subprocess.TimeoutExpired as e:
         raise ImageGenError(f"codex не ответил за {CODEX_TIMEOUT_S} с") from e
@@ -211,18 +221,24 @@ def run_codex(cmd: list[str], cwd: Path) -> tuple[int, str]:
 
 def generate_codex(prompt: str, dest: Path, aspect_ratio: str = "3:4", *, refs=(), raw: bool = False,
                    run=run_codex, home: Path | None = None) -> Path:
-    dest = Path(dest).resolve()  # -C и cwd — одна папка; относительный путь удвоился бы
+    dest = Path(dest).resolve()
     dest.parent.mkdir(parents=True, exist_ok=True)
-    cmd = ["codex", "exec", "--skip-git-repo-check", "--ephemeral", "-s", "workspace-write",
-           "-C", str(dest.parent), "--json",
-           *[f"--image={Path(r).resolve()}" for r in refs],
-           codex_prompt(prompt, dest.name, aspect_ratio, refs=bool(refs), raw=raw)]
-    _, output = run(cmd, dest.parent)
-    thread, error = parse_codex_events(output)
-    if error and "usage limit" in error.lower():
-        raise CodexLimit(error)
-    if dest.is_file():
-        return dest
+    # Codex пишет только во временную папку (workspace-write даёт ему запись в -C): если бы это была папка
+    # результата, а она в корне проекта, он мог бы менять и .claude/hooks. Готовый файл копируем сами.
+    with tempfile.TemporaryDirectory(prefix="jarvis-img-") as tmp:
+        work = Path(tmp)
+        cmd = ["codex", "exec", "--skip-git-repo-check", "--ephemeral", "-s", "workspace-write",
+               "-C", str(work), "--json",
+               *[f"--image={Path(r).resolve()}" for r in refs],
+               codex_prompt(prompt, dest.name, aspect_ratio, refs=bool(refs), raw=raw)]
+        _, output = run(cmd, work)
+        thread, error = parse_codex_events(output)
+        if error and "usage limit" in error.lower():
+            raise CodexLimit(error)
+        made = work / dest.name
+        if made.is_file():
+            shutil.copyfile(made, dest)
+            return dest
     # Codex мог оставить картинку у себя: ~/.codex/generated_images/<thread>/
     gen_dir = (home or Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")) / "generated_images"
     if thread and (gen_dir / thread).is_dir():
@@ -239,7 +255,7 @@ def require_kie_key(env: dict[str, str] | None = None) -> str:
     if env is None:
         from integrations.radar.keys import load_dotenv
 
-        load_dotenv()
+        load_dotenv(only=("KIE_API_KEY",))
         env = os.environ
     key = env.get("KIE_API_KEY")
     if not key:
@@ -305,6 +321,8 @@ def kie_http(method: str, path: str, key: str, body: dict | None = None) -> dict
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         raise ImageGenError(f"kie.ai ответил {e.code}: {e.read().decode('utf-8', 'replace')[:300]}") from e
+    except (urllib.error.URLError, TimeoutError, ValueError) as e:   # сеть, таймаут, не-JSON в ответе
+        raise ImageGenError(f"kie.ai недоступен или ответил не так: {type(e).__name__}") from e
 
 
 def http_download(url: str, dest: Path) -> None:
@@ -347,7 +365,10 @@ def _kie_task(model, prompt, dest, aspect_ratio, resolution, *, key, api, ref_ur
         info = api("GET", f"/api/v1/jobs/recordInfo?taskId={task_id}", key).get("data") or {}
         state = info.get("state")
         if state == "success":
-            urls = json.loads(info.get("resultJson") or "{}").get("resultUrls") or []
+            try:
+                urls = json.loads(info.get("resultJson") or "{}").get("resultUrls") or []
+            except ValueError as e:
+                raise ImageGenError("задача выполнена, но ответ с ссылкой не разобрать") from e
             if not urls:
                 raise ImageGenError("задача выполнена, но ссылки на картинку нет")
             download(urls[0], dest)

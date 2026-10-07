@@ -68,7 +68,7 @@ class ActorClient(Protocol):
 
 def require_token(env: dict[str, str] | None = None) -> str:
     if env is None:
-        load_dotenv()
+        load_dotenv(only=("APIFY_TOKEN",))
         env = os.environ  # type: ignore[assignment]
     token = env.get("APIFY_TOKEN")
     if not token:

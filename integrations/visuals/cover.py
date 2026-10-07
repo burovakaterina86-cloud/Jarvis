@@ -113,7 +113,9 @@ def make_hand_image(text: str, theme: str, dest: Path, root: Path = ROOT, genera
         from .imagegen import ImageGenError, generate as _generate
         try:
             _generate(hand_prompt(text, theme), dest, "16:9", "2K", style_refs=refs)   # 2:1 kie.ai не принимает
-        except ImageGenError:
+        except ImageGenError as exc:   # причина (нет ключа, лимит, 402) должна остаться в журнале
+            from runtime import errorlog
+            errorlog.record("cover.hand_lettering", exc, file=str(dest.name))
             return None
     else:
         generate(hand_prompt(text, theme), dest, refs)

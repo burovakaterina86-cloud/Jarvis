@@ -1131,3 +1131,13 @@ def test_gateway_registers_video_handler(tmp_path):
     from integrations.telegram import gateway
     src = inspect.getsource(gateway)
     assert "filters.VIDEO" in src and "filters.VIDEO_NOTE" in src
+
+
+def test_button_tokens_do_not_repeat_after_bot_restart(tmp_path):
+    """Старая кнопка из чата не должна совпасть с новым запросом после перезапуска (счётчик с нуля)."""
+    first, second = make_gateway(tmp_path), make_gateway(tmp_path)
+    old = first.approval_callback_data("req-OLD", "allow")
+    new = second.approval_callback_data("req-NEW", "allow")
+    assert old != new
+    assert first.approval_callback_data("req-OLD", "allow") == old     # одна кнопка на запрос
+    assert len(old) <= 64                                              # лимит callback_data Telegram

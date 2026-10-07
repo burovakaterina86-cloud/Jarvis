@@ -73,8 +73,8 @@ def test_playwright_is_a_declared_dependency():
 
 
 # --- зеркало навыков .agents/skills/ ---
-# Правило зеркала взято из уже синхронизированных папок: пути `.claude/` → `.Codex/`,
-# `CLAUDE.md` → `AGENTS.md`, концы строк не важны (core.autocrlf). `autopilot` — чужой
+# Правило зеркала — `scripts/sync_mirrors.py` (пути `.claude/skills|rules|agents` → настоящие папки Codex,
+# `CLAUDE.md` → `AGENTS.md`), концы строк не важны (core.autocrlf). `autopilot` — чужой
 # навык со своими путями установки (~/.claude/skills), его зеркало — дословная копия.
 
 SKILLS = ROOT / ".claude" / "skills"
@@ -88,10 +88,8 @@ def _files(folder: Path) -> set[str]:
 
 
 def _mirrored(skill: str, data: bytes) -> bytes:
-    data = data.replace(b"\r\n", b"\n")
-    if skill in VERBATIM:
-        return data
-    return data.replace(b".claude", b".Codex").replace(b"CLAUDE.md", b"AGENTS.md")
+    from scripts.sync_mirrors import mirrored
+    return mirrored(skill, data)
 
 
 @pytest.mark.parametrize("skill", sorted(p.name for p in SKILLS.iterdir() if p.is_dir()))

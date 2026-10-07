@@ -49,7 +49,7 @@ def transcribe(path: str | Path, transcriber=None) -> str | None:
     try:
         text = (transcriber or _whisper)(path)
     except Exception as exc:  # noqa: BLE001 — владелице важен отказ, а не трассировка
-        log.warning("распознавание не удалось: %s", type(exc).__name__)
+        log.warning("распознавание не удалось: %s", type(exc).__name__, exc_info=True)
         return None
     text = (text or "").strip()
     return text or None

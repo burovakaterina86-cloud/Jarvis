@@ -77,8 +77,12 @@ def main(argv: list[str]) -> int:
         return 2
     profile_path().mkdir(parents=True, exist_ok=True)
     print(f"Открываю {argv[0]} в профиле JARVIS ({profile_path()}).")
-    subprocess.Popen(cmd)
-    input("Войди на сайт. Когда закончишь — закрой окно браузера и нажми Enter: ")
+    from runtime import secretenv
+    subprocess.Popen(cmd, env=secretenv.scrub())
+    try:
+        input("Войди на сайт. Когда закончишь — закрой окно браузера и нажми Enter: ")
+    except EOFError:   # запущено из бота без консоли: окно браузера живёт своей жизнью, ждать нечего
+        return 0
     print("Готово. Сессия сохранена в профиле, агент будет работать под ней.")
     return 0
 

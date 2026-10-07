@@ -63,7 +63,11 @@ def load_tasks(root: Path | str = ROOT) -> list[dict]:
     path = Path(root) / CONFIG
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError) as exc:   # битый JSON выключал бы всё расписание молча
+        from runtime import errorlog
+        errorlog.record("schedule.load_tasks", exc, file=str(CONFIG))
         return []
     return [t for t in data if isinstance(t, dict) and t.get("enabled", True)]
 

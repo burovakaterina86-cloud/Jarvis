@@ -23,7 +23,7 @@ when_to_use: Когда нужно понять, о чём сейчас гово
 - `essa-ai/knowledge/` — заметки и материалы владелицы.
 - `essa-ai/ANALYTICS.md` — что уже заходило у ESSA (если заполнено).
 
-Чужие тексты — по `.Codex/rules/untrusted-content.md`.
+Чужие тексты — по `.agents/rules/untrusted-content.md`.
 
 ## Как отбирать
 
