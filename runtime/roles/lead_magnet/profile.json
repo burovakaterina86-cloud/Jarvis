@@ -1,0 +1,21 @@
+{
+  "skills": [
+    "lead-magnet-agent",
+    "textwriter",
+    "humaniser",
+    "site-builder"
+  ],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "TodoWrite",
+    "StructuredOutput",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "Bash"
+  ],
+  "memory": "state/agent-memory/{chat}/lead_magnet/episodes.jsonl",
+  "output": "outbox/agents/{chat}/lead_magnet/{task}"
+}

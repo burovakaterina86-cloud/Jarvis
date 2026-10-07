@@ -73,6 +73,8 @@ class TurnOptions:
     tools: str | None = None     # "" — собеседник без файлов, команд и других агентов
     disallowed_tools: tuple[str, ...] = ()
     minimal: bool = False        # собеседник: без CLAUDE.md, плагинов и авто-памяти, авторизация остаётся
+    role: str = ""              # ограниченный исполнитель: собственный контекст, Guard остаётся включён
+    role_output: str = ""
 
 
 def model_for(options: "TurnOptions", env: dict | None = None) -> str | None:
@@ -107,12 +109,12 @@ def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS) -
     if session_id:
         args += ["--resume", session_id]
     args += ["--permission-mode", "dontAsk",
-             "--system-prompt-file" if options.minimal else "--append-system-prompt-file", str(options.prompt_file),
+             "--system-prompt-file" if options.minimal or options.role else "--append-system-prompt-file", str(options.prompt_file),
              "--settings", str(options.settings),
              "--max-turns", str(options.max_turns)]
     # Лёгкий вход хода (её просьба 2026-10-06): только настройки проекта (без её личных плагинов, навыков
     # и глобального CLAUDE.md) и без каталога навыков — они идут списком имён, описание читается из файла.
-    args += ["--setting-sources", "" if options.minimal else "project", "--disable-slash-commands"]
+    args += ["--setting-sources", "" if options.minimal or options.role else "project", "--disable-slash-commands"]
     if options.minimal:
         args += ["--safe-mode"]
     names = skill_names()
@@ -426,6 +428,11 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
     """
     run_id = run_id or uuid.uuid4().hex
     child_env = build_env(env)
+    if options.role:
+        child_env['CLAUDE_CODE_DISABLE_CLAUDE_MDS'] = '1'
+        child_env['CLAUDE_CODE_DISABLE_AUTO_MEMORY'] = '1'
+        child_env['JARVIS_EXECUTION_ROLE'] = options.role
+        child_env['JARVIS_ROLE_OUTPUT'] = options.role_output
     limits_key = "claude"
     if account:
         limits_key = account[0]

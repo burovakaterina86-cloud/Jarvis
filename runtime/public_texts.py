@@ -54,7 +54,8 @@ def is_public_text(rel: str) -> bool:
     low = rel.lower()
     if low.startswith("essa-ai/content-plan/weeks/") and Path(low).name in ("reels.json", "slides.json", "carousels.json", "strategy.json"):
         return True
-    if not low.startswith(CONTENT_PREFIX) or not low.endswith(".md"):
+    scoped = re.match(r'^outbox/agents/[^/]+/(text|lead_magnet)/[^/]+/', low)
+    if not (low.startswith(CONTENT_PREFIX) or scoped) or not low.endswith(".md"):
         return False
     return Path(low).name not in NOT_PUBLIC_NAMES and not any(part in "/" + low for part in NOT_PUBLIC_PARTS)
 

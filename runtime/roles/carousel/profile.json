@@ -1,0 +1,18 @@
+{
+  "skills": [
+    "carousel-instagram"
+  ],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "TodoWrite",
+    "StructuredOutput",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "Bash"
+  ],
+  "memory": "state/agent-memory/{chat}/carousel/episodes.jsonl",
+  "output": "outbox/agents/{chat}/carousel/{task}"
+}

@@ -1,0 +1,22 @@
+{
+  "skills": [
+    "reel-radar",
+    "topic-monitor",
+    "trend-radar"
+  ],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "TodoWrite",
+    "StructuredOutput",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "Bash",
+    "WebFetch",
+    "WebSearch"
+  ],
+  "memory": "state/agent-memory/{chat}/radar/episodes.jsonl",
+  "output": "outbox/agents/{chat}/radar/{task}"
+}

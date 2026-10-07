@@ -13,7 +13,7 @@ TIMEOUT_SEC = 35
 ROLES = {
     "research": "исследования", "text": "тексты", "carousel": "карусели",
     "montage": "монтаж", "lead_magnet": "лид-магниты", "visual": "визуал",
-    "radar": "радар", "technical": "техническая задача",
+    "radar": "радар", "technical": "техническая задача", "builder": "сборка пайплайна",
 }
 SCHEMA = {
     "type": "object", "additionalProperties": False,

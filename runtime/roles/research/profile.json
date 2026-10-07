@@ -1,0 +1,22 @@
+{
+  "skills": [
+    "competitor-research",
+    "transcript",
+    "instagram-superpower"
+  ],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "TodoWrite",
+    "StructuredOutput",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "Bash",
+    "WebFetch",
+    "WebSearch"
+  ],
+  "memory": "state/agent-memory/{chat}/research/episodes.jsonl",
+  "output": "outbox/agents/{chat}/research/{task}"
+}

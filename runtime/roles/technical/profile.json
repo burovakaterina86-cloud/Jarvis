@@ -1,0 +1,20 @@
+{
+  "skills": [
+    "create-skill",
+    "create-agent",
+    "site-builder"
+  ],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "TodoWrite",
+    "StructuredOutput",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "Bash"
+  ],
+  "memory": "state/agent-memory/{chat}/technical/episodes.jsonl",
+  "output": "outbox/agents/{chat}/technical/{task}"
+}

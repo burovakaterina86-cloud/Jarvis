@@ -101,7 +101,8 @@ def build_args(session_id: str | None, options: TurnOptions = DEFAULT_OPTIONS,
                    "-c", f'sandbox_mode="{sandbox}"',
                    "-c", 'approval_policy="never"',
                    "-c", "sandbox_workspace_write.network_access=true",
-                   "-c", "developer_instructions=" + json.dumps(brain(options.prompt_file), ensure_ascii=False)]
+                   "-c", "developer_instructions=" + json.dumps(
+                       options.prompt_file.read_text(encoding="utf-8") if options.role else brain(options.prompt_file), ensure_ascii=False)]
     args.append("--skip-git-repo-check")   # есть и у exec, и у exec resume
     if not options.persist:
         args.append("--ephemeral")
@@ -139,6 +140,9 @@ async def run_turn(prompt: str, session_id: str | None = None, on_event=None, *,
     run_id = run_id or uuid.uuid4().hex
     cwd = Path(cwd or ROOT)
     child_env = build_env(env)
+    if options.role:
+        child_env['JARVIS_EXECUTION_ROLE'] = options.role
+        child_env['JARVIS_ROLE_OUTPUT'] = options.role_output
     if task_id:
         child_env["JARVIS_TASK_ID"] = task_id   # хук Guard: есть номер задачи → полный режим
     _stopped.discard(run_id)

@@ -623,6 +623,7 @@ class Gateway:
                 job.task_id = previous["task_id"]
                 job.resume_task = True
                 job.runtime = previous["runtime"]
+                job.previous_outcome = str(previous.get('result') or '')
             elif continuation is not None and continuation.context == "task":
                 job.task_id, job.role, job.original = continuation.task_id, continuation.role, continuation.original
         try:
@@ -647,7 +648,8 @@ class Gateway:
         # Статус-карточка уходит из чата вместе с концом хода; итоговая строка нужна только
         # репортёру с выключенным удалением (`delete_on_finish=False`).
         await reporter.finish(_final_line(result, reporter))
-        await self._deliver(context, chat_id, result, generation=generation)
+        scope = {'JARVIS_EXECUTION_ROLE': job.role, 'JARVIS_CHAT_ID': str(chat_id), 'JARVIS_TASK_ID': job.task_id} if job.context == 'task' and job.role else None
+        await self._deliver(context, chat_id, result, generation=generation, scope=scope)
 
     async def _conversation(self, context, chat_id, prompt: str, generation: int):
         """Все сообщения — отдельному собеседнику; сбой никогда не запускает исполнителя."""
@@ -677,10 +679,10 @@ class Gateway:
             return None
         if decision["action"] != "dispatch":
             result.text = decision["reply"]
-            await self._deliver(context, chat_id, result, generation=generation)
+            await self._deliver(context, chat_id, result, generation=generation, allow_attachments=False)
         return decision
 
-    async def _deliver(self, context, chat_id, result, *, generation=None) -> None:
+    async def _deliver(self, context, chat_id, result, *, generation=None, scope=None, allow_attachments=True) -> None:
         if generation is None:
             generation = self._stop_generation.get(str(chat_id), 0)
         def cancelled():
@@ -688,7 +690,7 @@ class Gateway:
         if getattr(result, "status", "") == "stopped" or cancelled():
             return
         try:
-            await self._deliver_inner(context, chat_id, result, cancelled=cancelled)
+            await self._deliver_inner(context, chat_id, result, cancelled=cancelled, scope=scope, allow_attachments=allow_attachments)
         except Exception as exc:  # noqa: BLE001 — сбой Telegram не должен ронять ход
             log.warning("не удалось доставить ответ: %s", type(exc).__name__, exc_info=True)
             if cancelled():
@@ -774,7 +776,7 @@ class Gateway:
             await query.edit_message_text(text="Это предложение уже неактуально.", reply_markup=None)
             return
         at = offer.get("resets_at") or (time.time() + 3600)
-        worker.defer(chat, at=at, prompt=offer.get("prompt", ""), task=offer.get("task") or "задача")
+        worker.defer(chat, at=at, prompt=offer.get("prompt", ""), task=offer.get("task") or "задача", scope=offer)
         worker.drop_offer(chat)
         await query.edit_message_text(text=f"Договорились, подожду. В {_hhmm(at)} продолжу в Claude и напишу тебе.", reply_markup=None)
 
@@ -786,11 +788,14 @@ class Gateway:
         for item in worker.due_deferred(now):
             job = Job(prompt=item["prompt"], task=item["task"], uses_browser=False, on_event=_ignore_event,
                       runtime="claude")
+            if item.get('context') == 'task':
+                job.context, job.role, job.task_id = 'task', item['role'], item['task_id']
+                job.original, job.data_root, job.resume_task = item.get('original', item['prompt']), self.root, True
             self._track_run(asyncio.ensure_future(self._run_scheduled(job, self._stop_generation.get(str(self.owner_id), 0))))
             started.append(item["task"])
         return started
 
-    async def _deliver_inner(self, context, chat_id, result, *, cancelled=lambda: False) -> None:
+    async def _deliver_inner(self, context, chat_id, result, *, cancelled=lambda: False, scope=None, allow_attachments=True) -> None:
         if getattr(result, "switched_back", False) is True:
             await self._send(context, chat_id, "Лимит у Claude восстановился, так что возвращаюсь к нему 🙂")
         if cancelled():
@@ -833,16 +838,16 @@ class Gateway:
                         return
                     if part.strip():
                         await render.send(context.bot, chat_id, part)
-        if attachments:
-            await self._send_attachments(context, chat_id, attachments, cancelled=cancelled)
+        if attachments and allow_attachments:
+            await self._send_attachments(context, chat_id, attachments, cancelled=cancelled, scope=scope)
         if cancelled():
             return
-        bundle = files.find_content_bundle(text, self.root)
+        bundle = files.find_content_bundle(text, self.root) if not scope and allow_attachments else None
         if bundle and getattr(result, "acceptance", "") not in ("needs_changes", "check_unavailable"):
             await self._send(context, chat_id, "Черновик готов — посмотри и скажи, что с ним делать.",
                              reply_markup=self._content_keyboard(bundle))
 
-    async def _send_attachments(self, context, chat_id, raw_paths: list[str], *, cancelled=lambda: False) -> None:
+    async def _send_attachments(self, context, chat_id, raw_paths: list[str], *, cancelled=lambda: False, scope=None) -> None:
         """Отправляет файлы, названные агентом строками «📎 <путь>» — без пережатия.
 
         Плохой файл не мешает остальным: причина отказа уходит одной строкой,
@@ -858,6 +863,8 @@ class Gateway:
                 continue
             try:
                 path = files.resolve_attachment(self.root, raw)
+                if scope and not task_router.role_profiles.allowed_path(self.root, scope, path, write=True):
+                    raise ValueError('файл находится вне результатов этой задачи')
             except ValueError as exc:
                 await self._send(context, chat_id, f"Не получилось прислать {name}: {exc}")
                 continue
@@ -1145,7 +1152,8 @@ class Gateway:
         except Exception as exc:  # noqa: BLE001 — сбой расписания не роняет бота
             log.warning("задача по расписанию %s не выполнилась: %s", job.task, type(exc).__name__, exc_info=True)
             return
-        await self._deliver(_BotContext(self.bot), self.owner_id, result, generation=generation)
+        scope = {'JARVIS_EXECUTION_ROLE': job.role, 'JARVIS_CHAT_ID': str(self.owner_id), 'JARVIS_TASK_ID': job.task_id} if job.context == 'task' and job.role else None
+        await self._deliver(_BotContext(self.bot), self.owner_id, result, generation=generation, scope=scope)
 
     async def schedule_tasks_done(self) -> None:
         """Дождаться запущенных задач по расписанию (нужно тестам и мягкой остановке)."""

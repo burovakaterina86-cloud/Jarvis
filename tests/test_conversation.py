@@ -190,7 +190,7 @@ async def test_task_context_does_not_resume_chat_and_keeps_its_own_session(tmp_p
         await job.result
     assert calls == [None, None]
     assert sessions.get(1) == "old-chat"
-    assert sessions.get(f"1:task:{jobs[0].task_id}") != sessions.get(f"1:task:{jobs[1].task_id}")
+    assert sessions.get(f"1:roles-v1:text:task:{jobs[0].task_id}") != sessions.get(f"1:roles-v1:research:task:{jobs[1].task_id}")
     for job in jobs:
         data = json.loads((tmp_path / "state" / "tasks" / f"{job.task_id}.json").read_text(encoding="utf-8"))
         assert data["original"] == "целый запрос" and data["role"] == job.role and data["status"] == "ok"
@@ -264,7 +264,8 @@ async def test_explicit_task_resume_uses_only_task_session(tmp_path, monkeypatch
     monkeypatch.setattr(task_router, "EPISODES_DIR", tmp_path / "episodes")
     sessions = FakeSessions()
     sessions.set(1, "main-session")
-    sessions.set("1:task:known", "own-session")
+    sessions.set("1:task:known", "old-wide-session")
+    sessions.set("1:roles-v1:text:task:known", "own-session")
     class Bridge:
         @staticmethod
         async def run_turn(prompt, sid, on_event, **kwargs):
@@ -275,5 +276,6 @@ async def test_explicit_task_resume_uses_only_task_session(tmp_path, monkeypatch
     router.runtimes["claude"] = Bridge
     job = task_router.Job("уточнение", context="task", task_id="known", role="text", resume_task=True)
     router.submit(1, job)
-    await job.result
+    result = await job.result
+    assert result.status == 'ok'
     assert sessions.get(1) == "main-session"

@@ -69,6 +69,13 @@ def test_deferred_tasks():
     assert worker.due_deferred(now=700.0) == []                       # забирается один раз
 
 
+def test_deferred_role_keeps_task_identity():
+    scope = {'context': 'task', 'task_id': 'own-task', 'role': 'text', 'original': 'полное поручение'}
+    worker.defer('1', at=0, prompt='продолжить', task='пост', scope=scope)
+    item = worker.due_deferred(now=1)[0]
+    assert all(item[key] == value for key, value in scope.items())
+
+
 def test_describe_limits_for_status():
     text = worker.describe_limits({
         "claude": {"status": "rejected", "resets_at": 1789566847},

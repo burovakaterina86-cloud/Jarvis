@@ -162,9 +162,12 @@ def cancel_pending(chat) -> None:
     _write("deferred.json", [d for d in items if isinstance(d, dict) and str(d.get("chat")) != str(chat)])
 
 
-def defer(chat, at: float, prompt: str, task: str) -> None:
+def defer(chat, at: float, prompt: str, task: str, *, scope=None) -> None:
     items = _read("deferred.json", [])
-    items.append({"chat": str(chat), "at": float(at), "prompt": prompt, "task": task})
+    item = {"chat": str(chat), "at": float(at), "prompt": prompt, "task": task}
+    if scope and scope.get('context') == 'task':
+        item.update({k: scope[k] for k in ('context', 'task_id', 'role', 'original') if k in scope})
+    items.append(item)
     _write("deferred.json", items)
 
 

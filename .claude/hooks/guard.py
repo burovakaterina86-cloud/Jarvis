@@ -572,6 +572,16 @@ def decide(event: dict, policy: dict, root, env=None) -> Decision:
     if not isinstance(tool_input, dict):
         return Decision("DENY", "deny", "аргументы инструмента не словарь", "malformed")
     base = Path(event.get("cwd") or root)
+    if (os.environ if env is None else env).get('JARVIS_EXECUTION_ROLE'):
+        try:
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from runtime.role_profiles import scope_error
+            reason = scope_error(event, root, os.environ if env is None else env)
+        except Exception:
+            reason = 'не удалось загрузить права роли'
+        if reason:
+            return Decision('DENY', 'deny', reason, 'role_scope')
     blob = json.dumps(tool_input, ensure_ascii=False)
     deny_paths = policy.get("deny_paths") or []
     protected = policy.get("protected_write_paths") or []

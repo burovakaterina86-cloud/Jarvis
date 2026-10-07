@@ -1,0 +1,12 @@
+{
+  "skills": [],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "TodoWrite",
+    "StructuredOutput"
+  ],
+  "memory": "state/agent-memory/{chat}/reviewer/episodes.jsonl",
+  "output": "outbox/agents/{chat}/reviewer/{task}"
+}

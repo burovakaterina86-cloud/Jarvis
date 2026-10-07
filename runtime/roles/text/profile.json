@@ -1,0 +1,22 @@
+{
+  "skills": [
+    "textwriter",
+    "humaniser",
+    "copywriting",
+    "threads-content",
+    "repurpose-content"
+  ],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "TodoWrite",
+    "StructuredOutput",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "Bash"
+  ],
+  "memory": "state/agent-memory/{chat}/text/episodes.jsonl",
+  "output": "outbox/agents/{chat}/text/{task}"
+}

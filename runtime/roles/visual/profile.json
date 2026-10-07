@@ -1,0 +1,18 @@
+{
+  "skills": [
+    "visual"
+  ],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "TodoWrite",
+    "StructuredOutput",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "Bash"
+  ],
+  "memory": "state/agent-memory/{chat}/visual/episodes.jsonl",
+  "output": "outbox/agents/{chat}/visual/{task}"
+}
