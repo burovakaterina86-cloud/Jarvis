@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from runtime import (claude2_bridge, claude_bridge, codex_bridge, errorlog, events, public_texts, review, spec,
+from runtime import (claude2_bridge, claude_bridge, codex_bridge, dialogue_context, errorlog, events, public_texts, review, spec,
                      task_state, worker)
 from runtime import sessions as sessions_mod
 from runtime.redact import redact
@@ -290,21 +290,21 @@ class TaskRouter:
             return job.runtime, False
         return worker.active(key, now=self.clock())
 
-    def _switch_brief(self) -> str:
+    def _switch_brief(self, chat_id=None) -> str:
         cut = lambda text: " ".join(str(text or "").split())[:BRIEF_TEXT_LIMIT]  # noqa: E731
         lines = ["[JARVIS] Разговор продолжается в Codex — переписку с Claude ты не видишь. "
                  "Последние задачи (подробности — в файлах и memory/episodes/):"]
         lines += [f"- {cut(r.get('request'))} → {cut(r.get('result'))} [{r.get('status', '?')}]"
-                  for r in self._recent_episodes(5)] or ["- (записей нет)"]
+                  for r in self._recent_episodes(5, chat_id)] or ["- (записей нет)"]
         return "\n".join(lines) + "\n\nСообщение владелицы:\n"
 
-    def _handoff_back(self) -> str:
+    def _handoff_back(self, chat_id=None) -> str:
         cut = lambda text: " ".join(str(text or "").split())[:BRIEF_TEXT_LIMIT]  # noqa: E731
         lines = ["[JARVIS] Пока у тебя был исчерпан лимит, работал другой исполнитель (второй аккаунт Claude или Codex). "
                  "Его последние задачи "
                  "(подробности — в файлах и memory/episodes/):"]
         lines += [f"- {cut(r.get('request'))} → {cut(r.get('result'))} [{r.get('status', '?')}]"
-                  for r in self._recent_episodes(5)] or ["- (записей нет)"]
+                  for r in self._recent_episodes(5, chat_id)] or ["- (записей нет)"]
         return "\n".join(lines) + "\n\nСообщение владелицы:\n"
 
     async def _worker(self, qkey: str) -> None:
@@ -364,10 +364,14 @@ class TaskRouter:
             if touch:
                 touch(key, self.clock())
         if back and job.session_mode != "brief":
-            prompt = self._handoff_back() + prompt
+            prompt = self._handoff_back(key) + prompt
         elif runtime == "codex" and not sid and not isolated and job.runtime is None:
             # /codex: у Codex своя сессия — без сводки он начал бы разговор с нуля (её поправка 2026-10-05)
-            prompt = self._switch_brief() + prompt
+            prompt = self._switch_brief(key) + prompt
+        if not isolated and job.session_mode != "brief":
+            corrections = dialogue_context.build(ROOT, key, job.prompt)
+            if corrections:
+                prompt = corrections + "\n\n" + prompt
         if runtime == "codex":
             ok, why = await self.codex_check()
             if not ok:
@@ -416,7 +420,7 @@ class TaskRouter:
         if res.switch_offer is not None:   # Codex должен знать, что Claude уже успел изменить
             res.switch_offer["files"] = list(res.files)
             worker.save_offer(key, res.switch_offer)
-        if not isolated and res.status == "ok":
+        if not isolated and res.status == "ok" and spec.is_spec(res.text):
             self._track_spec(key, job, res)
         if res.status == "ok" and job.context == "chat":
             res = await self._enforce_public_texts(key, job, res, limit)
@@ -435,6 +439,8 @@ class TaskRouter:
                 res.acceptance = "needs_changes"
             if res.pipeline_error:
                 res.acceptance = "check_unavailable"
+        if not isolated and res.status == "ok" and res.acceptance in ("accepted", "not_checked"):
+            self._track_spec(key, job, res)
         if runtime == "codex" and res.status == "ok":
             res.text = (res.text or "").rstrip() + "\n\n🟢 Отвечал через Codex"
         return res
@@ -598,15 +604,26 @@ class TaskRouter:
         last = last_active(key) if last_active else None
         return None if last is None else max(0.0, (self.clock() - last) / 3600)
 
-    def _recent_episodes(self, limit: int = BRIEF_EPISODES) -> list[dict]:
+    def _recent_episodes(self, limit: int = BRIEF_EPISODES, chat_id=None) -> list[dict]:
         rows = []
         for path in sorted(Path(EPISODES_DIR).glob("*.jsonl"))[-2:]:
-            for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                with path.open("rb") as file:
+                    file.seek(0, 2)
+                    file.seek(max(0, file.tell() - 512 * 1024))
+                    lines = file.read().decode("utf-8", "replace").splitlines()
+            except OSError:
+                continue
+            for line in lines:
                 try:
                     row = json.loads(line)
                 except ValueError:
                     continue
-                if isinstance(row, dict) and row.get("context", "chat") == "chat" and row.get("request"):
+                if not isinstance(row, dict):
+                    continue
+                owner = (self.env if self.env is not None else os.environ).get("TELEGRAM_OWNER_ID")
+                mine = row.get("chat") == str(chat_id) or (row.get("chat") is None and owner is not None and str(chat_id) == str(owner))
+                if isinstance(row, dict) and mine and row.get("context", "chat") == "chat" and row.get("request"):
                     rows.append(row)
         rows.sort(key=lambda r: str(r.get("date") or ""))
         return rows[-limit:]
@@ -616,17 +633,28 @@ class TaskRouter:
         cut = lambda text: " ".join(str(text or "").split())[:BRIEF_TEXT_LIMIT]  # noqa: E731
         lines = [f"[JARVIS] Чат молчал {idle_hours:g} ч — начат новый разговор. Прошлую переписку ты не видишь; "
                  "вот сводка последних задач (memory/episodes/). Нужны подробности — открой файлы оттуда."]
-        episodes = self._recent_episodes()
+        chat_id = job.chat or str((self.env if self.env is not None else os.environ).get("TELEGRAM_OWNER_ID") or "")
+        episodes = self._recent_episodes(chat_id=chat_id)
         for row in episodes:
-            lines.append(f"- {str(row.get('date', ''))[:16]} — {cut(row.get('request'))} → "
-                         f"{cut(row.get('result'))} [{row.get('status', '?')}]")
+            lines.append(f"- {str(row.get('date', ''))[:16]} [{row.get('status', '?')}; {row.get('acceptance', 'not_checked')}] — "
+                         f"{cut(row.get('request'))[:150]} → {cut(row.get('outcome') or row.get('result'))[:200]}")
+            if row.get("blockers"):
+                lines.append("Незакрытые проблемы: " + "; ".join(str(p)[:100] for p in row["blockers"][:2]))
+            if row.get("open_questions"):
+                lines.append("Открытые вопросы: " + str(row["open_questions"])[:200])
         if not episodes:
             lines.append("- (записей нет)")
         if job.spec:
             lines += ["", "Ждёт её ответа твой план (его она, скорее всего, сейчас подтверждает или правит):",
-                      str(job.spec.get("text") or "")[:2000]]
-        lines += ["", "Сообщение владелицы:", job.prompt]
-        return "\n".join(lines)
+                      str(job.spec.get("text") or "")[:800]]
+        corrections = dialogue_context.build(ROOT, chat_id, job.prompt)
+        if corrections:
+            lines += ["", corrections[:500]]
+        # При переполнении сначала сокращаются детали; вопросы и блокеры остаются в первых частях строк.
+        context = "\n".join(lines)
+        if len(context) > 3200:
+            context = "\n".join(line[:240] if line.startswith("- ") else line[:700] for line in lines)[:3200]
+        return context + "\n\nСообщение владелицы:\n" + job.prompt
 
     def _track_spec(self, key: str, job: Job, res) -> None:
         """Ответ-план — сохранить для чата; иначе ход исполнил прежний план — закрыть его."""
@@ -673,6 +701,7 @@ class TaskRouter:
                   "acceptance": res.acceptance,
                   "request": cut(job.prompt), "result": cut(res.text),
                   "files": list(res.files)[:EPISODE_FILES_LIMIT]}
+        record.update(dialogue_context.episode(job, res))
         path = Path(EPISODES_DIR) / f"{now:%Y-%m}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as fh:

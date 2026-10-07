@@ -36,7 +36,7 @@ def router(tmp_path, monkeypatch):
     monkeypatch.setattr(spec, "SPECS_DIR", tmp_path / "specs")
     monkeypatch.delenv("JARVIS_SESSION_IDLE_HOURS", raising=False)
     env = {**os.environ, "FAKE_CLAUDE_SCENARIO": "ok", "FAKE_CLAUDE_LOG": str(tmp_path / "calls.jsonl"),
-           "JARVIS_REVIEW": "off"}
+           "JARVIS_REVIEW": "off", "TELEGRAM_OWNER_ID": "1"}
     clock = Clock()
     r = task_router.TaskRouter(env=env, claude_cmd=FAKE, budget_path=tmp_path / "budget.json",
                                git_status=lambda: set(), clock=clock)

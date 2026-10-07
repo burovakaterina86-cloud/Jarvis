@@ -180,6 +180,8 @@ def _router(fake, monkeypatch, **kw):
     from runtime import sessions, task_router
     monkeypatch.setattr(sessions, "SESSIONS_PATH", fake.tmp / "sessions.json")
     monkeypatch.setattr(task_router, "EPISODES_DIR", fake.tmp / "episodes")
+    monkeypatch.setattr(task_router, "ROOT", fake.tmp)
+    monkeypatch.setattr(task_router.public_texts, "check", lambda *a, **kw: [])
     from runtime import spec
     monkeypatch.setattr(spec, "SPECS_DIR", fake.tmp / "specs")
     env = {**fake.base_env, "FAKE_CLAUDE_SCENARIO": "ok", "FAKE_CLAUDE_DELAY": "0.4"}
@@ -492,7 +494,7 @@ async def test_scheduled_job_does_not_block_the_chat(fake, monkeypatch):
     assert starts["привет"] < ends["радар"]             # шли одновременно
 
 
-async def test_stop_stops_only_her_task(fake, monkeypatch):
+async def test_stop_stops_all_existing_work_of_her_chat(fake, monkeypatch):
     from runtime import task_router
     router = _router(fake, monkeypatch)
     router.env = {**router.env, "FAKE_CLAUDE_SCENARIO": "sleep"}
@@ -507,10 +509,7 @@ async def test_stop_stops_only_her_task(fake, monkeypatch):
     assert router.stop(1) is True
     res = await asyncio.wait_for(chat.result, 10)
     assert res.status == "stopped"
-    assert not background.result.done()
-    from runtime import claude_bridge as cb
-    cb.stop(task_router.run_id_for("1:schedule"))       # уборка: фон тоже гасим
-    await asyncio.wait_for(background.result, 10)
+    assert (await asyncio.wait_for(background.result, 10)).status == "stopped"
 
 
 def test_turn_args_model_and_browser_switches(monkeypatch):
